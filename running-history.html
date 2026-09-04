@@ -1,0 +1,1312 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="auto">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Running history — 90-day rolling average</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page:           #f9f9f7;
+    --surface-1:      #fcfcfb;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --muted:          #898781;
+    --grid:           #e1e0d9;
+    --baseline:       #c3c2b7;
+    --border:         rgba(11,11,11,0.10);
+    /* Each scheme is a complementary pair: normal runs blue↔orange, long runs
+       violet↔olive. Within a scheme (the pair that carries the meaning) both
+       validate strongly — normal CVD ΔE 20.9 / normal-vision 25.8, long 24.0 / 26.3.
+       Across schemes colour cannot separate (violet's complement lands in the
+       yellow-green that collides with orange under red-green CVD), so the 45°
+       hatch marks long runs and stays on even when their colouring is off.
+       "Stable" is the weakest step of the scheme's productive ramp. */
+    --n-un-weak:      #e3a97f;
+    --n-un:           #d4722f;
+    --n-pr-weak:      #8fb0d9;
+    --n-pr:           #4f83c2;
+    --l-un-weak:      #b9c48a;
+    --l-un:           #7f8f2a;
+    --l-pr-weak:      #a99ad0;
+    --l-pr:           #6f5aa8;
+    --hatch:          rgba(11,11,11,0.30);
+    --nocolour:       #b5b3aa;   /* a run whose scheme has colouring switched off */
+    --rest:           #e7e5dd;   /* no run at all */
+    --freq:           #52514e;
+    --ghost:          rgba(11,11,11,0.05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --page:           #0d0d0d;
+      --surface-1:      #1a1a19;
+      --text-primary:   #ffffff;
+      --text-secondary: #c3c2b7;
+      --muted:          #898781;
+      --grid:           #2c2c2a;
+      --baseline:       #383835;
+      --border:         rgba(255,255,255,0.10);
+      --ghost:          rgba(255,255,255,0.06);
+      --n-un-weak:      #8f5527;
+      --n-un:           #e8871f;
+      --n-pr-weak:      #3a5f8f;
+      --n-pr:           #5c90cf;
+      --l-un-weak:      #56612a;
+      --l-un:           #a8b84a;
+      --l-pr-weak:      #4a3f77;
+      --l-pr:           #9b86dd;
+      --hatch:          rgba(255,255,255,0.28);
+      --nocolour:       #5c5a54;
+    --nocolour:       #5c5a54;
+      --rest:           #333230;
+      --freq:           #c3c2b7;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page:           #0d0d0d;
+    --surface-1:      #1a1a19;
+    --text-primary:   #ffffff;
+    --text-secondary: #c3c2b7;
+    --muted:          #898781;
+    --grid:           #2c2c2a;
+    --baseline:       #383835;
+    --border:         rgba(255,255,255,0.10);
+    --ghost:          rgba(255,255,255,0.06);
+    --n-un-weak:      #8f5527;
+    --n-un:           #e8871f;
+    --n-pr-weak:      #3a5f8f;
+    --n-pr:           #5c90cf;
+    --l-un-weak:      #56612a;
+    --l-un:           #a8b84a;
+    --l-pr-weak:      #4a3f77;
+    --l-pr:           #9b86dd;
+    --hatch:          rgba(255,255,255,0.28);
+    --rest:           #333230;
+    --freq:           #c3c2b7;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 32px 24px 56px;
+    background: var(--page); color: var(--text-primary);
+    font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  .wrap { max-width: 1120px; margin: 0 auto; }
+  h1 { font-size: 20px; font-weight: 600; margin: 0 0 4px; letter-spacing: -0.01em; }
+  .sub { color: var(--text-secondary); margin: 0 0 24px; font-size: 13px; }
+
+  .tiles { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
+  .tile {
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px;
+    padding: 12px 16px; min-width: 132px; flex: 0 0 auto;
+    display: flex; flex-direction: column; justify-content: center;
+  }
+  .tile .k { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .tile .v { font-size: 22px; font-weight: 600; margin-top: 2px; }
+  .tile .u { font-size: 12px; font-weight: 400; color: var(--text-secondary); margin-left: 2px; }
+  .tile.combo { min-width: 296px; flex: 0 1 auto; }
+  .tile.combo .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 28px; margin-top: 2px; }
+  .tile.combo .grid.three { grid-template-columns: repeat(3, auto); gap: 2px 22px; }
+  .tile.combo .grid.one { grid-template-columns: auto; }
+  .tile.combo .note { font-size: 11px; color: var(--muted); margin-top: 3px; }
+  .tile.combo .cell { display: flex; align-items: baseline; gap: 3px; }
+  .tile.combo .cell .v { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .tile.combo .cell .u { font-size: 12px; font-weight: 400; color: var(--text-secondary); }
+
+  .readout {
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px;
+    padding: 12px 16px; margin-bottom: 12px;
+    display: flex; align-items: center; gap: 22px; flex-wrap: wrap; min-height: 84px;
+  }
+  .readout .date { font-size: 15px; font-weight: 600; min-width: 168px; }
+  .readout .pair { display: flex; flex-direction: column; }
+  .readout .pair .k { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .readout .pair .v { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .readout .pair .sub-v { font-size: 12px; font-weight: 400; color: var(--text-secondary); }
+  .readout .pair .v2 { font-size: 11px; font-weight: 400; color: var(--muted);
+    font-variant-numeric: tabular-nums; margin-top: 1px; }
+  .badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px;
+    border: 1px solid currentColor;
+  }
+  .badge.up   { color: var(--above); }
+  .badge.down { color: var(--below); }
+  .badge.rest { color: var(--text-secondary); }
+  .readout.idle .date { color: var(--text-secondary); font-weight: 400; }
+  .readout .spacer-pair { width: 0; overflow: hidden; }
+
+  .chartcard {
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px;
+    padding: 12px 12px 8px;
+  }
+  .bar-controls {
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    padding: 0 4px 10px; font-size: 12px; color: var(--text-secondary);
+  }
+  .legend { display: flex; flex-direction: column; gap: 3px; align-items: flex-start; }
+  .legend-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .legend-tag { color: var(--text-secondary); font-weight: 600; min-width: 82px;
+    display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
+  .legend-row.off .item { opacity: 0.35; }
+  .legend-dim { color: var(--muted); font-weight: 400; }
+  .swatch { position: relative; overflow: hidden; }
+  .swatch.hatched::after { content: ''; position: absolute; inset: 0;
+    background: repeating-linear-gradient(45deg, var(--hatch) 0 1.5px, transparent 1.5px 4px); }
+  .ctrls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+    margin-left: auto; justify-content: flex-end; }
+  .legend .item { display: inline-flex; align-items: center; gap: 6px; }
+  .swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+  .swatch.ramp { width: 26px; }
+  .spacer { flex: 1 1 auto; }
+  .legend-note { color: var(--muted); font-size: 11px; }
+  button, label.chk {
+    font: inherit; font-size: 12px; color: var(--text-secondary);
+    background: transparent; border: 1px solid var(--border); border-radius: 6px;
+    padding: 4px 10px; cursor: pointer;
+  }
+  button:hover, label.chk:hover { background: var(--ghost); }
+  label.chk { display: inline-flex; align-items: center; gap: 6px; }
+  label.chk select { font: inherit; font-size: 12px; color: var(--text-primary);
+    background: transparent; border: 0; padding: 0; cursor: pointer; }
+  label.chk input[type=number] { font: inherit; font-size: 12px; color: var(--text-primary);
+    background: transparent; border: 0; border-bottom: 1px solid var(--border);
+    width: 46px; text-align: right; padding: 0 2px; }
+  #chart  { display: block; width: 100%; height: 300px; touch-action: none; cursor: crosshair; }
+  #chart2 { display: block; width: 100%; height: 156px; touch-action: none; cursor: crosshair; }
+  .panel-title { font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--muted); padding: 4px 0 2px 54px; }
+  .hint { padding: 6px 4px 0; font-size: 11px; color: var(--muted); }
+
+  .datarow { display: flex; align-items: center; gap: 10px; font-size: 12px;
+    color: var(--text-secondary); margin: -16px 0 20px; flex-wrap: wrap; }
+  .datarow .dim { color: var(--muted); }
+  .datarow button { font-size: 11px; padding: 2px 8px; }
+
+  .gate { position: fixed; inset: 0; z-index: 20; display: flex; align-items: center;
+    justify-content: center; padding: 24px; background: var(--page); }
+  /* an author display rule beats the UA stylesheet behind [hidden], so say it again */
+  .gate[hidden] { display: none; }
+  .gate-card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px;
+    padding: 26px 28px; max-width: 560px; }
+  .gate-card h2 { font-size: 17px; font-weight: 600; margin: 0 0 10px; }
+  .gate-lead { color: var(--text-secondary); font-size: 13px; margin: 0 0 10px; }
+  .gate-quiet { color: var(--muted); }
+  .gate-card code { font-size: 12px; background: var(--ghost); padding: 1px 4px; border-radius: 3px; }
+  button.primary { border-color: transparent; background: var(--n-pr); color: #fff; font-weight: 600;
+    padding: 7px 14px; }
+  button.primary:hover { filter: brightness(1.08); background: var(--n-pr); }
+  .gate-msg { font-size: 12px; color: var(--text-secondary); margin-top: 12px; }
+  .gate-msg.bad { color: var(--n-un); }
+  .sport-list { display: flex; flex-direction: column; gap: 2px; margin: 10px 0 14px;
+    max-height: 260px; overflow: auto; }
+  label.sport { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: baseline;
+    padding: 5px 6px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+  label.sport:hover { background: var(--ghost); }
+  .sport-meta { color: var(--muted); font-size: 11px; }
+
+  details.table { margin-top: 20px; }
+  details.table summary { cursor: pointer; font-size: 13px; color: var(--text-secondary); }
+  .tablewrap { max-height: 340px; overflow: auto; margin-top: 10px; border: 1px solid var(--border); border-radius: 8px; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; background: var(--surface-1); }
+  th, td { text-align: right; padding: 6px 12px; border-bottom: 1px solid var(--grid); font-variant-numeric: tabular-nums; }
+  th:first-child, td:first-child { text-align: left; }
+  th { position: sticky; top: 0; background: var(--surface-1); color: var(--muted);
+       font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Running history — <span id="h1win">70</span>-day rolling average</h1>
+  <p class="sub">
+    One bar per day. Bar height is the average daily distance over the trailing
+    <span class="winN">70</span> days; the colour compares that day&rsquo;s run against the
+    <span class="cmpN">mean</span> run of the <span class="winN">70</span> days before it &mdash; read
+    against 1&times; that target for a normal run, 2&times; for a long one.
+  </p>
+
+  <div class="datarow">
+    <span id="data-info"></span>
+    <button id="data-refresh" hidden>Refresh from file</button>
+    <button id="data-change">Change file&hellip;</button>
+  </div>
+
+  <div class="tiles" id="tiles"></div>
+
+  <div class="readout idle" id="readout">
+    <span class="date">Hover a bar to see that day&rsquo;s numbers</span>
+    <span class="pair spacer-pair" aria-hidden="true"><span class="k">&nbsp;</span><span class="v">&nbsp;</span><span class="v2">&nbsp;</span></span>
+  </div>
+
+  <div class="chartcard">
+    <div class="bar-controls">
+      <div class="legend">
+        <div class="legend-row" id="row-normal"><label class="legend-tag"><input type="checkbox" id="colourNormal" checked> Normal run</label>
+          <span class="item"><span class="swatch ramp" style="background:linear-gradient(90deg,var(--n-un-weak),var(--n-un))"></span>▼ unproductive</span>
+          <span class="item"><span class="swatch" style="background:var(--n-pr-weak)"></span>= stable</span>
+          <span class="item"><span class="swatch ramp" style="background:linear-gradient(90deg,var(--n-pr-weak),var(--n-pr))"></span>▲ productive</span>
+        </div>
+        <div class="legend-row" id="row-long"><label class="legend-tag"><input type="checkbox" id="colourLong" checked> Long run <span class="legend-dim">(&gt;1.5&times; target, hatched; needs &ge;3 runs/wk)</span></label>
+          <span class="item"><span class="swatch ramp hatched" style="background:linear-gradient(90deg,var(--l-un-weak),var(--l-un))"></span>▼ unproductive</span>
+          <span class="item"><span class="swatch hatched" style="background:var(--l-pr-weak)"></span>= stable</span>
+          <span class="item"><span class="swatch ramp hatched" style="background:linear-gradient(90deg,var(--l-pr-weak),var(--l-pr))"></span>▲ productive</span>
+        </div>
+        <div class="legend-row"><span class="legend-tag">No run</span>
+          <span class="item"><span class="swatch" style="background:var(--rest)"></span>rest day</span>
+          <span class="legend-dim">stable = within &plusmn;<span class="bandN">1</span>% of target; colour ramps to full over the remaining <span class="gradN">49</span>%</span>
+        </div>
+      </div>
+      <span class="spacer"></span>
+      <div class="ctrls">
+      <label class="chk">Window
+        <input type="number" id="windowDays" min="7" max="365" step="7" value="70"> days
+      </label>
+      <label class="chk" title="Whether a day has to contain one long run on its own, rather than reaching the distance across several runs.">
+        <input type="checkbox" id="longSingle" checked> Long run needs a single run
+      </label>
+      <label class="chk" title="How close to the target still counts as holding steady.">Stable band &plusmn;
+        <input type="number" id="stableBand" min="0" max="5" step="0.5" value="1">%
+      </label>
+      <label class="chk" title="What each run is measured against, over the window before it.">Compare to
+        <select id="compareMode">
+          <option value="mean">mean run</option>
+          <option value="median">median run</option>
+        </select>
+      </label>
+      <label class="chk" id="rampLabel">First <span id="rampN">70</span> days &divide;
+        <select id="rampMode">
+          <option value="full">the full window</option>
+          <option value="elapsed">days elapsed</option>
+        </select>
+      </label>
+      <button id="reset">Reset</button>
+      </div>
+    </div>
+    <canvas id="chart"></canvas>
+    <div class="panel-title">Average run days per week, over the trailing <span class="winN">70</span> days</div>
+    <canvas id="chart2"></canvas>
+    <div class="hint">Scroll or pinch to zoom — the day under the cursor stays put while both sides scale around it. Drag to pan. Double-click to reset.</div>
+  </div>
+
+  <details class="table">
+    <summary>Data table (days currently in view)</summary>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Date</th><th>Distance (km)</th><th><span class="winN">70</span>-day avg (km/day)</th><th>Run days / week</th><th>Target (km)</th><th>Verdict</th></tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </details>
+</div>
+
+  <div class="gate" id="gate" hidden>
+    <div class="gate-card">
+      <h2 id="gate-title">Load your Runalyze export</h2>
+      <p class="gate-lead">In Runalyze, go to <em>Settings &rarr; Export</em> and download your activities as CSV
+        (<code>runalyze-activities.csv</code>). Pick that file here.</p>
+      <p class="gate-lead gate-quiet">It never leaves your machine &mdash; the page reads it locally and remembers
+        it for next time. No server is involved.</p>
+      <button class="primary" id="gate-pick">Choose CSV&hellip;</button>
+      <button id="gate-cancel" hidden>Cancel</button>
+      <div class="gate-msg" id="gate-msg"></div>
+      <div id="gate-sports" hidden>
+        <p class="gate-lead">Which of these are your runs? Sport IDs are specific to your Runalyze account, so
+          they have to be matched by hand. The guess below uses typical running speed.</p>
+        <div class="sport-list" id="sport-list"></div>
+        <button class="primary" id="gate-use">Use selection</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+// ---------------------------------------------------------------------------
+// Data loading. A page cannot read a filesystem path out of localStorage — the
+// browser will not open an arbitrary path without the user handing over the file.
+// So two things are remembered instead: the parsed data (localStorage), which is
+// what makes the page open straight into the chart, and where supported a
+// FileSystemFileHandle (IndexedDB), which is a re-openable reference to the file
+// itself and is as close to "remember the path" as the platform allows.
+// ---------------------------------------------------------------------------
+const LS_DATA = 'runviz.data.v2', LS_SPORTS = 'runviz.sports.v2';
+const SCHEMA = 2;
+
+const lsGet = k => { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); return true; }
+                          catch (e) { return false; } };
+
+// --- CSV: quoted fields may contain commas, newlines and doubled quotes --------
+function parseCsv(text) {
+  const rows = [];
+  let row = [], field = '', quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (quoted) {
+      if (ch === '"') { if (text[i+1] === '"') { field += '"'; i++; } else quoted = false; }
+      else field += ch;
+    } else if (ch === '"') quoted = true;
+    else if (ch === ',') { row.push(field); field = ''; }
+    else if (ch === '\n') { row.push(field); field = ''; rows.push(row); row = []; }
+    else if (ch !== '\r') field += ch;
+  }
+  if (field !== '' || row.length) { row.push(field); rows.push(row); }
+  if (!rows.length) throw new Error('that file is empty');
+  const header = {};
+  rows[0].forEach((name, i) => header[name.trim()] = i);
+  for (const need of ['time', 'timezoneOffset', 'distance', 'sportid']) {
+    if (!(need in header)) throw new Error(`no "${need}" column — is this a Runalyze activities export?`);
+  }
+  return { header, rows: rows.slice(1).filter(r => r.length > 1) };
+}
+
+const median = a => { if (!a.length) return 0; const b = a.slice().sort((x,y) => x-y);
+  const n = b.length; return n % 2 ? b[(n-1)/2] : (b[n/2-1] + b[n/2]) / 2; };
+
+// --- per-sport summary, so the right ones can be picked -----------------------
+function summariseSports({ header, rows }) {
+  const by = new Map();
+  for (const r of rows) {
+    const id = r[header.sportid];
+    if (!id) continue;
+    if (!by.has(id)) by.set(id, { id, n: 0, km: 0, speeds: [], title: '' });
+    const g = by.get(id);
+    g.n++;
+    const dist = parseFloat(r[header.distance]) || 0;
+    const secs = parseFloat(r[header.s]) || 0;
+    g.km += dist;
+    if (dist > 0.5 && secs > 60) g.speeds.push(dist / (secs / 3600));
+    if (!g.title && header.title != null && r[header.title]) g.title = r[header.title];
+  }
+  const out = [...by.values()].map(g => ({ ...g, speed: median(g.speeds) }));
+  out.sort((a, b) => b.n - a.n);
+  // Running sits around 8–16 km/h, but so does cross-country skiing, so speed alone
+  // over-selects. Take the busiest sport in that band, plus any other in it with a
+  // comparable amount of activity (a genuine second running sport, e.g. trail),
+  // and leave the long tail for the user to tick.
+  const band = out.filter(g => g.n >= 3 && g.speed >= 7.5 && g.speed <= 17);
+  const top = band.length ? Math.max(...band.map(g => g.n)) : 0;
+  for (const g of out) g.guess = band.includes(g) && g.n >= top * 0.25;
+  return out;
+}
+
+// --- aggregate the chosen sports into one row per calendar day ----------------
+function buildData({ header, rows }, sportIds, fileName) {
+  const per = new Map();
+  let runCount = 0;
+  for (const r of rows) {
+    if (!sportIds.has(r[header.sportid])) continue;
+    const t = Number(r[header.time]);
+    if (!Number.isFinite(t)) continue;
+    const off = Number(r[header.timezoneOffset]) || 0;
+    // shift by the activity's own offset, then read UTC parts, so a run is filed
+    // under the calendar day it happened on locally
+    const key = new Date((t + off * 60) * 1000).toISOString().slice(0, 10);
+    const dist = parseFloat(r[header.distance]) || 0;
+    const g = per.get(key) || { sum: 0, max: 0, n: 0 };
+    g.sum += dist; g.max = Math.max(g.max, dist); g.n++;
+    per.set(key, g);
+    runCount++;
+  }
+  if (!per.size) throw new Error('no activities matched the selected sports');
+  const keys = [...per.keys()].sort();
+  const start = keys[0], end = keys[keys.length - 1];
+  const day = 86400000, t0 = Date.parse(start + 'T00:00:00Z');
+  const days = Math.round((Date.parse(end + 'T00:00:00Z') - t0) / day) + 1;
+  const values = [], maxRun = [], nRuns = [];
+  const r3 = v => Math.round(v * 1000) / 1000;
+  for (let i = 0; i < days; i++) {
+    const g = per.get(new Date(t0 + i * day).toISOString().slice(0, 10));
+    values.push(g ? r3(g.sum) : 0); maxRun.push(g ? r3(g.max) : 0); nRuns.push(g ? g.n : 0);
+  }
+  return { schema: SCHEMA, start, values, maxRun, nRuns, runCount, fileName,
+           sports: [...sportIds], loadedAt: new Date().toISOString().slice(0, 10) };
+}
+
+// --- a re-openable reference to the file, where the browser supports it -------
+const idb = () => new Promise((res, rej) => {
+  const rq = indexedDB.open('runviz', 1);
+  rq.onupgradeneeded = () => rq.result.createObjectStore('handles');
+  rq.onsuccess = () => res(rq.result);
+  rq.onerror = () => rej(rq.error);
+});
+async function putHandle(h) {
+  try { const db = await idb();
+    await new Promise((res, rej) => { const t = db.transaction('handles', 'readwrite');
+      t.objectStore('handles').put(h, 'csv'); t.oncomplete = res; t.onerror = () => rej(t.error); });
+  } catch (e) { /* no handle memory available; the cached data still works */ }
+}
+async function getHandle() {
+  try { const db = await idb();
+    return await new Promise((res, rej) => { const t = db.transaction('handles', 'readonly');
+      const rq = t.objectStore('handles').get('csv');
+      rq.onsuccess = () => res(rq.result || null); rq.onerror = () => rej(rq.error); });
+  } catch (e) { return null; }
+}
+
+async function chooseFile() {
+  if (window.showOpenFilePicker) {
+    try {
+      const [h] = await window.showOpenFilePicker({ multiple: false,
+        types: [{ description: 'CSV', accept: { 'text/csv': ['.csv'], 'text/plain': ['.csv'] } }] });
+      await putHandle(h);
+      return await h.getFile();
+    } catch (e) {
+      if (e && e.name === 'AbortError') return null;   // user closed the picker
+      // otherwise fall through: file:// pages and non-Chromium browsers land here
+    }
+  }
+  return await new Promise(res => {
+    const inp = document.createElement('input');
+    inp.type = 'file'; inp.accept = '.csv,text/csv,text/plain';
+    inp.onchange = () => res(inp.files && inp.files[0] ? inp.files[0] : null);
+    inp.click();
+  });
+}
+</script>
+
+<script>
+// ---------------------------------------------------------------------------
+// Gate: shown when there is no remembered data, or when changing files.
+// ---------------------------------------------------------------------------
+const gate = document.getElementById('gate');
+const gateMsg = document.getElementById('gate-msg');
+const sportBox = document.getElementById('gate-sports');
+const sportList = document.getElementById('sport-list');
+let pendingParsed = null, pendingName = '';
+
+function openGate(changing) {
+  gate.hidden = false;
+  document.getElementById('gate-title').textContent =
+    changing ? 'Choose a different export' : 'Load your Runalyze export';
+  document.getElementById('gate-cancel').hidden = !changing;
+  gateMsg.textContent = ''; gateMsg.className = 'gate-msg';
+  sportBox.hidden = true;
+}
+function closeGate() { gate.hidden = true; }
+
+function fail(msg) { gateMsg.textContent = msg; gateMsg.className = 'gate-msg bad'; }
+
+async function pickAndParse() {
+  const file = await chooseFile();
+  if (!file) return;
+  gateMsg.textContent = 'Reading ' + file.name + '…'; gateMsg.className = 'gate-msg';
+  try {
+    const text = await file.text();
+    pendingParsed = parseCsv(text);
+    pendingName = file.name;
+  } catch (e) { fail('Could not read that file: ' + e.message); return; }
+
+  const sports = summariseSports(pendingParsed);
+  const remembered = new Set(lsGet(LS_SPORTS) || []);
+  const usable = sports.filter(g => remembered.has(g.id));
+  if (usable.length) return commit(new Set(usable.map(g => g.id)));   // same choice as last time
+
+  gateMsg.textContent = `${pendingParsed.rows.length} activities across ${sports.length} sports.`;
+  sportList.innerHTML = sports.map(g => `
+    <label class="sport"><input type="checkbox" value="${g.id}" ${g.guess ? 'checked' : ''}>
+      <span class="sport-title">${g.title ? g.title.replace(/[<>&]/g, '') : 'sport ' + g.id}</span>
+      <span class="sport-meta">${g.n} activities · ${g.km.toFixed(0)} km · ${
+        g.speed ? g.speed.toFixed(1) + ' km/h' : 'no pace'}</span></label>`).join('');
+  sportBox.hidden = false;
+}
+
+function commit(ids) {
+  let data;
+  try { data = buildData(pendingParsed, ids, pendingName); }
+  catch (e) { fail(e.message); return; }
+  if (data.values.length < 2) { fail('that export only covers a single day'); return; }
+  if (!lsSet(LS_DATA, data)) {
+    fail('Could not save to local storage, so this would not be remembered. ' +
+         'Private browsing usually causes this.');
+    return;
+  }
+  lsSet(LS_SPORTS, [...ids]);
+  location.reload();
+}
+
+document.getElementById('gate-pick').onclick = pickAndParse;
+document.getElementById('gate-cancel').onclick = closeGate;
+document.getElementById('gate-use').onclick = () => {
+  const ids = new Set([...sportList.querySelectorAll('input:checked')].map(i => i.value));
+  if (!ids.size) { fail('Pick at least one sport.'); return; }
+  commit(ids);
+};
+
+// ---------------------------------------------------------------------------
+// Boot
+// ---------------------------------------------------------------------------
+const cached = lsGet(LS_DATA);
+if (cached && cached.schema === SCHEMA && Array.isArray(cached.values) && cached.values.length > 1) {
+  window.RUNVIZ = cached;
+} else {
+  openGate(false);
+}
+
+// Once running from cache, offer to re-read the remembered file so a fresh export
+// shows up. Only auto-reads when permission is already granted, and only once per
+// tab, so it can never loop.
+window.addEventListener('DOMContentLoaded', async () => {
+  if (!window.RUNVIZ) return;
+  const info = document.getElementById('data-info');
+  if (info) {
+    info.innerHTML = `<span class="dim">Data:</span> ${window.RUNVIZ.fileName || 'local file'}` +
+      ` <span class="dim">· ${window.RUNVIZ.values.length} days · loaded ${window.RUNVIZ.loadedAt}</span>`;
+  }
+  const change = document.getElementById('data-change');
+  if (change) change.onclick = () => openGate(true);
+
+  const handle = await getHandle();
+  const refresh = document.getElementById('data-refresh');
+  if (!handle) { if (refresh) refresh.hidden = true; return; }
+
+  const reread = async () => {
+    if ((await handle.requestPermission({ mode: 'read' })) !== 'granted') return;
+    pendingParsed = parseCsv(await (await handle.getFile()).text());
+    pendingName = handle.name;
+    commit(new Set(lsGet(LS_SPORTS) || window.RUNVIZ.sports || []));
+  };
+  if (refresh) { refresh.hidden = false; refresh.onclick = reread; }
+
+  try {
+    if ((await handle.queryPermission({ mode: 'read' })) === 'granted'
+        && !sessionStorage.getItem('runviz.reread')) {
+      sessionStorage.setItem('runviz.reread', '1');
+      const text = await (await handle.getFile()).text();
+      const fresh = buildData(parseCsv(text), new Set(lsGet(LS_SPORTS) || []), handle.name);
+      const same = fresh.start === window.RUNVIZ.start
+        && fresh.values.length === window.RUNVIZ.values.length
+        && fresh.runCount === window.RUNVIZ.runCount;
+      if (!same) { lsSet(LS_DATA, fresh); location.reload(); }
+    }
+  } catch (e) { /* permission lapsed or file moved — the cache still stands */ }
+});
+</script>
+
+<script>
+const DATA = window.RUNVIZ;
+if (DATA) {
+let WINDOW = 70;   // rolling window, in days — adjustable in the controls row
+
+// ---- derive series -------------------------------------------------------
+const daily = DATA.values;
+const maxRun = DATA.maxRun;   // longest single run that day
+const nRuns  = DATA.nRuns;    // how many separate runs that day
+const N = daily.length;
+const start = new Date(DATA.start + "T00:00:00");
+const dateAt = i => new Date(start.getTime() + i * 86400000);
+
+// Trailing 90-day mean. The first 90 days have no full window behind them, so the
+// denominator is a choice: a full 90 (the series ramps up from zero) or the days
+// actually elapsed (day 1 reads as a 5 km/day "average" off a single run).
+let fullWindow = true;
+let compareMode = 'mean';   // 'mean' | 'median' — what each run is measured against
+const avg = new Array(N);
+const runs = new Array(N);   // how many of the trailing WINDOW days had a run on them
+const target = new Array(N); // what each day's run had to be to hold the average (see computeTargets)
+const longOn = new Array(N); // was the long-run scheme in play that day at all?
+const rpwPrev = new Array(N); // run days per week as of the day before
+// Days actually behind a given index — the window is short only at the very start.
+// Deliberately independent of the ramp-in setting, which describes the average
+// line, not the rates derived from the window (same reasoning as the target).
+const windowDays = i => Math.min(i + 1, WINDOW);
+// Never state a weekly rate off less than a week of history: one run on day one is
+// not "7 runs a week". Both the volume and the run count use this same floor, so
+// their ratio (mean km per run) is untouched by it.
+const rateDays  = i => Math.max(windowDays(i), 7);
+const perWeekAt = i => runs[i] * 7 / rateDays(i);
+const LONG_MIN_RUNS_PER_WEEK = 3.0;
+function recompute() {
+  let running = 0, ran = 0;
+  for (let i = 0; i < N; i++) {
+    running += daily[i];
+    if (daily[i] > 0) ran++;
+    if (i >= WINDOW) {
+      running -= daily[i - WINDOW];
+      if (daily[i - WINDOW] > 0) ran--;
+    }
+    avg[i] = running / (fullWindow ? WINDOW : Math.min(i + 1, WINDOW));
+    runs[i] = ran;
+  }
+  computeTargets();
+}
+recompute();
+
+// --- perceptual colour mixing (OKLab) so mid-ramp steps don't go muddy -------
+function srgbToLinear(c) { c /= 255; return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); }
+function linearToSrgb(c) { const v = c <= 0.0031308 ? c * 12.92 : 1.055 * Math.pow(c, 1/2.4) - 0.055;
+  return Math.max(0, Math.min(255, Math.round(v * 255))); }
+function hexToOklab(hex) {
+  const h = hex.trim().replace('#', '');
+  const r = srgbToLinear(parseInt(h.slice(0,2),16)), g = srgbToLinear(parseInt(h.slice(2,4),16)), b = srgbToLinear(parseInt(h.slice(4,6),16));
+  const l = Math.cbrt(0.4122214708*r + 0.5363325363*g + 0.0514459929*b);
+  const m = Math.cbrt(0.2119034982*r + 0.6806995451*g + 0.1073969566*b);
+  const s = Math.cbrt(0.0883024619*r + 0.2817188376*g + 0.6299787005*b);
+  return [0.2104542553*l + 0.7936177850*m - 0.0040720468*s,
+          1.9779984951*l - 2.4285922050*m + 0.4505937099*s,
+          0.0259040371*l + 0.7827717662*m - 0.8086757660*s];
+}
+function oklabToCss([L, A, B]) {
+  const l = Math.pow(L + 0.3963377774*A + 0.2158037573*B, 3);
+  const m = Math.pow(L - 0.1055613458*A - 0.0638541728*B, 3);
+  const s = Math.pow(L - 0.0894841775*A - 1.2914855480*B, 3);
+  return 'rgb(' + linearToSrgb( 4.0767416621*l - 3.3077115913*m + 0.2309699292*s) + ','
+                + linearToSrgb(-1.2684380046*l + 2.6097574011*m - 0.3413193965*s) + ','
+                + linearToSrgb(-0.0041960863*l - 0.7034186147*m + 1.7076147010*s) + ')';
+}
+
+// One ramp per (scheme, direction) per frame, so the OKLab maths runs 4x24 times
+// rather than once per bar.
+const RAMP_STEPS = 24;
+let ramps = null;
+function buildRamps() {
+  const make = (weak, strong) => {
+    const a = hexToOklab(weak), b = hexToOklab(strong), out = [];
+    for (let k = 0; k <= RAMP_STEPS; k++) {
+      const t = k / RAMP_STEPS;
+      out.push(oklabToCss([a[0] + (b[0]-a[0])*t, a[1] + (b[1]-a[1])*t, a[2] + (b[2]-a[2])*t]));
+    }
+    return out;
+  };
+  ramps = {
+    normal: { un: make(C('--n-un-weak'), C('--n-un')), pr: make(C('--n-pr-weak'), C('--n-pr')) },
+    long:   { un: make(C('--l-un-weak'), C('--l-un')), pr: make(C('--l-pr-weak'), C('--l-pr')) },
+  };
+}
+function barColour(c) {
+  if (!ramps) buildRamps();
+  if (!c) return C('--rest');
+  if (!colourScheme[c.scheme]) return C('--nocolour');
+  // stable = the bottom of the productive ramp, so "just holding" and "just above"
+  // sit next to each other instead of jumping to an unrelated hue
+  if (c.dir === 'st') return ramps[c.scheme].pr[0];
+  return ramps[c.scheme][c.dir][Math.round(c.t * RAMP_STEPS)];
+}
+function fullColour(c) {
+  if (!ramps) buildRamps();
+  if (!c) return C('--rest');
+  // the pale stable step has too little contrast for text, so labels carry it
+  if (c.dir === 'st') return C('--text-secondary');
+  return ramps[c.scheme][c.dir][RAMP_STEPS];
+}
+
+// Long runs also carry a 45° hatch. Hue is doing the productive/stable/unproductive
+// work and can only separate three ways at once, so the scheme rides on a
+// non-colour channel instead of a fourth, fifth and sixth hue.
+let hatchPattern = null, hatchKey = '';
+function hatch() {
+  const ink = C('--hatch');
+  if (hatchPattern && hatchKey === ink) return hatchPattern;
+  const t = document.createElement('canvas');
+  t.width = t.height = 8;
+  const g = t.getContext('2d');
+  g.strokeStyle = ink; g.lineWidth = 1.5;
+  g.beginPath();
+  g.moveTo(-2, 6); g.lineTo(6, -2);
+  g.moveTo(2, 10); g.lineTo(10, 2);
+  g.stroke();
+  hatchPattern = ctx.createPattern(t, 'repeat');
+  hatchKey = ink;
+  return hatchPattern;
+}
+// What today's run had to be to hold the average steady, judged only on where
+// things stood YESTERDAY — comparing a run against an average it is itself part of
+// is circular, and the raw average also moves when an old run drops out of the
+// window. Holding avg km/day at a frequency of r run days per week means each run
+// has to cover a week's volume spread over those r runs:
+//     target = avg(yesterday) x 7 / runDaysPerWeek(yesterday)
+// which is just the average distance per running day as of yesterday.
+function computeTargets() {
+  target[0] = 0;   // nothing behind day one, so any run counts as an increase
+  // Rates over the window ending yesterday, and whether long runs apply at all.
+  // Below 3 run days per week there is no room for a run to be "the long one", so
+  // the long scheme is switched off and everything is read against 1x.
+  {
+    let rd = 0;
+    for (let i = 1; i < N; i++) {
+      if (daily[i-1] > 0) rd++;
+      const dropped = i - 1 - WINDOW;
+      if (dropped >= 0 && daily[dropped] > 0) rd--;
+      rpwPrev[i] = rd * 7 / Math.max(Math.min(i, WINDOW), 7);
+      longOn[i] = rpwPrev[i] >= LONG_MIN_RUNS_PER_WEEK;
+    }
+    rpwPrev[0] = 0; longOn[0] = false;
+  }
+
+  if (compareMode === 'mean') {
+    // Weekly volume split over the week's runs. Once long runs are in play one of
+    // them is expected to be worth two, so a 3-runs-a-week week is 1+1+2 = 4
+    // target-sized efforts, not 3: divide by runsPerWeek + 1.
+    //
+    // Written from the window's own sum and day count rather than as
+    // avg x 7 / runsPerWeek, because those agree only while the window is full —
+    // the old form inflated the target by WINDOW/elapsed in "days elapsed" mode.
+    let sum = 0;
+    for (let i = 1; i < N; i++) {
+      sum += daily[i-1];
+      const dropped = i - 1 - WINDOW;
+      if (dropped >= 0) sum -= daily[dropped];
+      const wd = Math.max(Math.min(i, WINDOW), 7);
+      const weekly = sum * 7 / wd;
+      const divisor = rpwPrev[i] + (longOn[i] ? 1 : 0);
+      target[i] = divisor > 0 ? weekly / divisor : 0;
+    }
+    return;
+  }
+  // Median mode: the middle run of the previous window. Run distances are
+  // right-skewed (a few long ones pull the mean up), so the mean target sits above
+  // the typical run and days lean orange even when volume is flat; the median
+  // splits the window's runs down the middle instead.
+  // Kept as a sorted array with binary insert/remove, so this is one pass, not a
+  // sort per day.
+  const win = [];
+  const at = v => { let lo = 0, hi = win.length;
+    while (lo < hi) { const m = (lo + hi) >> 1; if (win[m] < v) lo = m + 1; else hi = m; } return lo; };
+  for (let i = 1; i < N; i++) {
+    if (daily[i-1] > 0) win.splice(at(daily[i-1]), 0, daily[i-1]);
+    const dropped = i - 1 - WINDOW;
+    if (dropped >= 0 && daily[dropped] > 0) {
+      const k = at(daily[dropped]);
+      if (win[k] === daily[dropped]) win.splice(k, 1);
+    }
+    const n = win.length;
+    target[i] = n === 0 ? 0 : (n % 2 ? win[(n - 1) / 2] : (win[n/2 - 1] + win[n/2]) / 2);
+  }
+}
+
+// Two schemes, three meanings each. A run is judged on its ratio to the day's
+// target: normal runs are read against 1x, long runs (past the 1.5x midpoint)
+// against 2x. Within a scheme, landing inside ±stableBand of the centre is
+// "stable"; outside it the colour ramps to full strength over the remaining
+// distance to the halfway mark, so the two schemes tile the whole range:
+//   <50 full un | 50-95 ramp un | 95-105 stable | 105-150 ramp pr   (normal, 1x)
+//   150-195 ramp un | 195-205 stable | 205-250 ramp pr | >250 full pr (long, 2x)
+let stableBand = 0.01;   // ±fraction of the centre, adjustable 0–5%
+// Each scheme's colouring can be switched off independently; its bars then fall back
+// to a neutral, which stays distinct from the paler rest-day grey.
+const colourScheme = { normal: true, long: true };
+// A day can reach 150% of target either with one big run or by stacking a couple of
+// ordinary ones. With this on, only a single run that clears 150% on its own makes
+// the day a long-run day; stacked days stay in the normal scheme (where their large
+// total still reads as productive).
+let longNeedsSingleRun = true;
+
+const DIR_LABEL = { un: 'unproductive', st: 'stable', pr: 'productive' };
+const DIR_ARROW = { un: '▼', st: '=', pr: '▲' };
+
+function classify(i) {
+  if (daily[i] <= 0) return null;                 // rest day
+  const tg = target[i];
+  if (!(tg > 0)) return { scheme: 'normal', dir: 'pr', t: 1, ratio: null };
+  const ratio = daily[i] / tg;
+  // 150% exactly belongs to the normal scheme; below the frequency floor there is
+  // no long scheme to fall into, so even a huge day is read against 1x
+  const long = longOn[i] && (longNeedsSingleRun ? maxRun[i] : daily[i]) > 1.5 * tg;
+  const d = ratio - (long ? 2 : 1);
+  const S = stableBand, G = 0.5 - S;
+  const scheme = long ? 'long' : 'normal';
+  // epsilon: 1.05 - 1 lands a hair above 0.05 in binary floating point, which would
+  // drop the exact band edges out of "stable"
+  if (Math.abs(d) <= S + 1e-9) return { scheme, dir: 'st', t: 1, ratio };
+  return { scheme, dir: d > 0 ? 'pr' : 'un', t: G > 0 ? Math.min(1, (Math.abs(d) - S) / G) : 1, ratio };
+}
+
+const fmtDate = new Intl.DateTimeFormat(undefined, { weekday:'short', year:'numeric', month:'short', day:'numeric' });
+const fmtShort = new Intl.DateTimeFormat(undefined, { year:'numeric', month:'short', day:'numeric' });
+const fmtMon = new Intl.DateTimeFormat(undefined, { month:'short' });
+const km = v => v.toFixed(2);
+// The same rolling rate, expressed over longer spans. A month is 365/12 days so
+// the three figures stay consistent with each other rather than with the calendar.
+const nf0 = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
+const nf1 = new Intl.NumberFormat(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const perWeekKm  = v => v * 7;
+const perMonthKm = v => v * 365 / 12;
+const perYearKm  = v => v * 365;
+const rateSummary = v => `${nf1.format(perWeekKm(v))} km/wk · ${nf0.format(perMonthKm(v))} km/mo · ${nf0.format(perYearKm(v))} km/yr`;
+
+// ---- stat tiles ----------------------------------------------------------
+const total = daily.reduce((a,b)=>a+b,0);
+const runDays = daily.filter(v=>v>0).length;
+function renderTiles() {
+  // all-time figures first, then the rolling rate as one box read left-to-right,
+  // top-to-bottom: day, week, month, year
+  const totals = [
+    ['Total distance', total.toFixed(0), 'km'],
+    ['Runs logged', String(DATA.runCount), ''],
+    ['Days with a run', runDays + ' / ' + N, ''],
+    ['All-time avg', (total/N).toFixed(2), 'km/day'],
+  ].map(([k,v,u]) => `<div class="tile"><div class="k">${k}</div><div class="v">${v}<span class="u">${u}</span></div></div>`).join('');
+
+  const a = avg[N-1];
+  const tg = target[N-1];
+  const gate = longOn[N-1];
+  const targetCells = [
+    [km(tg), 'km/run'],
+    ...(gate ? [[km(1.5 * tg), 'km long-run floor'], [km(2 * tg), 'km long-run target']] : []),
+  ].map(([v,u]) => `<div class="cell"><span class="v">${v}</span><span class="u">${u}</span></div>`).join('');
+
+  const cells = [
+    [a.toFixed(2), 'km/day'],
+    [nf1.format(perWeekKm(a)), 'km/wk'],
+    [nf0.format(perMonthKm(a)), 'km/mo'],
+    [nf0.format(perYearKm(a)), 'km/yr'],
+  ].map(([v,u]) => `<div class="cell"><span class="v">${v}</span><span class="u">${u}</span></div>`).join('');
+
+  document.getElementById('tiles').innerHTML = totals +
+    `<div class="tile combo"><div class="k">Current ${WINDOW}-day average</div><div class="grid">${cells}</div></div>` +
+    `<div class="tile combo target"><div class="k">Today&rsquo;s ${compareMode} target</div>` +
+      `<div class="grid ${gate ? 'three' : 'one'}">${targetCells}</div>` +
+      (gate ? '' : `<div class="note">long runs need &ge;${LONG_MIN_RUNS_PER_WEEK} runs/wk &mdash; at ${perWeekAt(N-1).toFixed(1)}</div>`) +
+    `</div>`;
+}
+renderTiles();
+
+// ---- view state ----------------------------------------------------------
+const cv  = document.getElementById('chart');
+const ctx = cv.getContext('2d');
+const cv2  = document.getElementById('chart2');
+const ctx2 = cv2.getContext('2d');
+
+let span = N;             // days visible
+let center = N / 2;       // index at the horizontal centre
+let tSpan = span, tCenter = center;   // animation targets
+let hover = null;
+
+const clampView = () => {
+  span = Math.max(5, Math.min(N, span));
+  const half = span / 2;
+  center = span >= N ? N / 2 : Math.max(half, Math.min(N - half, center));
+};
+const clampTarget = () => {
+  tSpan = Math.max(5, Math.min(N, tSpan));
+  const half = tSpan / 2;
+  tCenter = tSpan >= N ? N / 2 : Math.max(half, Math.min(N - half, tCenter));
+};
+
+let raf = null;
+function animate() {
+  const ds = tSpan - span, dc = tCenter - center;
+  if (Math.abs(ds) < 0.01 && Math.abs(dc) < 0.001) {
+    span = tSpan; center = tCenter; clampView(); drawAll(); raf = null; return;
+  }
+  span += ds * 0.25; center += dc * 0.25; clampView(); drawAll();
+  raf = requestAnimationFrame(animate);
+}
+const kick = () => { clampTarget(); if (!raf) raf = requestAnimationFrame(animate); };
+
+// ---- shared geometry -----------------------------------------------------
+// Both panels share the left/right padding and the same x mapping, so a day sits
+// at the same screen x in each.
+const PAD  = { l: 54, r: 14 };
+const BARS = { t: 14, b: 12 };    // top panel insets
+const FREQ = { t: 10, b: 26 };   // bottom panel insets (carries the x labels)
+let W = 0;
+const plotW = () => W - PAD.l - PAD.r;
+const barW  = () => plotW() / span;
+const left  = () => center - span / 2;
+const xOf   = i => PAD.l + (i - left()) * barW();
+const idxAt = px => Math.floor((px - PAD.l) / barW() + left());
+
+function niceTicks(max) {
+  const raw = max / 4;
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const step = ([1, 2, 2.5, 5, 10].find(m => m * mag >= raw) || 10) * mag;
+  const n = Math.ceil(max / step - 1e-9);
+  const out = [];
+  for (let k = 0; k <= n; k++) out.push(k * step);
+  out.step = step;
+  return out;
+}
+
+const C = k => getComputedStyle(document.documentElement).getPropertyValue(k).trim();
+
+function fitCanvas(canvas, context) {
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  if (canvas.width !== Math.round(w*dpr) || canvas.height !== Math.round(h*dpr)) {
+    canvas.width = Math.round(w*dpr); canvas.height = Math.round(h*dpr);
+  }
+  context.setTransform(dpr, 0, 0, dpr, 0, 0);
+  context.clearRect(0, 0, w, h);
+  return { w, h };
+}
+
+const visibleRange = () => [
+  Math.max(0, Math.floor(left()) - 1),
+  Math.min(N - 1, Math.ceil(left() + span) + 1),
+];
+
+// ---- panel 1: distance ---------------------------------------------------
+function drawBars() {
+  buildRamps();
+  const { w, h } = fitCanvas(cv, ctx);
+  W = w;
+  const plotH = h - BARS.t - BARS.b;
+  const [i0, i1] = visibleRange();
+
+  let yMax = 0;
+  for (let i = i0; i <= i1; i++) if (avg[i] > yMax) yMax = avg[i];
+  yMax = Math.max(yMax * 1.12, 1);
+  const ticks = niceTicks(yMax);
+  yMax = ticks[ticks.length - 1];
+  const dec = ticks.step < 1 ? (ticks.step < 0.2 ? 2 : 1) : 0;
+  const yOf = v => BARS.t + plotH * (1 - v / yMax);
+
+  ctx.font = '11px system-ui, -apple-system, sans-serif';
+  ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  for (const t of ticks) {
+    const y = Math.round(yOf(t)) + 0.5;
+    ctx.strokeStyle = t === 0 ? C('--baseline') : C('--grid');
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(PAD.l, y); ctx.lineTo(w - PAD.r, y); ctx.stroke();
+    ctx.fillStyle = C('--muted');
+    ctx.fillText(t.toFixed(dec), PAD.l - 8, y);
+  }
+  ctx.save();
+  ctx.translate(13, BARS.t + plotH/2); ctx.rotate(-Math.PI/2);
+  ctx.textAlign = 'center'; ctx.fillStyle = C('--muted');
+  ctx.fillText('km per day', 0, 0);
+  ctx.restore();
+
+  // Bars butt up against each other at every zoom level: each bar spans from its
+  // own day boundary to the next, both snapped to whole pixels so neighbours share
+  // an edge exactly and antialiasing can't open a seam between them.
+  ctx.save();
+  ctx.beginPath(); ctx.rect(PAD.l, BARS.t, plotW(), plotH); ctx.clip();
+  for (let i = i0; i <= i1; i++) {
+    const x0 = Math.round(xOf(i)), x1 = Math.round(xOf(i + 1));
+    const bw = Math.max(1, x1 - x0);
+    const y = yOf(avg[i]);
+    const hh = BARS.t + plotH - y;
+    if (hh <= 0) continue;
+    const c = classify(i);
+    ctx.fillStyle = barColour(c);
+    ctx.fillRect(x0, y, bw, hh);
+    // the hatch is what makes long runs readable when their colouring is switched
+    // off, so it is not gated on the toggle
+    if (c && c.scheme === 'long' && bw >= 2) {
+      ctx.fillStyle = hatch(); ctx.fillRect(x0, y, bw, hh);
+    }
+  }
+
+
+  if (hover !== null && hover >= i0 && hover <= i1) {
+    const x0 = Math.round(xOf(hover)), x1 = Math.round(xOf(hover + 1));
+    const bw = Math.max(1, x1 - x0);
+    const y = yOf(avg[hover]);
+    ctx.strokeStyle = C('--text-primary');
+    ctx.lineWidth = 1;
+    ctx.globalAlpha = 0.25;
+    ctx.beginPath(); ctx.moveTo(x0 + bw/2 + 0.5, BARS.t); ctx.lineTo(x0 + bw/2 + 0.5, BARS.t + plotH); ctx.stroke();
+    ctx.globalAlpha = 1;
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(x0 - 0.25, y - 1, bw + 0.5, BARS.t + plotH - y + 1);
+  }
+  ctx.restore();
+}
+
+// ---- panel 2: how many of those 90 days had a run ------------------------
+function drawFreq() {
+  const { w, h } = fitCanvas(cv2, ctx2);
+  const plotH = h - FREQ.t - FREQ.b;
+  const [i0, i1] = visibleRange();
+  // The window is a rate now: run days per week, so windows of different lengths
+  // are directly comparable and the scale is a fixed 0–7.
+  const perWeek = perWeekAt;
+  const yMax = 7;
+  const yOf = v => FREQ.t + plotH * (1 - v / yMax);
+  const c = ctx2;
+
+  // Fill first, reference lines second: the whole point of the integer lines is to
+  // read a level off them, so they must stay legible where the area covers them.
+  const pxAt = i => xOf(i) + barW() / 2;
+  c.save();
+  c.beginPath(); c.rect(PAD.l, FREQ.t - 4, plotW(), plotH + 8); c.clip();
+  c.beginPath();
+  c.moveTo(pxAt(i0), FREQ.t + plotH);
+  for (let i = i0; i <= i1; i++) c.lineTo(pxAt(i), yOf(perWeek(i)));
+  c.lineTo(pxAt(i1), FREQ.t + plotH);
+  c.closePath();
+  c.fillStyle = C('--freq'); c.globalAlpha = 0.10; c.fill(); c.globalAlpha = 1;
+  c.restore();
+
+  c.font = '11px system-ui, -apple-system, sans-serif';
+  c.textAlign = 'right'; c.textBaseline = 'middle';
+  // one reference line per whole run-day-per-week
+  for (let t = 0; t <= 7; t++) {
+    const y = Math.round(yOf(t)) + 0.5;
+    c.strokeStyle = t === 0 ? C('--baseline') : C('--grid');
+    c.lineWidth = 1;
+    c.beginPath(); c.moveTo(PAD.l, y); c.lineTo(w - PAD.r, y); c.stroke();
+    c.fillStyle = C('--muted');
+    c.fillText(String(t), PAD.l - 8, y);
+  }
+  c.save();
+  c.translate(13, FREQ.t + plotH/2); c.rotate(-Math.PI/2);
+  c.textAlign = 'center'; c.fillStyle = C('--muted');
+  c.fillText('run days / week', 0, 0);
+  c.restore();
+
+  c.save();
+  c.beginPath(); c.rect(PAD.l, FREQ.t - 4, plotW(), plotH + 8); c.clip();
+  const px = i => xOf(i) + barW() / 2;
+
+  c.beginPath();
+  for (let i = i0; i <= i1; i++) {
+    const x = px(i), y = yOf(perWeek(i));
+    if (i === i0) c.moveTo(x, y); else c.lineTo(x, y);
+  }
+  c.strokeStyle = C('--freq'); c.lineWidth = 2;
+  c.lineJoin = 'round'; c.lineCap = 'round';
+  c.stroke();
+
+  if (hover !== null && hover >= i0 && hover <= i1) {
+    const x = Math.round(px(hover)) + 0.5, y = yOf(perWeek(hover));
+    c.strokeStyle = C('--text-primary'); c.lineWidth = 1; c.globalAlpha = 0.25;
+    c.beginPath(); c.moveTo(x, FREQ.t); c.lineTo(x, FREQ.t + plotH); c.stroke();
+    c.globalAlpha = 1;
+    c.beginPath(); c.arc(x, y, 4.5, 0, Math.PI * 2);
+    c.fillStyle = C('--freq'); c.fill();
+    c.strokeStyle = C('--surface-1'); c.lineWidth = 2; c.stroke();
+  }
+  c.restore();
+
+  // x axis labels live on the bottom panel only; both panels share the x mapping
+  c.textAlign = 'center'; c.textBaseline = 'top';
+  c.fillStyle = C('--muted');
+  const ty = FREQ.t + plotH + 7;
+  const labelEvery = (() => {
+    if (span <= 21) return { kind: 'day', n: Math.ceil(span / 10) };
+    if (span <= 120) return { kind: 'week' };
+    if (span <= 500) return { kind: 'month', n: 1 };
+    if (span <= 1100) return { kind: 'month', n: 3 };
+    return { kind: 'month', n: 6 };
+  })();
+  let lastX = -1e9;
+  if (labelEvery.kind !== 'day') {
+    const d0 = dateAt(Math.max(0, Math.ceil(left())));
+    c.fillText(String(d0.getFullYear()), PAD.l + 16, ty);
+    lastX = PAD.l + 16;
+  }
+  for (let i = i0; i <= i1; i++) {
+    const d = dateAt(i);
+    let show = false, text = '';
+    if (labelEvery.kind === 'day') { show = i % labelEvery.n === 0; text = fmtShort.format(d); }
+    else if (labelEvery.kind === 'week') { show = d.getDay() === 1; text = d.getDate() + ' ' + fmtMon.format(d); }
+    else {
+      show = d.getDate() === 1 && (d.getMonth() % labelEvery.n === 0);
+      text = d.getMonth() === 0 ? String(d.getFullYear()) : fmtMon.format(d);
+    }
+    if (!show) continue;
+    const x = px(i);
+    if (x < PAD.l - 2 || x > w - PAD.r + 2 || x - lastX < 46) continue;
+    lastX = x;
+    c.fillText(text, x, ty);
+  }
+}
+
+function drawAll() {
+  drawBars();
+  drawFreq();
+  const [i0, i1] = visibleRange();
+  renderTable(i0, i1);
+}
+const draw = drawAll;
+
+// ---- readout -------------------------------------------------------------
+const ro = document.getElementById('readout');
+function setReadout(i) {
+  if (i === null) {
+    // The idle state carries an invisible label/value pair so the panel is exactly
+    // as tall as the hovered state — otherwise the box twitches by a few pixels
+    // every time the pointer enters or leaves the chart.
+    ro.className = 'readout idle';
+    ro.innerHTML = '<span class="date">Hover a bar to see that day&rsquo;s numbers</span>' +
+      '<span class="pair spacer-pair" aria-hidden="true"><span class="k">&nbsp;</span><span class="v">&nbsp;</span><span class="v2">&nbsp;</span></span>';
+    return;
+  }
+  const c = classify(i);
+  const wd = windowDays(i);
+  ro.className = 'readout';
+  ro.innerHTML = `
+    <span class="date">${fmtDate.format(dateAt(i))}</span>
+    <span class="pair"><span class="k">Distance that day</span><span class="v">${daily[i] > 0 ? km(daily[i]) + ' km' : 'no run'}${nRuns[i] > 1 ? `<span class="sub-v"> in ${nRuns[i]} runs</span>` : ''}</span><span class="v2">${
+      target[i] > 0
+        ? compareMode + ' target ' + km(target[i]) + ' km'
+          + (compareMode === 'mean' ? ' · weekly ÷ ' + (rpwPrev[i] + (longOn[i] ? 1 : 0)).toFixed(1) : '')
+          + (longOn[i] ? '' : ' · no long runs')
+          + (nRuns[i] > 1 ? ' · longest ' + km(maxRun[i]) : '')
+        : 'no target yet'}</span></span>
+    <span class="pair"><span class="k">${WINDOW}-day average${i < WINDOW - 1 ? ' (partial)' : ''}</span><span class="v">${km(avg[i])} km/day</span><span class="v2">${rateSummary(avg[i])}</span></span>
+    <span class="pair"><span class="k">Run days per week</span><span class="v">${perWeekAt(i).toFixed(1)}<span class="sub-v"> · ${runs[i]} of ${wd} days</span></span></span>
+    <span class="badge" style="color:${c ? fullColour(c) : 'var(--text-secondary)'}">${
+      !c ? '— rest day'
+         : `${DIR_ARROW[c.dir]} ${c.scheme === 'long' ? 'long run · ' : ''}${DIR_LABEL[c.dir]}${
+             c.ratio === null ? '' : ' · ' + Math.round(c.ratio * 100) + '% of target'}`
+    }</span>`;
+}
+
+// ---- table ---------------------------------------------------------------
+const tbody = document.getElementById('tbody');
+let tableKey = '';
+function renderTable(i0, i1) {
+  const key = i0 + ':' + i1 + ':' + fullWindow + ':' + WINDOW;
+  if (key === tableKey) return;
+  tableKey = key;
+  const rows = [];
+  for (let i = Math.min(i1, i0 + 400); i >= i0; i--) {
+    rows.push(`<tr><td>${fmtShort.format(dateAt(i))}</td><td>${daily[i] > 0 ? km(daily[i]) : '—'}</td><td>${km(avg[i])}</td><td>${perWeekAt(i).toFixed(1)}</td><td>${target[i] > 0 ? km(target[i]) : '—'}</td><td>${(() => { const c = classify(i);
+        return c ? `<span style="color:${fullColour(c)}">${DIR_ARROW[c.dir]} ${c.scheme === 'long' ? 'long · ' : ''}${DIR_LABEL[c.dir]}</span>${c.ratio === null ? '' : ' <span style="color:var(--muted)">' + Math.round(c.ratio * 100) + '%</span>'}`
+                  : '<span style="color:var(--text-secondary)">— no run</span>'; })()}</td></tr>`);
+  }
+  if (i1 - i0 > 400) rows.push(`<tr><td colspan="6" style="text-align:left;color:var(--muted)">Showing the most recent 400 of ${i1-i0+1} days in view — zoom in for the rest.</td></tr>`);
+  tbody.innerHTML = rows.join('');
+}
+
+// ---- interaction (both panels drive the same view) -----------------------
+let drag = null;
+
+function onMove(e) {
+  const rect = e.currentTarget.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  if (drag) {
+    center = drag.center - (mx - drag.x) / barW();
+    tCenter = center; tSpan = span; clampView(); drawAll();
+    return;
+  }
+  const i = idxAt(mx);
+  const next = (i >= 0 && i < N && mx >= PAD.l && mx <= W - PAD.r) ? i : null;
+  if (next !== hover) { hover = next; setReadout(hover); drawAll(); }
+}
+
+function onWheel(e) {
+  e.preventDefault();
+  if (raf) { cancelAnimationFrame(raf); raf = null; span = tSpan; center = tCenter; clampView(); }
+  const rect = e.currentTarget.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  // Zoom about the cursor: the (fractional) day under the pointer keeps the same
+  // screen x, so both sides scale around it instead of the left edge staying put.
+  const frac = Math.min(1, Math.max(0, (mx - PAD.l) / plotW()));
+  const anchorDay = left() + frac * span;
+  span = Math.max(5, Math.min(N, span / Math.exp(-e.deltaY * 0.0022)));
+  center = anchorDay + (0.5 - frac) * span;
+  clampView();
+  tSpan = span; tCenter = center;
+  const i = idxAt(mx);
+  const next = (i >= 0 && i < N) ? i : null;
+  if (next !== hover) { hover = next; setReadout(hover); }
+  drawAll();
+}
+
+let pinch = null;
+function onTouchStart(e) {
+  if (e.touches.length === 2) {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+    const mid = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left;
+    const frac = Math.min(1, Math.max(0, (mid - PAD.l) / plotW()));
+    pinch = { d, span, frac, anchorDay: left() + frac * span };
+  }
+}
+function onTouchMove(e) {
+  if (pinch && e.touches.length === 2) {
+    e.preventDefault();
+    const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+    span = Math.max(5, Math.min(N, pinch.span * (pinch.d / d)));
+    center = pinch.anchorDay + (0.5 - pinch.frac) * span;
+    clampView(); tSpan = span; tCenter = center; drawAll();
+  }
+}
+
+for (const el of [cv, cv2]) {
+  el.addEventListener('mousemove', onMove);
+  el.addEventListener('mouseleave', () => { hover = null; setReadout(null); drawAll(); });
+  el.addEventListener('wheel', onWheel, { passive: false });
+  el.addEventListener('mousedown', e => {
+    const rect = el.getBoundingClientRect();
+    drag = { x: e.clientX - rect.left, center };
+    el.style.cursor = 'grabbing';
+  });
+  el.addEventListener('dblclick', () => { tSpan = N; tCenter = N / 2; kick(); });
+  el.addEventListener('touchstart', onTouchStart, { passive: true });
+  el.addEventListener('touchmove', onTouchMove, { passive: false });
+  el.addEventListener('touchend', () => { pinch = null; });
+}
+window.addEventListener('mouseup', () => {
+  drag = null; cv.style.cursor = 'crosshair'; cv2.style.cursor = 'crosshair';
+});
+
+document.getElementById('reset').onclick = () => { tSpan = N; tCenter = N / 2; kick(); };
+function syncLabels() {
+  document.getElementById('h1win').textContent = WINDOW;
+  for (const el of document.querySelectorAll('.cmpN')) el.textContent = compareMode;
+  const pct = +(stableBand * 100).toFixed(1);
+  for (const el of document.querySelectorAll('.bandN')) el.textContent = pct;
+  for (const el of document.querySelectorAll('.gradN')) el.textContent = +(50 - pct).toFixed(1);
+  document.getElementById('rampN').textContent = WINDOW;
+  for (const el of document.querySelectorAll('.winN')) el.textContent = WINDOW;
+  document.title = `Running history — ${WINDOW}-day rolling average`;
+  renderTiles();
+}
+
+function applyWindow() {
+  recompute();
+  syncLabels();
+  if (hover !== null) setReadout(hover);
+  tableKey = '';
+  drawAll();
+}
+
+document.getElementById('rampMode').onchange = e => {
+  fullWindow = e.target.value === 'full';
+  applyWindow();
+};
+for (const [scheme, id] of [['normal', 'colourNormal'], ['long', 'colourLong']]) {
+  const box = document.getElementById(id);
+  box.onchange = () => {
+    colourScheme[scheme] = box.checked;
+    document.getElementById('row-' + scheme).classList.toggle('off', !box.checked);
+    drawAll();
+  };
+}
+const longSingleBox = document.getElementById('longSingle');
+longSingleBox.onchange = () => {
+  longNeedsSingleRun = longSingleBox.checked;
+  if (hover !== null) setReadout(hover);
+  tableKey = '';
+  drawAll();
+};
+const bandInput = document.getElementById('stableBand');
+bandInput.onchange = bandInput.oninput = () => {
+  const v = Number(bandInput.value);
+  if (!Number.isFinite(v) || v < 0 || v > 5) return;
+  stableBand = v / 100;
+  syncLabels();
+  if (hover !== null) setReadout(hover);
+  tableKey = '';
+  drawAll();
+};
+document.getElementById('compareMode').onchange = e => {
+  compareMode = e.target.value;
+  computeTargets();
+  syncLabels();
+  if (hover !== null) setReadout(hover);
+  tableKey = '';
+  drawAll();
+};
+const winInput = document.getElementById('windowDays');
+winInput.onchange = winInput.oninput = () => {
+  const v = Math.round(Number(winInput.value));
+  if (!Number.isFinite(v) || v < 7 || v > 365) return;   // ignore half-typed values
+  WINDOW = v;
+  applyWindow();
+};
+syncLabels();
+
+window.addEventListener('resize', drawAll);
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', drawAll);
+drawAll();
+}
+</script>
+</body>
+</html>
