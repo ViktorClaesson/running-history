@@ -111,6 +111,18 @@
   .tile.combo .grid.three { grid-template-columns: repeat(3, auto); gap: 2px 22px; }
   .tile.combo .grid.one { grid-template-columns: auto; }
   .tile.combo .note { font-size: 11px; color: var(--muted); margin-top: 3px; }
+  .tile.combo.target { min-width: 330px; }
+  .tile.combo .plan { display: flex; align-items: baseline; gap: 4px; margin: 3px 0 1px;
+    font-size: 12px; color: var(--text-secondary); }
+  .tile.combo .plan input { font: inherit; font-size: 13px; font-weight: 600; width: 52px;
+    text-align: right; color: var(--text-primary); background: transparent;
+    border: 0; border-bottom: 1px solid var(--border); padding: 0 2px;
+    font-variant-numeric: tabular-nums; }
+  .tile.combo .plan input:focus { outline: none; border-bottom-color: var(--n-pr); }
+  .tile.combo .plan .op { color: var(--muted); margin: 0 2px; }
+  .tile.combo .plan button { font-size: 11px; padding: 1px 7px; margin-left: 4px; }
+  .whatif { font-size: 10px; font-weight: 600; color: var(--n-pr); border: 1px solid currentColor;
+    border-radius: 999px; padding: 0 5px; margin-left: 5px; letter-spacing: 0; text-transform: none; }
   .tile.combo .cell { display: flex; align-items: baseline; gap: 3px; }
   .tile.combo .cell .v { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
   .tile.combo .cell .u { font-size: 12px; font-weight: 400; color: var(--text-secondary); }
@@ -223,8 +235,8 @@
   <p class="sub">
     One bar per day. Bar height is the average daily distance over the trailing
     <span class="winN">70</span> days; the colour compares that day&rsquo;s run against the
-    <span class="cmpN">mean</span> run of the <span class="winN">70</span> days before it &mdash; read
-    against 1&times; that target for a normal run, 2&times; for a long one.
+    target for that day &mdash; a week&rsquo;s volume shared over that week&rsquo;s runs, with the long
+    run counted twice. Read against 1&times; for a normal run, 2&times; for a long one.
   </p>
 
   <div class="datarow">
@@ -268,12 +280,6 @@
       </label>
       <label class="chk" title="How close to the target still counts as holding steady.">Stable band &plusmn;
         <input type="number" id="stableBand" min="0" max="5" step="0.5" value="1">%
-      </label>
-      <label class="chk" title="What each run is measured against, over the window before it.">Compare to
-        <select id="compareMode">
-          <option value="mean">mean run</option>
-          <option value="median">median run</option>
-        </select>
       </label>
       <label class="chk" id="rampLabel">First <span id="rampN">70</span> days &divide;
         <select id="rampMode">
@@ -600,12 +606,12 @@ const dateAt = i => new Date(start.getTime() + i * 86400000);
 // denominator is a choice: a full 90 (the series ramps up from zero) or the days
 // actually elapsed (day 1 reads as a 5 km/day "average" off a single run).
 let fullWindow = true;
-let compareMode = 'mean';   // 'mean' | 'median' — what each run is measured against
 const avg = new Array(N);
 const runs = new Array(N);   // how many of the trailing WINDOW days had a run on them
 const target = new Array(N); // what each day's run had to be to hold the average (see computeTargets)
 const longOn = new Array(N); // was the long-run scheme in play that day at all?
 const rpwPrev = new Array(N); // run days per week as of the day before
+const weeklyPrev = new Array(N); // km per week as of the day before
 // Days actually behind a given index — the window is short only at the very start.
 // Deliberately independent of the ramp-in setting, which describes the average
 // line, not the rates derived from the window (same reasoning as the target).
@@ -730,47 +736,26 @@ function computeTargets() {
       rpwPrev[i] = rd * 7 / Math.max(Math.min(i, WINDOW), 7);
       longOn[i] = rpwPrev[i] >= LONG_MIN_RUNS_PER_WEEK;
     }
-    rpwPrev[0] = 0; longOn[0] = false;
+    rpwPrev[0] = 0; longOn[0] = false; weeklyPrev[0] = 0;
   }
 
-  if (compareMode === 'mean') {
-    // Weekly volume split over the week's runs. Once long runs are in play one of
-    // them is expected to be worth two, so a 3-runs-a-week week is 1+1+2 = 4
-    // target-sized efforts, not 3: divide by runsPerWeek + 1.
-    //
-    // Written from the window's own sum and day count rather than as
-    // avg x 7 / runsPerWeek, because those agree only while the window is full —
-    // the old form inflated the target by WINDOW/elapsed in "days elapsed" mode.
-    let sum = 0;
-    for (let i = 1; i < N; i++) {
-      sum += daily[i-1];
-      const dropped = i - 1 - WINDOW;
-      if (dropped >= 0) sum -= daily[dropped];
-      const wd = Math.max(Math.min(i, WINDOW), 7);
-      const weekly = sum * 7 / wd;
-      const divisor = rpwPrev[i] + (longOn[i] ? 1 : 0);
-      target[i] = divisor > 0 ? weekly / divisor : 0;
-    }
-    return;
-  }
-  // Median mode: the middle run of the previous window. Run distances are
-  // right-skewed (a few long ones pull the mean up), so the mean target sits above
-  // the typical run and days lean orange even when volume is flat; the median
-  // splits the window's runs down the middle instead.
-  // Kept as a sorted array with binary insert/remove, so this is one pass, not a
-  // sort per day.
-  const win = [];
-  const at = v => { let lo = 0, hi = win.length;
-    while (lo < hi) { const m = (lo + hi) >> 1; if (win[m] < v) lo = m + 1; else hi = m; } return lo; };
+  // Weekly volume split over the week's runs. Once long runs are in play one of
+  // them is expected to be worth two, so a 3-runs-a-week week is 1+1+2 = 4
+  // target-sized efforts, not 3: divide by runsPerWeek + 1.
+  //
+  // Written from the window's own sum and day count rather than as
+  // avg x 7 / runsPerWeek, because those agree only while the window is full —
+  // the old form inflated the target by WINDOW/elapsed in "days elapsed" mode.
+  let sum = 0;
   for (let i = 1; i < N; i++) {
-    if (daily[i-1] > 0) win.splice(at(daily[i-1]), 0, daily[i-1]);
+    sum += daily[i-1];
     const dropped = i - 1 - WINDOW;
-    if (dropped >= 0 && daily[dropped] > 0) {
-      const k = at(daily[dropped]);
-      if (win[k] === daily[dropped]) win.splice(k, 1);
-    }
-    const n = win.length;
-    target[i] = n === 0 ? 0 : (n % 2 ? win[(n - 1) / 2] : (win[n/2 - 1] + win[n/2]) / 2);
+    if (dropped >= 0) sum -= daily[dropped];
+    const wd = Math.max(Math.min(i, WINDOW), 7);
+    const weekly = sum * 7 / wd;
+    weeklyPrev[i] = weekly;
+    const divisor = rpwPrev[i] + (longOn[i] ? 1 : 0);
+    target[i] = divisor > 0 ? weekly / divisor : 0;
   }
 }
 
@@ -838,12 +823,6 @@ function renderTiles() {
   ].map(([k,v,u]) => `<div class="tile"><div class="k">${k}</div><div class="v">${v}<span class="u">${u}</span></div></div>`).join('');
 
   const a = avg[N-1];
-  const tg = target[N-1];
-  const gate = longOn[N-1];
-  const targetCells = [
-    [km(tg), 'km/run'],
-    ...(gate ? [[km(1.5 * tg), 'km long-run floor'], [km(2 * tg), 'km long-run target']] : []),
-  ].map(([v,u]) => `<div class="cell"><span class="v">${v}</span><span class="u">${u}</span></div>`).join('');
 
   const cells = [
     [a.toFixed(2), 'km/day'],
@@ -854,10 +833,62 @@ function renderTiles() {
 
   document.getElementById('tiles').innerHTML = totals +
     `<div class="tile combo"><div class="k">Current ${WINDOW}-day average</div><div class="grid">${cells}</div></div>` +
-    `<div class="tile combo target"><div class="k">Today&rsquo;s ${compareMode} target</div>` +
-      `<div class="grid ${gate ? 'three' : 'one'}">${targetCells}</div>` +
-      (gate ? '' : `<div class="note">long runs need &ge;${LONG_MIN_RUNS_PER_WEEK} runs/wk &mdash; at ${perWeekAt(N-1).toFixed(1)}</div>`) +
-    `</div>`;
+    `<div class="tile combo target" id="target-tile"></div>`;
+  renderTarget();
+}
+
+// --- Today's target, as a what-if -----------------------------------------
+// Editable so a change in weekly volume or frequency can be tried out. This box
+// only ever describes the inputs in it; the bars keep their own per-day targets
+// from the actual history, which is why it shows the real figure alongside once
+// the numbers have been touched.
+const planActual = () => ({ km: weeklyPrev[N-1], days: rpwPrev[N-1] });
+let plan = planActual();
+let planEdited = false;
+
+function targetFor(weeklyKm, runsPerWeek) {
+  const long = runsPerWeek >= LONG_MIN_RUNS_PER_WEEK;
+  const divisor = runsPerWeek + (long ? 1 : 0);
+  return { long, divisor, target: divisor > 0 ? weeklyKm / divisor : 0 };
+}
+
+function renderTarget() {
+  const tile = document.getElementById('target-tile');
+  if (!tile) return;
+  if (!planEdited) plan = planActual();
+  const { long, divisor, target: tg } = targetFor(plan.km, plan.days);
+  const cells = [
+    [tg > 0 ? km(tg) : '—', 'km/run'],
+    ...(long ? [[km(1.5 * tg), 'km long-run floor'], [km(2 * tg), 'km long-run target']] : []),
+  ].map(([v,u]) => `<div class="cell"><span class="v">${v}</span><span class="u">${u}</span></div>`).join('');
+
+  const actual = targetFor(planActual().km, planActual().days).target;
+  tile.innerHTML =
+    `<div class="k">Today&rsquo;s target${planEdited ? ' <span class="whatif">what-if</span>' : ''}</div>` +
+    `<div class="plan">` +
+      `<input type="number" id="plan-km" min="0" max="700" step="1" value="${plan.km.toFixed(1)}"><span class="u">km/wk</span>` +
+      `<span class="op">÷</span>` +
+      `<input type="number" id="plan-days" min="0" max="14" step="0.5" value="${plan.days.toFixed(1)}"><span class="u">runs/wk</span>` +
+      (long ? `<span class="op">+1</span>` : '') +
+      (planEdited ? `<button id="plan-reset">reset</button>` : '') +
+    `</div>` +
+    `<div class="grid ${long ? 'three' : 'one'}">${cells}</div>` +
+    `<div class="note">${
+      long ? `weekly &divide; ${divisor.toFixed(1)} &mdash; the long run counts twice`
+           : `long runs need &ge;${LONG_MIN_RUNS_PER_WEEK} runs/wk, so weekly &divide; ${divisor.toFixed(1)}`
+    }${planEdited ? ` &middot; actually now ${km(actual)} km/run` : ''}</div>`;
+
+  const kmIn = document.getElementById('plan-km'), daysIn = document.getElementById('plan-days');
+  const onEdit = () => {
+    const k = Number(kmIn.value), d = Number(daysIn.value);
+    if (!Number.isFinite(k) || !Number.isFinite(d) || k < 0 || d < 0 || d > 14) return;
+    plan = { km: k, days: d };
+    planEdited = true;
+    renderTarget();
+  };
+  kmIn.onchange = daysIn.onchange = onEdit;
+  const reset = document.getElementById('plan-reset');
+  if (reset) reset.onclick = () => { planEdited = false; renderTarget(); };
 }
 renderTiles();
 
@@ -1132,8 +1163,8 @@ function setReadout(i) {
     <span class="date">${fmtDate.format(dateAt(i))}</span>
     <span class="pair"><span class="k">Distance that day</span><span class="v">${daily[i] > 0 ? km(daily[i]) + ' km' : 'no run'}${nRuns[i] > 1 ? `<span class="sub-v"> in ${nRuns[i]} runs</span>` : ''}</span><span class="v2">${
       target[i] > 0
-        ? compareMode + ' target ' + km(target[i]) + ' km'
-          + (compareMode === 'mean' ? ' · weekly ÷ ' + (rpwPrev[i] + (longOn[i] ? 1 : 0)).toFixed(1) : '')
+        ? 'target ' + km(target[i]) + ' km'
+          + ' · weekly ÷ ' + (rpwPrev[i] + (longOn[i] ? 1 : 0)).toFixed(1)
           + (longOn[i] ? '' : ' · no long runs')
           + (nRuns[i] > 1 ? ' · longest ' + km(maxRun[i]) : '')
         : 'no target yet'}</span></span>
@@ -1239,7 +1270,6 @@ window.addEventListener('mouseup', () => {
 document.getElementById('reset').onclick = () => { tSpan = N; tCenter = N / 2; kick(); };
 function syncLabels() {
   document.getElementById('h1win').textContent = WINDOW;
-  for (const el of document.querySelectorAll('.cmpN')) el.textContent = compareMode;
   const pct = +(stableBand * 100).toFixed(1);
   for (const el of document.querySelectorAll('.bandN')) el.textContent = pct;
   for (const el of document.querySelectorAll('.gradN')) el.textContent = +(50 - pct).toFixed(1);
@@ -1251,7 +1281,7 @@ function syncLabels() {
 
 function applyWindow() {
   recompute();
-  syncLabels();
+  syncLabels();          // rebuilds the tiles, which re-renders the target box
   if (hover !== null) setReadout(hover);
   tableKey = '';
   drawAll();
@@ -1281,14 +1311,6 @@ bandInput.onchange = bandInput.oninput = () => {
   const v = Number(bandInput.value);
   if (!Number.isFinite(v) || v < 0 || v > 5) return;
   stableBand = v / 100;
-  syncLabels();
-  if (hover !== null) setReadout(hover);
-  tableKey = '';
-  drawAll();
-};
-document.getElementById('compareMode').onchange = e => {
-  compareMode = e.target.value;
-  computeTargets();
   syncLabels();
   if (hover !== null) setReadout(hover);
   tableKey = '';
