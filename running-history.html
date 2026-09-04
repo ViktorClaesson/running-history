@@ -853,7 +853,7 @@ function renderTarget() {
     `<div class="plan">` +
       `<input type="number" id="plan-km" min="0" max="700" step="1" value="${plan.km.toFixed(1)}"><span class="u">km/wk</span>` +
       `<span class="op">÷</span>` +
-      `<input type="number" id="plan-days" min="0" max="14" step="0.5" value="${plan.days.toFixed(1)}"><span class="u">runs/wk</span>` +
+      `<input type="number" id="plan-days" min="0" max="7" step="0.5" value="${plan.days.toFixed(1)}"><span class="u">runs/wk</span>` +
       (long ? `<span class="op">+1</span>` : '') +
       (planEdited ? `<button id="plan-reset">reset</button>` : '') +
     `</div>` +
@@ -866,7 +866,9 @@ function renderTarget() {
   const kmIn = document.getElementById('plan-km'), daysIn = document.getElementById('plan-days');
   const onEdit = () => {
     const k = Number(kmIn.value), d = Number(daysIn.value);
-    if (!Number.isFinite(k) || !Number.isFinite(d) || k < 0 || d < 0 || d > 14) return;
+    // capped at 7: the figure is run *days* per week, so two runs in one day is
+    // still one day — there is no eighth day to run on
+    if (!Number.isFinite(k) || !Number.isFinite(d) || k < 0 || d < 0 || d > 7) return;
     plan = { km: k, days: d };
     planEdited = true;
     renderTarget();
