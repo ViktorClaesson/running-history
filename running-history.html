@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Running history — 90-day rolling average</title>
+<title>Running history — 70-day rolling average</title>
 <style>
   :root {
     color-scheme: light;
@@ -58,7 +58,6 @@
       --l-pr:           #9b86dd;
       --hatch:          rgba(255,255,255,0.28);
       --nocolour:       #5c5a54;
-    --nocolour:       #5c5a54;
       --rest:           #333230;
       --freq:           #c3c2b7;
     }
@@ -83,6 +82,7 @@
     --l-pr-weak:      #4a3f77;
     --l-pr:           #9b86dd;
     --hatch:          rgba(255,255,255,0.28);
+    --nocolour:       #5c5a54;
     --rest:           #333230;
     --freq:           #c3c2b7;
   }
@@ -144,8 +144,6 @@
     font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px;
     border: 1px solid currentColor;
   }
-  .badge.up   { color: var(--above); }
-  .badge.down { color: var(--below); }
   .badge.rest { color: var(--text-secondary); }
   .readout.idle .date { color: var(--text-secondary); font-weight: 400; }
   .readout .spacer-pair { width: 0; overflow: hidden; }
@@ -281,7 +279,7 @@
       <label class="chk" title="How close to the target still counts as holding steady.">Stable band &plusmn;
         <input type="number" id="stableBand" min="0" max="5" step="0.5" value="1">%
       </label>
-      <button id="reset">Reset</button>
+      <button id="reset" title="Put the window, stable band, colour toggles and what-if target back to their defaults, forget the remembered settings, and zoom back out.">Reset</button>
       </div>
     </div>
     <canvas id="chart"></canvas>
@@ -335,6 +333,7 @@ const SCHEMA = 2;
 const lsGet = k => { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); return true; }
                           catch (e) { return false; } };
+const lsDel = k => { try { localStorage.removeItem(k); } catch (e) { /* nothing to undo */ } };
 
 // --- CSV: quoted fields may contain commas, newlines and doubled quotes --------
 function parseCsv(text) {
@@ -586,7 +585,56 @@ window.addEventListener('DOMContentLoaded', async () => {
 <script>
 const DATA = window.RUNVIZ;
 if (DATA) {
-let WINDOW = 70;   // rolling window, in days — adjustable in the controls row
+
+// ---- remembered settings -------------------------------------------------
+// Everything the controls row and the what-if box can be set to, so the page
+// opens the way it was left. Read here, at the very top, because recompute()
+// runs at load and reads WINDOW — see the declaration-order gotcha.
+const LS_PREFS = 'runviz.prefs.v1';
+const PREF_DEFAULTS = {
+  window: 70,
+  stableBand: 0.01,
+  longNeedsSingleRun: true,
+  colourNormal: true,
+  colourLong: true,
+  plan: null,        // null = the what-if box follows real history; {km, days} = edited
+};
+function loadPrefs() {
+  const p = { ...PREF_DEFAULTS };
+  const raw = lsGet(LS_PREFS);
+  if (!raw || typeof raw !== 'object') return p;
+  // Validated field by field, against the same limits as the controls, so a
+  // stale or hand-edited entry can only ever produce a state the UI can reach.
+  const num = (v, lo, hi) => Number.isFinite(v) && v >= lo && v <= hi;
+  if (num(raw.window, 7, 365)) p.window = Math.round(raw.window);
+  if (num(raw.stableBand, 0, 0.05)) p.stableBand = raw.stableBand;
+  for (const k of ['longNeedsSingleRun', 'colourNormal', 'colourLong']) {
+    if (typeof raw[k] === 'boolean') p[k] = raw[k];
+  }
+  if (raw.plan && num(raw.plan.km, 0, 700) && num(raw.plan.days, 0, 7)) {
+    p.plan = { km: raw.plan.km, days: raw.plan.days };
+  }
+  return p;
+}
+const prefs = loadPrefs();
+// Written only when something is actually off-default, and the entry is dropped
+// again the moment everything returns to default — so a page whose settings have
+// never been touched leaves nothing behind, and Reset really does forget.
+function savePrefs() {
+  const cur = {
+    window: WINDOW,
+    stableBand,
+    longNeedsSingleRun,
+    colourNormal: colourScheme.normal,
+    colourLong: colourScheme.long,
+    plan: planEdited ? { km: plan.km, days: plan.days } : null,
+  };
+  const changed = Object.keys(PREF_DEFAULTS)
+    .some(k => k === 'plan' ? cur.plan !== null : cur[k] !== PREF_DEFAULTS[k]);
+  if (changed) lsSet(LS_PREFS, cur); else lsDel(LS_PREFS);
+}
+
+let WINDOW = prefs.window;   // rolling window, in days — adjustable in the controls row
 
 // ---- derive series -------------------------------------------------------
 const daily = DATA.values;
@@ -751,15 +799,15 @@ function computeTargets() {
 // distance to the halfway mark, so the two schemes tile the whole range:
 //   <50 full un | 50-95 ramp un | 95-105 stable | 105-150 ramp pr   (normal, 1x)
 //   150-195 ramp un | 195-205 stable | 205-250 ramp pr | >250 full pr (long, 2x)
-let stableBand = 0.01;   // ±fraction of the centre, adjustable 0–5%
+let stableBand = prefs.stableBand;   // ±fraction of the centre, adjustable 0–5%
 // Each scheme's colouring can be switched off independently; its bars then fall back
 // to a neutral, which stays distinct from the paler rest-day grey.
-const colourScheme = { normal: true, long: true };
+const colourScheme = { normal: prefs.colourNormal, long: prefs.colourLong };
 // A day can reach 150% of target either with one big run or by stacking a couple of
 // ordinary ones. With this on, only a single run that clears 150% on its own makes
 // the day a long-run day; stacked days stay in the normal scheme (where their large
 // total still reads as productive).
-let longNeedsSingleRun = true;
+let longNeedsSingleRun = prefs.longNeedsSingleRun;
 
 const DIR_LABEL = { un: 'unproductive', st: 'stable', pr: 'productive' };
 const DIR_ARROW = { un: '▼', st: '=', pr: '▲' };
@@ -828,8 +876,8 @@ function renderTiles() {
 // from the actual history, which is why it shows the real figure alongside once
 // the numbers have been touched.
 const planActual = () => ({ km: weeklyPrev[N-1], days: rpwPrev[N-1] });
-let plan = planActual();
-let planEdited = false;
+let plan = prefs.plan ? { ...prefs.plan } : planActual();
+let planEdited = prefs.plan !== null;
 
 function targetFor(weeklyKm, runsPerWeek) {
   const long = runsPerWeek >= LONG_MIN_RUNS_PER_WEEK;
@@ -871,11 +919,12 @@ function renderTarget() {
     if (!Number.isFinite(k) || !Number.isFinite(d) || k < 0 || d < 0 || d > 7) return;
     plan = { km: k, days: d };
     planEdited = true;
+    savePrefs();
     renderTarget();
   };
   kmIn.onchange = daysIn.onchange = onEdit;
   const reset = document.getElementById('plan-reset');
-  if (reset) reset.onclick = () => { planEdited = false; renderTarget(); };
+  if (reset) reset.onclick = () => { planEdited = false; savePrefs(); renderTarget(); };
 }
 renderTiles();
 
@@ -1023,7 +1072,7 @@ function drawBars() {
   ctx.restore();
 }
 
-// ---- panel 2: how many of those 90 days had a run ------------------------
+// ---- panel 2: run days per week over the trailing window -----------------
 function drawFreq() {
   const { w, h } = fitCanvas(cv2, ctx2);
   const plotH = h - FREQ.t - FREQ.b;
@@ -1253,7 +1302,21 @@ window.addEventListener('mouseup', () => {
   drag = null; cv.style.cursor = 'crosshair'; cv2.style.cursor = 'crosshair';
 });
 
-document.getElementById('reset').onclick = () => { tSpan = N; tCenter = N / 2; kick(); };
+// The one Reset: every remembered setting back to its default, the saved entry
+// dropped, and the view zoomed back out. (Double-click on a panel still resets
+// only the zoom, which is view state and deliberately not remembered.)
+document.getElementById('reset').onclick = () => {
+  WINDOW = PREF_DEFAULTS.window;
+  stableBand = PREF_DEFAULTS.stableBand;
+  longNeedsSingleRun = PREF_DEFAULTS.longNeedsSingleRun;
+  colourScheme.normal = PREF_DEFAULTS.colourNormal;
+  colourScheme.long = PREF_DEFAULTS.colourLong;
+  planEdited = false;
+  savePrefs();           // everything is default now, so this removes the entry
+  syncControls();
+  applyWindow();         // recompute + relabels + rebuilds the tiles + redraws
+  tSpan = N; tCenter = N / 2; kick();
+};
 function syncLabels() {
   document.getElementById('h1win').textContent = WINDOW;
   const pct = +(stableBand * 100).toFixed(1);
@@ -1262,6 +1325,18 @@ function syncLabels() {
   for (const el of document.querySelectorAll('.winN')) el.textContent = WINDOW;
   document.title = `Running history — ${WINDOW}-day rolling average`;
   renderTiles();
+}
+
+// The controls are the one place state has to be pushed *into* the DOM: at boot
+// they carry the markup defaults, which a remembered setting has to overwrite.
+function syncControls() {
+  winInput.value = WINDOW;
+  bandInput.value = +(stableBand * 100).toFixed(1);
+  longSingleBox.checked = longNeedsSingleRun;
+  for (const [scheme, id] of [['normal', 'colourNormal'], ['long', 'colourLong']]) {
+    document.getElementById(id).checked = colourScheme[scheme];
+    document.getElementById('row-' + scheme).classList.toggle('off', !colourScheme[scheme]);
+  }
 }
 
 function applyWindow() {
@@ -1277,12 +1352,14 @@ for (const [scheme, id] of [['normal', 'colourNormal'], ['long', 'colourLong']])
   box.onchange = () => {
     colourScheme[scheme] = box.checked;
     document.getElementById('row-' + scheme).classList.toggle('off', !box.checked);
+    savePrefs();
     drawAll();
   };
 }
 const longSingleBox = document.getElementById('longSingle');
 longSingleBox.onchange = () => {
   longNeedsSingleRun = longSingleBox.checked;
+  savePrefs();
   if (hover !== null) setReadout(hover);
   tableKey = '';
   drawAll();
@@ -1292,6 +1369,7 @@ bandInput.onchange = bandInput.oninput = () => {
   const v = Number(bandInput.value);
   if (!Number.isFinite(v) || v < 0 || v > 5) return;
   stableBand = v / 100;
+  savePrefs();
   syncLabels();
   if (hover !== null) setReadout(hover);
   tableKey = '';
@@ -1302,8 +1380,10 @@ winInput.onchange = winInput.oninput = () => {
   const v = Math.round(Number(winInput.value));
   if (!Number.isFinite(v) || v < 7 || v > 365) return;   // ignore half-typed values
   WINDOW = v;
+  savePrefs();
   applyWindow();
 };
+syncControls();
 syncLabels();
 
 window.addEventListener('resize', drawAll);
