@@ -307,7 +307,7 @@
       <label class="chk" title="How close to the target still counts as holding steady.">Stable band &plusmn;
         <input type="number" id="stableBand" min="0" max="5" step="0.5" value="1">%
       </label>
-      <button id="reset" title="Put the window, stable band, colour toggles and what-if target back to their defaults, forget the remembered settings, and zoom back out.">Reset</button>
+      <button id="reset" title="Put the window, stable band, colour toggles and long-run rule back to their defaults, and zoom back out. Leaves the what-if target alone — that has its own reset.">Reset</button>
       </div>
     </div>
     <canvas id="chart"></canvas>
@@ -969,6 +969,8 @@ function renderTarget() {
   };
   kmIn.onchange = daysIn.onchange = onEdit;
   const reset = document.getElementById('plan-reset');
+  // Scoped the same way round: this clears only the what-if, never the chart
+  // settings. savePrefs() keeps whatever those are set to.
   if (reset) reset.onclick = () => { planEdited = false; savePrefs(); renderTarget(); };
 }
 renderTiles();
@@ -1386,17 +1388,21 @@ window.addEventListener('keydown', e => {
   selected = null; refreshReadout(); drawAll();
 });
 
-// The one Reset: every remembered setting back to its default, the saved entry
-// dropped, and the view zoomed back out. (Double-click on a panel still resets
-// only the zoom, which is view state and deliberately not remembered.)
+// Reset, scoped to the chart: the settings in this controls row back to their
+// defaults, plus the view zoomed back out. It deliberately leaves the what-if
+// target alone — that box has its own reset, and the two are separate concerns.
+// (Double-click on a panel still resets only the zoom, which is view state and
+// deliberately not remembered.)
+// savePrefs() then drops the stored entry if nothing is off-default any more, or
+// keeps it holding just the what-if if that is still edited — so neither reset has
+// to know what the other one owns.
 document.getElementById('reset').onclick = () => {
   WINDOW = PREF_DEFAULTS.window;
   stableBand = PREF_DEFAULTS.stableBand;
   longNeedsSingleRun = PREF_DEFAULTS.longNeedsSingleRun;
   colourScheme.normal = PREF_DEFAULTS.colourNormal;
   colourScheme.long = PREF_DEFAULTS.colourLong;
-  planEdited = false;
-  savePrefs();           // everything is default now, so this removes the entry
+  savePrefs();
   syncControls();
   applyWindow();         // recompute + relabels + rebuilds the tiles + redraws
   tSpan = N; tCenter = N / 2; kick();
