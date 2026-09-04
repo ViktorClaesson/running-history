@@ -130,10 +130,35 @@
   .readout {
     background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px;
     padding: 12px 16px; margin-bottom: 12px;
-    display: flex; align-items: center; gap: 22px; flex-wrap: wrap; min-height: 84px;
+    display: flex; align-items: center; gap: 22px; flex-wrap: wrap; min-height: 100px;
   }
-  .readout .date { font-size: 15px; font-weight: 600; min-width: 168px; }
-  .readout .pair { display: flex; flex-direction: column; }
+  /* Allowed to shrink, so under pressure the "pinned" tag drops below the date
+     inside this column — two short lines still fit the reserve above, so it
+     costs no height, where a wrap of the whole row would cost 50px. */
+  .readout .date { font-size: 15px; font-weight: 600; flex: 0 1 auto; min-width: 150px; }
+  /* The two detail lines are the variable-length strings in here, and they are the
+     only items allowed to shrink: a long one wraps to a second row inside its own
+     column rather than shoving the verdict pill onto a second row of the box.
+     min-height above reserves those two lines, so the box is one fixed height
+     whatever is showing — idle, hovered, one detail line or two.
+     flex-basis has to be the small floor rather than `auto`: a wrapping flex
+     container packs lines using each item's *hypothetical* size, so an auto-basis
+     item forces a line break before it will ever shrink. `max-width: max-content`
+     then caps the grow, so with room to spare nothing moves from where it sits
+     today and the slack still pools after the pill. */
+  .readout .pair { display: flex; flex-direction: column; flex: 0 0 auto; }
+  .readout .pair.detail { flex: 1 1 160px; max-width: max-content; }
+  .readout .pair.detail .v { white-space: nowrap; }
+  .readout .pair.rate { flex: 1 1 140px; max-width: max-content; }
+  /* Two line boxes are reserved whether or not the text needs them, so a wrap
+     costs no height and the idle state matches the hovered one by construction
+     rather than by a min-height that has to be guessed right. (px first for
+     engines without `lh`.) */
+  .readout .pair .v2 { min-height: 33px; min-height: 2lh; }
+  /* so a wrapped detail line breaks at the · separators, never mid-phrase
+     ("no / long runs", "564 / km/yr") */
+  .readout .seg { white-space: nowrap; }
+  .readout .badge { flex: 0 0 auto; }
   .readout .pair .k { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
   .readout .pair .v { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
   .readout .pair .sub-v { font-size: 12px; font-weight: 400; color: var(--text-secondary); }
@@ -145,6 +170,9 @@
     border: 1px solid currentColor;
   }
   .badge.rest { color: var(--text-secondary); }
+  .readout .pin { font-size: 10px; font-weight: 600; color: var(--muted);
+    border: 1px solid currentColor; border-radius: 999px; padding: 0 5px;
+    margin-left: 6px; white-space: nowrap; vertical-align: 1px; }
   .readout.idle .date { color: var(--text-secondary); font-weight: 400; }
   .readout .spacer-pair { width: 0; overflow: hidden; }
 
@@ -285,7 +313,8 @@
     <canvas id="chart"></canvas>
     <div class="panel-title">Average run days per week, over the trailing <span class="winN">70</span> days</div>
     <canvas id="chart2"></canvas>
-    <div class="hint">Scroll or pinch to zoom — the day under the cursor stays put while both sides scale around it. Drag to pan. Double-click to reset.</div>
+    <div class="hint">Scroll or pinch to zoom — the day under the cursor stays put while both sides scale around it. Drag to pan. Double-click to reset.
+      Click a day to pin its numbers in the readout above; click it again, or press Esc, to release.</div>
   </div>
 
   <details class="table">
@@ -328,7 +357,7 @@
 // itself and is as close to "remember the path" as the platform allows.
 // ---------------------------------------------------------------------------
 const LS_DATA = 'runviz.data.v2', LS_SPORTS = 'runviz.sports.v2';
-const SCHEMA = 2;
+const SCHEMA = 3;   // 3: activities are filed by `time` read as UTC, not time + offset
 
 const lsGet = k => { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); return true; }
@@ -353,7 +382,7 @@ function parseCsv(text) {
   if (!rows.length) throw new Error('that file is empty');
   const header = {};
   rows[0].forEach((name, i) => header[name.trim()] = i);
-  for (const need of ['time', 'timezoneOffset', 'distance', 'sportid']) {
+  for (const need of ['time', 'distance', 'sportid']) {
     if (!(need in header)) throw new Error(`no "${need}" column — is this a Runalyze activities export?`);
   }
   return { header, rows: rows.slice(1).filter(r => r.length > 1) };
@@ -397,10 +426,15 @@ function buildData({ header, rows }, sportIds, fileName) {
     if (!sportIds.has(r[header.sportid])) continue;
     const t = Number(r[header.time]);
     if (!Number.isFinite(t)) continue;
-    const off = Number(r[header.timezoneOffset]) || 0;
-    // shift by the activity's own offset, then read UTC parts, so a run is filed
-    // under the calendar day it happened on locally
-    const key = new Date((t + off * 60) * 1000).toISOString().slice(0, 10);
+    // Runalyze's `time` is ALREADY the local wall clock, stored as a Unix
+    // timestamp — so reading its UTC parts gives the local calendar day directly.
+    // `timezoneOffset` is a record of the offset that applied (60 in winter, 120 in
+    // summer here), not something still to be added: adding it shifted every
+    // activity that started at or after 22:00 local into the next day. That was 25
+    // of 641 runs, wrong on 41 of 592 run-days. Checked against Runalyze's own day
+    // grouping for 22–31 Aug 2026, which agrees with this on all ten days,
+    // activity by activity, and disagrees with the shifted version on three.
+    const key = new Date(t * 1000).toISOString().slice(0, 10);
     const dist = parseFloat(r[header.distance]) || 0;
     const g = per.get(key) || { sum: 0, max: 0, n: 0 };
     g.sum += dist; g.max = Math.max(g.max, dist); g.n++;
@@ -474,12 +508,19 @@ const sportBox = document.getElementById('gate-sports');
 const sportList = document.getElementById('sport-list');
 let pendingParsed = null, pendingName = '';
 
-function openGate(changing) {
+function openGate(changing, staleCache) {
   gate.hidden = false;
   document.getElementById('gate-title').textContent =
     changing ? 'Choose a different export' : 'Load your Runalyze export';
   document.getElementById('gate-cancel').hidden = !changing;
-  gateMsg.textContent = ''; gateMsg.className = 'gate-msg';
+  // A SCHEMA bump means the cached copy is not just old but wrong, and it can only
+  // be rebuilt from the CSV — so say why rather than silently asking again.
+  gateMsg.textContent = staleCache
+    ? 'The remembered copy was built with a bug that filed runs starting after '
+      + '22:00 under the next day, so it has been discarded. Pick the CSV again to '
+      + 'rebuild it — your settings are kept.'
+    : '';
+  gateMsg.className = 'gate-msg';
   sportBox.hidden = true;
 }
 function closeGate() { gate.hidden = true; }
@@ -539,7 +580,7 @@ const cached = lsGet(LS_DATA);
 if (cached && cached.schema === SCHEMA && Array.isArray(cached.values) && cached.values.length > 1) {
   window.RUNVIZ = cached;
 } else {
-  openGate(false);
+  openGate(false, !!(cached && cached.schema !== SCHEMA));
 }
 
 // Once running from cache, offer to re-read the remembered file so a fresh export
@@ -840,7 +881,11 @@ const nf1 = new Intl.NumberFormat(undefined, { minimumFractionDigits: 1, maximum
 const perWeekKm  = v => v * 7;
 const perMonthKm = v => v * 365 / 12;
 const perYearKm  = v => v * 365;
-const rateSummary = v => `${nf1.format(perWeekKm(v))} km/wk · ${nf0.format(perMonthKm(v))} km/mo · ${nf0.format(perYearKm(v))} km/yr`;
+// Joined with · but each piece unbreakable, so a wrap lands between them.
+const seg = parts => parts.filter(Boolean).map(t => `<span class="seg">${t}</span>`).join(' · ');
+const rateSummary = v => seg([`${nf1.format(perWeekKm(v))} km/wk`,
+                              `${nf0.format(perMonthKm(v))} km/mo`,
+                              `${nf0.format(perYearKm(v))} km/yr`]);
 
 // ---- stat tiles ----------------------------------------------------------
 const total = daily.reduce((a,b)=>a+b,0);
@@ -938,6 +983,7 @@ let span = N;             // days visible
 let center = N / 2;       // index at the horizontal centre
 let tSpan = span, tCenter = center;   // animation targets
 let hover = null;
+let selected = null;    // the pinned day, if any — see refreshReadout
 
 const clampView = () => {
   span = Math.max(5, Math.min(N, span));
@@ -1057,18 +1103,25 @@ function drawBars() {
   }
 
 
-  if (hover !== null && hover >= i0 && hover <= i1) {
-    const x0 = Math.round(xOf(hover)), x1 = Math.round(xOf(hover + 1));
+  // The pinned day is dashed and the hovered one solid, so when both are on
+  // screen at once they read as two different things rather than two hovers.
+  const outline = (i, dashed) => {
+    const x0 = Math.round(xOf(i)), x1 = Math.round(xOf(i + 1));
     const bw = Math.max(1, x1 - x0);
-    const y = yOf(avg[hover]);
+    const y = yOf(avg[i]);
     ctx.strokeStyle = C('--text-primary');
     ctx.lineWidth = 1;
-    ctx.globalAlpha = 0.25;
+    ctx.globalAlpha = dashed ? 0.16 : 0.25;
     ctx.beginPath(); ctx.moveTo(x0 + bw/2 + 0.5, BARS.t); ctx.lineTo(x0 + bw/2 + 0.5, BARS.t + plotH); ctx.stroke();
     ctx.globalAlpha = 1;
     ctx.lineWidth = 1.5;
+    if (dashed) ctx.setLineDash([3, 2]);
     ctx.strokeRect(x0 - 0.25, y - 1, bw + 0.5, BARS.t + plotH - y + 1);
-  }
+    ctx.setLineDash([]);
+  };
+  const inView = i => i !== null && i >= i0 && i <= i1;
+  if (inView(selected) && selected !== hover) outline(selected, true);
+  if (inView(hover)) outline(hover, false);
   ctx.restore();
 }
 
@@ -1127,15 +1180,19 @@ function drawFreq() {
   c.lineJoin = 'round'; c.lineCap = 'round';
   c.stroke();
 
-  if (hover !== null && hover >= i0 && hover <= i1) {
-    const x = Math.round(px(hover)) + 0.5, y = yOf(perWeek(hover));
-    c.strokeStyle = C('--text-primary'); c.lineWidth = 1; c.globalAlpha = 0.25;
+  // Same split as the bars: the pinned day is a hollow ring, the hovered one solid.
+  const dot = (i, hollow) => {
+    const x = Math.round(px(i)) + 0.5, y = yOf(perWeek(i));
+    c.strokeStyle = C('--text-primary'); c.lineWidth = 1; c.globalAlpha = hollow ? 0.16 : 0.25;
     c.beginPath(); c.moveTo(x, FREQ.t); c.lineTo(x, FREQ.t + plotH); c.stroke();
     c.globalAlpha = 1;
     c.beginPath(); c.arc(x, y, 4.5, 0, Math.PI * 2);
-    c.fillStyle = C('--freq'); c.fill();
-    c.strokeStyle = C('--surface-1'); c.lineWidth = 2; c.stroke();
-  }
+    c.fillStyle = hollow ? C('--surface-1') : C('--freq'); c.fill();
+    c.strokeStyle = hollow ? C('--freq') : C('--surface-1'); c.lineWidth = 2; c.stroke();
+  };
+  const seen = i => i !== null && i >= i0 && i <= i1;
+  if (seen(selected) && selected !== hover) dot(selected, true);
+  if (seen(hover)) dot(hover, false);
   c.restore();
 
   // x axis labels live on the bottom panel only; both panels share the x mapping
@@ -1182,7 +1239,7 @@ const draw = drawAll;
 
 // ---- readout -------------------------------------------------------------
 const ro = document.getElementById('readout');
-function setReadout(i) {
+function setReadout(i, pinned) {
   if (i === null) {
     // The idle state carries an invisible label/value pair so the panel is exactly
     // as tall as the hovered state — otherwise the box twitches by a few pixels
@@ -1195,15 +1252,15 @@ function setReadout(i) {
   const c = classify(i);
   ro.className = 'readout';
   ro.innerHTML = `
-    <span class="date">${fmtDate.format(dateAt(i))}</span>
-    <span class="pair"><span class="k">Distance that day</span><span class="v">${daily[i] > 0 ? km(daily[i]) + ' km' : 'no run'}${nRuns[i] > 1 ? `<span class="sub-v"> in ${nRuns[i]} runs</span>` : ''}</span><span class="v2">${
+    <span class="date">${fmtDate.format(dateAt(i))}${pinned ? '<span class="pin">pinned</span>' : ''}</span>
+    <span class="pair detail"><span class="k">Distance that day</span><span class="v">${daily[i] > 0 ? km(daily[i]) + ' km' : 'no run'}${nRuns[i] > 1 ? `<span class="sub-v"> in ${nRuns[i]} runs</span>` : ''}</span><span class="v2">${
       target[i] > 0
-        ? 'target ' + km(target[i]) + ' km'
-          + ' · weekly ÷ ' + (rpwPrev[i] + (longOn[i] ? 1 : 0)).toFixed(1)
-          + (longOn[i] ? '' : ' · no long runs')
-          + (nRuns[i] > 1 ? ' · longest ' + km(maxRun[i]) : '')
+        ? seg(['target ' + km(target[i]) + ' km',
+               'weekly ÷ ' + (rpwPrev[i] + (longOn[i] ? 1 : 0)).toFixed(1),
+               longOn[i] ? '' : 'no long runs',
+               nRuns[i] > 1 ? 'longest ' + km(maxRun[i]) : ''])
         : 'no target yet'}</span></span>
-    <span class="pair"><span class="k">${WINDOW}-day average${i < WINDOW - 1 ? ' (partial)' : ''}</span><span class="v">${km(avg[i])} km/day</span><span class="v2">${rateSummary(avg[i])}</span></span>
+    <span class="pair rate"><span class="k">${WINDOW}-day average${i < WINDOW - 1 ? ' (partial)' : ''}</span><span class="v">${km(avg[i])} km/day</span><span class="v2">${rateSummary(avg[i])}</span></span>
     <span class="pair"><span class="k">Run days per week</span><span class="v">${perWeekAt(i).toFixed(1)}<span class="sub-v"> · ${runs[i]} of ${WINDOW} days</span></span></span>
     <span class="badge" style="color:${c ? fullColour(c) : 'var(--text-secondary)'}">${
       !c ? '— rest day'
@@ -1211,6 +1268,13 @@ function setReadout(i) {
              c.ratio === null ? '' : ' · ' + Math.round(c.ratio * 100) + '% of target'}`
     }</span>`;
 }
+
+// Hover always wins; the pinned day is only what the readout falls back to. So
+// moving the pointer off a bar — or off the chart, or onto another window
+// entirely — leaves the pinned day's numbers up instead of going idle, which is
+// the point: they stay readable and selectable.
+const shownDay = () => hover !== null ? hover : selected;
+const refreshReadout = () => setReadout(shownDay(), hover === null && selected !== null);
 
 // ---- table ---------------------------------------------------------------
 const tbody = document.getElementById('tbody');
@@ -1231,18 +1295,22 @@ function renderTable(i0, i1) {
 
 // ---- interaction (both panels drive the same view) -----------------------
 let drag = null;
+// A pan ends in a mouseup on the canvas, which the browser then reports as a
+// click. Only a press that never really moved should pin a day.
+let draggedNotClicked = false;
 
 function onMove(e) {
   const rect = e.currentTarget.getBoundingClientRect();
   const mx = e.clientX - rect.left;
   if (drag) {
+    if (Math.abs(mx - drag.x) > 3) drag.moved = true;
     center = drag.center - (mx - drag.x) / barW();
     tCenter = center; tSpan = span; clampView(); drawAll();
     return;
   }
   const i = idxAt(mx);
   const next = (i >= 0 && i < N && mx >= PAD.l && mx <= W - PAD.r) ? i : null;
-  if (next !== hover) { hover = next; setReadout(hover); drawAll(); }
+  if (next !== hover) { hover = next; refreshReadout(); drawAll(); }
 }
 
 function onWheel(e) {
@@ -1260,7 +1328,7 @@ function onWheel(e) {
   tSpan = span; tCenter = center;
   const i = idxAt(mx);
   const next = (i >= 0 && i < N) ? i : null;
-  if (next !== hover) { hover = next; setReadout(hover); }
+  if (next !== hover) { hover = next; refreshReadout(); }
   drawAll();
 }
 
@@ -1286,12 +1354,23 @@ function onTouchMove(e) {
 
 for (const el of [cv, cv2]) {
   el.addEventListener('mousemove', onMove);
-  el.addEventListener('mouseleave', () => { hover = null; setReadout(null); drawAll(); });
+  el.addEventListener('mouseleave', () => { hover = null; refreshReadout(); drawAll(); });
   el.addEventListener('wheel', onWheel, { passive: false });
   el.addEventListener('mousedown', e => {
     const rect = el.getBoundingClientRect();
-    drag = { x: e.clientX - rect.left, center };
+    drag = { x: e.clientX - rect.left, center, moved: false };
+    draggedNotClicked = false;
     el.style.cursor = 'grabbing';
+  });
+  el.addEventListener('click', e => {
+    if (draggedNotClicked) { draggedNotClicked = false; return; }
+    const rect = el.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const i = idxAt(mx);
+    if (!(i >= 0 && i < N && mx >= PAD.l && mx <= W - PAD.r)) return;
+    selected = selected === i ? null : i;   // clicking the pinned day releases it
+    refreshReadout();
+    drawAll();
   });
   el.addEventListener('dblclick', () => { tSpan = N; tCenter = N / 2; kick(); });
   el.addEventListener('touchstart', onTouchStart, { passive: true });
@@ -1299,7 +1378,12 @@ for (const el of [cv, cv2]) {
   el.addEventListener('touchend', () => { pinch = null; });
 }
 window.addEventListener('mouseup', () => {
+  draggedNotClicked = !!(drag && drag.moved);
   drag = null; cv.style.cursor = 'crosshair'; cv2.style.cursor = 'crosshair';
+});
+window.addEventListener('keydown', e => {
+  if (e.key !== 'Escape' || selected === null) return;
+  selected = null; refreshReadout(); drawAll();
 });
 
 // The one Reset: every remembered setting back to its default, the saved entry
@@ -1342,7 +1426,7 @@ function syncControls() {
 function applyWindow() {
   recompute();
   syncLabels();          // rebuilds the tiles, which re-renders the target box
-  if (hover !== null) setReadout(hover);
+  refreshReadout();
   tableKey = '';
   drawAll();
 }
@@ -1360,7 +1444,7 @@ const longSingleBox = document.getElementById('longSingle');
 longSingleBox.onchange = () => {
   longNeedsSingleRun = longSingleBox.checked;
   savePrefs();
-  if (hover !== null) setReadout(hover);
+  refreshReadout();
   tableKey = '';
   drawAll();
 };
@@ -1371,7 +1455,7 @@ bandInput.onchange = bandInput.oninput = () => {
   stableBand = v / 100;
   savePrefs();
   syncLabels();
-  if (hover !== null) setReadout(hover);
+  refreshReadout();
   tableKey = '';
   drawAll();
 };

@@ -29,6 +29,7 @@ Two stacked panels sharing one x-axis, one bar/point per calendar day:
 
 Hovering a day fills a fixed-height readout: exact distance, the rolling average
 (also as km/wk, km/mo, km/yr), run days per week, the day's target, and the verdict.
+**Clicking a day pins it** there — see below.
 
 The **Today's target** tile is a what-if calculator: both inputs (km/wk and runs/wk)
 are editable, so a change in volume or frequency can be tried out, and it shows the
@@ -37,6 +38,43 @@ seeded from the exact quantities behind today's real target (`weeklyPrev[N-1]`,
 `rpwPrev[N-1]`) so the default figure matches the chart and the hover readout. Editing
 it never changes the bars — those keep their own per-day targets from actual history —
 and once touched it shows the real figure alongside and offers a reset.
+
+## The readout: pinning, and why it is a fixed height
+
+**Pinning.** Clicking a day sets `selected`; clicking it again, or Esc, releases it.
+`shownDay()` is `hover ?? selected` — hover always wins, and the pinned day is only
+what the readout *falls back* to. So moving the pointer off a bar, off the chart, or
+onto another window leaves the numbers up and selectable instead of going idle. All
+the "the model changed, redraw the readout" call sites go through `refreshReadout()`
+rather than `setReadout(hover)`, or a window/band change would blank a pinned day.
+The pinned day is drawn **dashed** (bars) and as a **hollow ring** (frequency panel)
+against hover's solid outline and filled dot, so both can be on screen at once and
+still read as two different things. Like zoom, it is view state and deliberately not
+persisted in `runviz.prefs.v1`.
+
+A pan ends in a mouseup on the canvas, which the browser then reports as a click —
+`draggedNotClicked` (set from `drag.moved`, threshold 3px) is what stops a pan from
+pinning whatever it happened to finish over.
+
+**Fixed height.** The verdict pill used to get shoved onto a second row by a long
+detail line, growing the box. Three things hold it to one height now:
+
+- The detail line and the rate line are the only shrinkable items, and their
+  `flex-basis` is the small **floor**, not `auto`. This matters: a wrapping flex
+  container packs lines using each item's *hypothetical* size, so an `auto`-basis
+  item forces a line break before it will ever shrink. `max-width: max-content` caps
+  the grow, so with room to spare nothing moves from where it sat before.
+- `.readout .pair .v2` reserves **two line boxes** (`min-height: 2lh`, px fallback
+  first) whether or not the text needs them. A wrap therefore costs no height, and
+  idle matches hovered by construction rather than by a guessed `min-height`.
+- `.readout .seg` keeps each `·`-separated piece unbreakable, so a wrap lands on a
+  separator and never mid-phrase ("no / long runs", "564 / km/yr").
+
+The floors sum to ~861px, so the row holds together down to roughly a **943px**
+viewport (it was ~1120px before). Below that it wraps to two rows and the box grows
+— that is a genuinely narrow window, where the tiles above already wrap. Don't
+shrink the floors to chase it: at much under 160px the detail line needs a *third*
+line and the two-line reserve stops holding.
 
 ## The model (this is the part worth understanding)
 
@@ -129,18 +167,34 @@ clean, precomputed once per frame into 24 steps.
 ## Data pipeline
 
 - CSV is parsed in-browser (`parseCsv` handles quoted fields, embedded commas,
-  doubled quotes, CRLF). Required columns: `time`, `timezoneOffset`, `distance`,
-  `sportid`.
-- Each activity is filed under its **local** calendar day (`time + timezoneOffset*60`,
-  read as UTC), then aggregated per day into `values` (total km), `maxRun` (longest
-  single run) and `nRuns` (count). 63 of my days have more than one run.
+  doubled quotes, CRLF). Required columns: `time`, `distance`, `sportid`.
+- **`time` is already the local wall clock**, stored as a Unix timestamp, so reading
+  its UTC parts (`new Date(t * 1000).toISOString().slice(0, 10)`) gives the local
+  calendar day directly. `timezoneOffset` is a *record* of the offset that applied
+  (60 in winter, 120 in summer here — it tracks DST), **not** something still to be
+  added, and it is no longer read at all.
+  This was wrong until Sep 2026: adding the offset shifted every activity that
+  started at or after 22:00 local into the *next* day — 25 of 641 runs, wrong on 41
+  of 592 run-days, and visible as "no run" on a day that had one with its distance
+  glued onto the following day. Verified against Runalyze's own day grouping for
+  22–31 Aug 2026: unshifted agrees on all ten days activity by activity, shifted
+  disagrees on three. If this ever looks wrong again, the discriminator is an
+  activity starting between 22:00 and midnight — nothing else moves.
+- Each activity is filed under that day, then aggregated per day into `values`
+  (total km), `maxRun` (longest single run) and `nRuns` (count). 63 of my days have
+  more than one run.
 - **Sport IDs are per-account**, so there is no way to detect "running" generically.
   `summariseSports` shows every sport with count / total km / median speed and
   pre-ticks a guess: the busiest sport with median speed 7.5–17 km/h, plus anything
   comparable in volume. Speed alone over-selects — cross-country skiing at 8.2 km/h
   sits squarely in running range.
-- Parsed data is cached in `localStorage` under `runviz.data.v2` (`SCHEMA = 2`; bump
-  both together if the shape changes), ~12 KB. Selected sports in `runviz.sports.v2`.
+- Parsed data is cached in `localStorage` under `runviz.data.v2` (`SCHEMA = 3`).
+  `SCHEMA` guards what the cached numbers *mean*, not only their shape — the day
+  attribution fix bumped it to 3 with the shape unchanged, because the cached values
+  were wrong and can only be rebuilt from the CSV. Bump the key alongside it only if
+  the shape changes. A stale schema opens the gate with `staleCache` set, which says
+  why it is asking for the file again instead of doing it silently. Selected sports
+  in `runviz.sports.v2`.
   Settings in `runviz.prefs.v1` (see below).
 - Where supported, the picked file is also kept as a `FileSystemFileHandle` in
   IndexedDB (`runviz` / `handles`), which powers "Refresh from file" and a silent
@@ -174,8 +228,10 @@ day) → `buildRamps`/`barColour` → `drawBars`/`drawFreq`/`drawAll` →
   edges pixel-snapped, so neighbours share an edge exactly at any zoom.
 - **Zoom is cursor-anchored** — the fractional day under the pointer keeps its screen
   x; it must not re-centre or pin the left edge.
-- **The readout must not change height** between idle and hovered. The idle state
-  carries an invisible label/value spacer so it matches by construction.
+- **The readout must not change height** between idle, hovered and pinned. The idle
+  state carries an invisible label/value spacer, and `.v2` reserves two line boxes,
+  so all three match by construction. See the readout section above before touching
+  its flex properties.
 - Floating point: `1.05 - 1 > 0.05`, so band edges need the epsilon in `classify`.
 
 ## How to verify a change
