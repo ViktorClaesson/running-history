@@ -76,6 +76,31 @@ All of it is derived in-browser from one array of daily distances.
   the rate was computed against a 7-day floor, which was both inconsistent and not
   what the chart is for.
 
+## Remembered settings
+
+`runviz.prefs.v1` holds everything the controls row and the what-if box can be set
+to, so the page opens the way it was left: `window`, `stableBand`,
+`longNeedsSingleRun`, `colourNormal`, `colourLong`, and `plan` (`null` = the
+what-if box follows real history, `{km, days}` = edited). Three rules:
+
+- **Read at the very top of the `if (DATA)` block**, above `let WINDOW`, because
+  `recompute()` runs at load and reads `WINDOW` — the declaration-order gotcha below.
+- **Validated field by field on load** (`loadPrefs`), against the same limits as the
+  inputs, so a stale or hand-edited entry can only produce a state the UI can reach.
+  Anything that fails falls back to `PREF_DEFAULTS` for that field alone.
+- **Written only when something is off-default** (`savePrefs`), and the entry is
+  *removed* the moment everything is back to default. A page whose settings have
+  never been touched leaves nothing behind.
+
+`syncControls()` is the one place state is pushed *into* the DOM — the markup carries
+the defaults, and a remembered setting has to overwrite them at boot.
+
+**Reset** (the button in the controls row) now means all of it: every remembered
+setting back to its default, the stored entry dropped, and the view zoomed back out.
+Double-clicking a panel still resets only the zoom, which is view state and
+deliberately *not* remembered — persisting it would fight the Reset button and open
+the page mid-history.
+
 ## Colour system
 
 Two schemes, three meanings each, plus rest days. Hexes live in the CSS custom
@@ -116,6 +141,7 @@ clean, precomputed once per frame into 24 steps.
   sits squarely in running range.
 - Parsed data is cached in `localStorage` under `runviz.data.v2` (`SCHEMA = 2`; bump
   both together if the shape changes), ~12 KB. Selected sports in `runviz.sports.v2`.
+  Settings in `runviz.prefs.v1` (see below).
 - Where supported, the picked file is also kept as a `FileSystemFileHandle` in
   IndexedDB (`runviz` / `handles`), which powers "Refresh from file" and a silent
   re-read on open when permission is still granted. **A browser cannot open a
@@ -137,7 +163,9 @@ day) → `buildRamps`/`barColour` → `drawBars`/`drawFreq`/`drawAll` →
 - **Declaration order.** `recompute()` runs at load. Anything it touches (`WINDOW`,
   `compareMode`, `LONG_MIN_RUNS_PER_WEEK`, the series arrays) must be declared
   *above* that call or the whole script dies on a `const`/`let` TDZ error, which
-  surfaces confusingly as "Cannot access 'C' before initialization".
+  surfaces confusingly as "Cannot access 'C' before initialization". `loadPrefs()`
+  therefore sits above `let WINDOW`; `savePrefs()` may *reference* things declared
+  later (`stableBand`, `plan`) because it is only ever *called* later.
 - **`[hidden]` vs `display`.** An author `display:` rule beats the UA stylesheet
   behind the `hidden` attribute. `.gate[hidden] { display: none }` exists for that
   reason.
