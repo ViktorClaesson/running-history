@@ -34,6 +34,7 @@
     --nocolour:       #b5b3aa;   /* a run whose scheme has colouring switched off */
     --rest:           #e7e5dd;   /* no run at all */
     --freq:           #52514e;
+    --freq2:          #2f8f7a;
     --ghost:          rgba(11,11,11,0.05);
   }
   @media (prefers-color-scheme: dark) {
@@ -60,6 +61,7 @@
       --nocolour:       #5c5a54;
       --rest:           #333230;
       --freq:           #c3c2b7;
+      --freq2:          #5fc9ae;
     }
   }
   :root[data-theme="dark"] {
@@ -85,6 +87,7 @@
     --nocolour:       #5c5a54;
     --rest:           #333230;
     --freq:           #c3c2b7;
+    --freq2:          #5fc9ae;
   }
 
   * { box-sizing: border-box; }
@@ -214,6 +217,7 @@
     width: 46px; text-align: right; padding: 0 2px; }
   #chart  { display: block; width: 100%; height: 300px; touch-action: none; cursor: crosshair; }
   #chart2 { display: block; width: 100%; height: 156px; touch-action: none; cursor: crosshair; }
+  #chart3 { display: block; width: 100%; height: 156px; touch-action: none; cursor: crosshair; }
   .panel-title { font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
     color: var(--muted); padding: 4px 0 2px 54px; }
   .hint { padding: 6px 4px 0; font-size: 11px; color: var(--muted); }
@@ -313,6 +317,8 @@
     <canvas id="chart"></canvas>
     <div class="panel-title">Average run days per week, over the trailing <span class="winN">70</span> days</div>
     <canvas id="chart2"></canvas>
+    <div class="panel-title">Average runs per week, over the trailing <span class="winN">70</span> days</div>
+    <canvas id="chart3"></canvas>
     <div class="hint">Scroll or pinch to zoom — the day under the cursor stays put while both sides scale around it. Drag to pan. Double-click to reset.
       Click a day to pin its numbers in the readout above; click it again, or press Esc, to release.</div>
   </div>
@@ -321,7 +327,7 @@
     <summary>Data table (days currently in view)</summary>
     <div class="tablewrap">
       <table>
-        <thead><tr><th>Date</th><th>Distance (km)</th><th><span class="winN">70</span>-day avg (km/day)</th><th>Run days / week</th><th>Target (km)</th><th>Verdict</th></tr></thead>
+        <thead><tr><th>Date</th><th>Distance (km)</th><th><span class="winN">70</span>-day avg (km/day)</th><th>Run days / week</th><th>Runs / week</th><th>Target (km)</th><th>Verdict</th></tr></thead>
         <tbody id="tbody"></tbody>
       </table>
     </div>
@@ -690,6 +696,7 @@ const dateAt = i => new Date(start.getTime() + i * 86400000);
 // than reading a single 5 km run on day one as a 5 km/day "average".
 const avg = new Array(N);
 const runs = new Array(N);   // how many of the trailing WINDOW days had a run on them
+const totalRuns = new Array(N); // how many separate runs happened in the trailing WINDOW days
 const target = new Array(N); // what each day's run had to be to hold the average (see computeTargets)
 const longOn = new Array(N); // was the long-run scheme in play that day at all?
 const rpwPrev = new Array(N); // run days per week as of the day before
@@ -699,18 +706,24 @@ const weeklyPrev = new Array(N); // km per week as of the day before
 // single elapsed day. Volume and run count share the denominator, so their ratio
 // (mean km per running day) is untouched by it.
 const perWeekAt = i => runs[i] * 7 / WINDOW;
+// Same idea as perWeekAt, but counting every run rather than run-having days, so a
+// double-run day shows up as 2 rather than being clumped into 1.
+const perWeekRunsAt = i => totalRuns[i] * 7 / WINDOW;
 const LONG_MIN_RUNS_PER_WEEK = 3.0;
 function recompute() {
-  let running = 0, ran = 0;
+  let running = 0, ran = 0, ranTotal = 0;
   for (let i = 0; i < N; i++) {
     running += daily[i];
     if (daily[i] > 0) ran++;
+    ranTotal += nRuns[i];
     if (i >= WINDOW) {
       running -= daily[i - WINDOW];
       if (daily[i - WINDOW] > 0) ran--;
+      ranTotal -= nRuns[i - WINDOW];
     }
     avg[i] = running / WINDOW;
     runs[i] = ran;
+    totalRuns[i] = ranTotal;
   }
   computeTargets();
 }
@@ -980,6 +993,8 @@ const cv  = document.getElementById('chart');
 const ctx = cv.getContext('2d');
 const cv2  = document.getElementById('chart2');
 const ctx2 = cv2.getContext('2d');
+const cv3  = document.getElementById('chart3');
+const ctx3 = cv3.getContext('2d');
 
 let span = N;             // days visible
 let center = N / 2;       // index at the horizontal centre
@@ -1014,7 +1029,8 @@ const kick = () => { clampTarget(); if (!raf) raf = requestAnimationFrame(animat
 // at the same screen x in each.
 const PAD  = { l: 54, r: 14 };
 const BARS = { t: 14, b: 12 };    // top panel insets
-const FREQ = { t: 10, b: 26 };   // bottom panel insets (carries the x labels)
+const FREQ  = { t: 10, b: 12 };  // middle panel insets
+const FREQ2 = { t: 10, b: 26 };  // bottom panel insets (carries the x labels)
 let W = 0;
 const plotW = () => W - PAD.l - PAD.r;
 const barW  = () => plotW() / span;
@@ -1196,11 +1212,80 @@ function drawFreq() {
   if (seen(selected) && selected !== hover) dot(selected, true);
   if (seen(hover)) dot(hover, false);
   c.restore();
+}
 
-  // x axis labels live on the bottom panel only; both panels share the x mapping
+// ---- panel 3: runs per week, without clumping same-day runs into one -----
+// Same shape as drawFreq, but counts every run rather than run-having days, so
+// a double-run day shows as 2 instead of being folded into the 7-day ceiling.
+// The axis is therefore not fixed at 0–7 the way run-days/week is.
+function drawRuns() {
+  const { w, h } = fitCanvas(cv3, ctx3);
+  const plotH = h - FREQ2.t - FREQ2.b;
+  const [i0, i1] = visibleRange();
+  const perWeek = perWeekRunsAt;
+  let yMax = 0;
+  for (let i = i0; i <= i1; i++) if (perWeek(i) > yMax) yMax = perWeek(i);
+  const ticks = niceTicks(Math.max(yMax * 1.12, 1));
+  yMax = ticks[ticks.length - 1];
+  const dec = ticks.step < 1 ? 1 : 0;
+  const yOf = v => FREQ2.t + plotH * (1 - v / yMax);
+  const c = ctx3;
+
+  const pxAt = i => xOf(i) + barW() / 2;
+  c.save();
+  c.beginPath(); c.rect(PAD.l, FREQ2.t - 4, plotW(), plotH + 8); c.clip();
+  c.beginPath();
+  c.moveTo(pxAt(i0), FREQ2.t + plotH);
+  for (let i = i0; i <= i1; i++) c.lineTo(pxAt(i), yOf(perWeek(i)));
+  c.lineTo(pxAt(i1), FREQ2.t + plotH);
+  c.closePath();
+  c.fillStyle = C('--freq2'); c.globalAlpha = 0.10; c.fill(); c.globalAlpha = 1;
+  c.restore();
+
+  c.font = '11px system-ui, -apple-system, sans-serif';
+  c.textAlign = 'right'; c.textBaseline = 'middle';
+  for (const t of ticks) {
+    const y = Math.round(yOf(t)) + 0.5;
+    c.strokeStyle = t === 0 ? C('--baseline') : C('--grid');
+    c.lineWidth = 1;
+    c.beginPath(); c.moveTo(PAD.l, y); c.lineTo(w - PAD.r, y); c.stroke();
+    c.fillStyle = C('--muted');
+    c.fillText(t.toFixed(dec), PAD.l - 8, y);
+  }
+  c.save();
+  c.translate(13, FREQ2.t + plotH/2); c.rotate(-Math.PI/2);
+  c.textAlign = 'center'; c.fillStyle = C('--muted');
+  c.fillText('runs / week', 0, 0);
+  c.restore();
+
+  c.save();
+  c.beginPath(); c.rect(PAD.l, FREQ2.t - 4, plotW(), plotH + 8); c.clip();
+  const px = i => xOf(i) + barW() / 2;
+
+  c.beginPath();
+  for (let i = i0; i <= i1; i++) {
+    const x = px(i), y = yOf(perWeek(i));
+    if (i === i0) c.moveTo(x, y); else c.lineTo(x, y);
+  }
+  c.strokeStyle = C('--freq2'); c.lineWidth = 2;
+  c.lineJoin = 'round'; c.lineCap = 'round';
+  c.stroke();
+
+  if (hover !== null && hover >= i0 && hover <= i1) {
+    const x = Math.round(px(hover)) + 0.5, y = yOf(perWeek(hover));
+    c.strokeStyle = C('--text-primary'); c.lineWidth = 1; c.globalAlpha = 0.25;
+    c.beginPath(); c.moveTo(x, FREQ2.t); c.lineTo(x, FREQ2.t + plotH); c.stroke();
+    c.globalAlpha = 1;
+    c.beginPath(); c.arc(x, y, 4.5, 0, Math.PI * 2);
+    c.fillStyle = C('--freq2'); c.fill();
+    c.strokeStyle = C('--surface-1'); c.lineWidth = 2; c.stroke();
+  }
+  c.restore();
+
+  // x axis labels live on the bottom panel only; all three panels share the x mapping
   c.textAlign = 'center'; c.textBaseline = 'top';
   c.fillStyle = C('--muted');
-  const ty = FREQ.t + plotH + 7;
+  const ty = FREQ2.t + plotH + 7;
   const labelEvery = (() => {
     if (span <= 21) return { kind: 'day', n: Math.ceil(span / 10) };
     if (span <= 120) return { kind: 'week' };
@@ -1234,6 +1319,7 @@ function drawFreq() {
 function drawAll() {
   drawBars();
   drawFreq();
+  drawRuns();
   const [i0, i1] = visibleRange();
   renderTable(i0, i1);
 }
@@ -1264,6 +1350,7 @@ function setReadout(i, pinned) {
         : 'no target yet'}</span></span>
     <span class="pair rate"><span class="k">${WINDOW}-day average${i < WINDOW - 1 ? ' (partial)' : ''}</span><span class="v">${km(avg[i])} km/day</span><span class="v2">${rateSummary(avg[i])}</span></span>
     <span class="pair"><span class="k">Run days per week</span><span class="v">${perWeekAt(i).toFixed(1)}<span class="sub-v"> · ${runs[i]} of ${WINDOW} days</span></span></span>
+    <span class="pair"><span class="k">Runs per week</span><span class="v">${perWeekRunsAt(i).toFixed(1)}<span class="sub-v"> · ${totalRuns[i]} runs in ${WINDOW} days</span></span></span>
     <span class="badge" style="color:${c ? fullColour(c) : 'var(--text-secondary)'}">${
       !c ? '— rest day'
          : `${DIR_ARROW[c.dir]} ${c.scheme === 'long' ? 'long run · ' : ''}${DIR_LABEL[c.dir]}${
@@ -1287,11 +1374,11 @@ function renderTable(i0, i1) {
   tableKey = key;
   const rows = [];
   for (let i = Math.min(i1, i0 + 400); i >= i0; i--) {
-    rows.push(`<tr><td>${fmtShort.format(dateAt(i))}</td><td>${daily[i] > 0 ? km(daily[i]) : '—'}</td><td>${km(avg[i])}</td><td>${perWeekAt(i).toFixed(1)}</td><td>${target[i] > 0 ? km(target[i]) : '—'}</td><td>${(() => { const c = classify(i);
+    rows.push(`<tr><td>${fmtShort.format(dateAt(i))}</td><td>${daily[i] > 0 ? km(daily[i]) : '—'}</td><td>${km(avg[i])}</td><td>${perWeekAt(i).toFixed(1)}</td><td>${perWeekRunsAt(i).toFixed(1)}</td><td>${target[i] > 0 ? km(target[i]) : '—'}</td><td>${(() => { const c = classify(i);
         return c ? `<span style="color:${fullColour(c)}">${DIR_ARROW[c.dir]} ${c.scheme === 'long' ? 'long · ' : ''}${DIR_LABEL[c.dir]}</span>${c.ratio === null ? '' : ' <span style="color:var(--muted)">' + Math.round(c.ratio * 100) + '%</span>'}`
                   : '<span style="color:var(--text-secondary)">— no run</span>'; })()}</td></tr>`);
   }
-  if (i1 - i0 > 400) rows.push(`<tr><td colspan="6" style="text-align:left;color:var(--muted)">Showing the most recent 400 of ${i1-i0+1} days in view — zoom in for the rest.</td></tr>`);
+  if (i1 - i0 > 400) rows.push(`<tr><td colspan="7" style="text-align:left;color:var(--muted)">Showing the most recent 400 of ${i1-i0+1} days in view — zoom in for the rest.</td></tr>`);
   tbody.innerHTML = rows.join('');
 }
 
@@ -1354,7 +1441,7 @@ function onTouchMove(e) {
   }
 }
 
-for (const el of [cv, cv2]) {
+for (const el of [cv, cv2, cv3]) {
   el.addEventListener('mousemove', onMove);
   el.addEventListener('mouseleave', () => { hover = null; refreshReadout(); drawAll(); });
   el.addEventListener('wheel', onWheel, { passive: false });
@@ -1381,7 +1468,7 @@ for (const el of [cv, cv2]) {
 }
 window.addEventListener('mouseup', () => {
   draggedNotClicked = !!(drag && drag.moved);
-  drag = null; cv.style.cursor = 'crosshair'; cv2.style.cursor = 'crosshair';
+  drag = null; cv.style.cursor = 'crosshair'; cv2.style.cursor = 'crosshair'; cv3.style.cursor = 'crosshair';
 });
 window.addEventListener('keydown', e => {
   if (e.key !== 'Escape' || selected === null) return;

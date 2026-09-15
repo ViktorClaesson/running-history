@@ -20,12 +20,16 @@ to refresh). After that the page opens straight into the chart.
 
 ## What the chart shows
 
-Two stacked panels sharing one x-axis, one bar/point per calendar day:
+Three stacked panels sharing one x-axis, one bar/point per calendar day:
 
 1. **Bars** — height is the rolling average km/day over the trailing window
    (default 70 days). Colour is a *verdict on that day's run* (see below).
 2. **Line** — average run days per week over the same window, on a fixed 0–7 axis
-   with a reference line per whole day.
+   with a reference line per whole day. A day with two runs still counts as one
+   day here.
+3. **Line** — average runs per week over the same window: every run counts, so a
+   double-run day shows as 2. Axis is not fixed at 0–7 like the panel above it,
+   since it can run higher.
 
 Hovering a day fills a fixed-height readout: exact distance, the rolling average
 (also as km/wk, km/mo, km/yr), run days per week, the day's target, and the verdict.
