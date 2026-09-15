@@ -357,7 +357,7 @@
 // itself and is as close to "remember the path" as the platform allows.
 // ---------------------------------------------------------------------------
 const LS_DATA = 'runviz.data.v2', LS_SPORTS = 'runviz.sports.v2';
-const SCHEMA = 2;
+const SCHEMA = 3;   // 3: activities are filed by `time` read as UTC, not time + offset
 
 const lsGet = k => { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); return true; }
@@ -382,7 +382,7 @@ function parseCsv(text) {
   if (!rows.length) throw new Error('that file is empty');
   const header = {};
   rows[0].forEach((name, i) => header[name.trim()] = i);
-  for (const need of ['time', 'timezoneOffset', 'distance', 'sportid']) {
+  for (const need of ['time', 'distance', 'sportid']) {
     if (!(need in header)) throw new Error(`no "${need}" column — is this a Runalyze activities export?`);
   }
   return { header, rows: rows.slice(1).filter(r => r.length > 1) };
@@ -426,10 +426,15 @@ function buildData({ header, rows }, sportIds, fileName) {
     if (!sportIds.has(r[header.sportid])) continue;
     const t = Number(r[header.time]);
     if (!Number.isFinite(t)) continue;
-    const off = Number(r[header.timezoneOffset]) || 0;
-    // shift by the activity's own offset, then read UTC parts, so a run is filed
-    // under the calendar day it happened on locally
-    const key = new Date((t + off * 60) * 1000).toISOString().slice(0, 10);
+    // Runalyze's `time` is ALREADY the local wall clock, stored as a Unix
+    // timestamp — so reading its UTC parts gives the local calendar day directly.
+    // `timezoneOffset` is a record of the offset that applied (60 in winter, 120 in
+    // summer here), not something still to be added: adding it shifted every
+    // activity that started at or after 22:00 local into the next day. That was 25
+    // of 641 runs, wrong on 41 of 592 run-days. Checked against Runalyze's own day
+    // grouping for 22–31 Aug 2026, which agrees with this on all ten days,
+    // activity by activity, and disagrees with the shifted version on three.
+    const key = new Date(t * 1000).toISOString().slice(0, 10);
     const dist = parseFloat(r[header.distance]) || 0;
     const g = per.get(key) || { sum: 0, max: 0, n: 0 };
     g.sum += dist; g.max = Math.max(g.max, dist); g.n++;
@@ -503,12 +508,19 @@ const sportBox = document.getElementById('gate-sports');
 const sportList = document.getElementById('sport-list');
 let pendingParsed = null, pendingName = '';
 
-function openGate(changing) {
+function openGate(changing, staleCache) {
   gate.hidden = false;
   document.getElementById('gate-title').textContent =
     changing ? 'Choose a different export' : 'Load your Runalyze export';
   document.getElementById('gate-cancel').hidden = !changing;
-  gateMsg.textContent = ''; gateMsg.className = 'gate-msg';
+  // A SCHEMA bump means the cached copy is not just old but wrong, and it can only
+  // be rebuilt from the CSV — so say why rather than silently asking again.
+  gateMsg.textContent = staleCache
+    ? 'The remembered copy was built with a bug that filed runs starting after '
+      + '22:00 under the next day, so it has been discarded. Pick the CSV again to '
+      + 'rebuild it — your settings are kept.'
+    : '';
+  gateMsg.className = 'gate-msg';
   sportBox.hidden = true;
 }
 function closeGate() { gate.hidden = true; }
@@ -568,7 +580,7 @@ const cached = lsGet(LS_DATA);
 if (cached && cached.schema === SCHEMA && Array.isArray(cached.values) && cached.values.length > 1) {
   window.RUNVIZ = cached;
 } else {
-  openGate(false);
+  openGate(false, !!(cached && cached.schema !== SCHEMA));
 }
 
 // Once running from cache, offer to re-read the remembered file so a fresh export

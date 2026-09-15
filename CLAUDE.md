@@ -167,18 +167,34 @@ clean, precomputed once per frame into 24 steps.
 ## Data pipeline
 
 - CSV is parsed in-browser (`parseCsv` handles quoted fields, embedded commas,
-  doubled quotes, CRLF). Required columns: `time`, `timezoneOffset`, `distance`,
-  `sportid`.
-- Each activity is filed under its **local** calendar day (`time + timezoneOffset*60`,
-  read as UTC), then aggregated per day into `values` (total km), `maxRun` (longest
-  single run) and `nRuns` (count). 63 of my days have more than one run.
+  doubled quotes, CRLF). Required columns: `time`, `distance`, `sportid`.
+- **`time` is already the local wall clock**, stored as a Unix timestamp, so reading
+  its UTC parts (`new Date(t * 1000).toISOString().slice(0, 10)`) gives the local
+  calendar day directly. `timezoneOffset` is a *record* of the offset that applied
+  (60 in winter, 120 in summer here — it tracks DST), **not** something still to be
+  added, and it is no longer read at all.
+  This was wrong until Sep 2026: adding the offset shifted every activity that
+  started at or after 22:00 local into the *next* day — 25 of 641 runs, wrong on 41
+  of 592 run-days, and visible as "no run" on a day that had one with its distance
+  glued onto the following day. Verified against Runalyze's own day grouping for
+  22–31 Aug 2026: unshifted agrees on all ten days activity by activity, shifted
+  disagrees on three. If this ever looks wrong again, the discriminator is an
+  activity starting between 22:00 and midnight — nothing else moves.
+- Each activity is filed under that day, then aggregated per day into `values`
+  (total km), `maxRun` (longest single run) and `nRuns` (count). 63 of my days have
+  more than one run.
 - **Sport IDs are per-account**, so there is no way to detect "running" generically.
   `summariseSports` shows every sport with count / total km / median speed and
   pre-ticks a guess: the busiest sport with median speed 7.5–17 km/h, plus anything
   comparable in volume. Speed alone over-selects — cross-country skiing at 8.2 km/h
   sits squarely in running range.
-- Parsed data is cached in `localStorage` under `runviz.data.v2` (`SCHEMA = 2`; bump
-  both together if the shape changes), ~12 KB. Selected sports in `runviz.sports.v2`.
+- Parsed data is cached in `localStorage` under `runviz.data.v2` (`SCHEMA = 3`).
+  `SCHEMA` guards what the cached numbers *mean*, not only their shape — the day
+  attribution fix bumped it to 3 with the shape unchanged, because the cached values
+  were wrong and can only be rebuilt from the CSV. Bump the key alongside it only if
+  the shape changes. A stale schema opens the gate with `staleCache` set, which says
+  why it is asking for the file again instead of doing it silently. Selected sports
+  in `runviz.sports.v2`.
   Settings in `runviz.prefs.v1` (see below).
 - Where supported, the picked file is also kept as a `FileSystemFileHandle` in
   IndexedDB (`runviz` / `handles`), which powers "Refresh from file" and a silent
