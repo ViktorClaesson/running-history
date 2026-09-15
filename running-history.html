@@ -302,8 +302,11 @@
       </div>
       <span class="spacer"></span>
       <div class="ctrls">
-      <label class="chk">Window
-        <input type="number" id="windowDays" min="7" max="365" step="7" value="70"> days
+      <label class="chk">Volume window
+        <input type="number" id="windowVolWeeks" min="1" max="52" step="1" value="10"> weeks
+      </label>
+      <label class="chk">Frequency window
+        <input type="number" id="windowFreqWeeks" min="1" max="52" step="1" value="10"> weeks
       </label>
       <label class="chk" title="Whether a day has to contain one long run on its own, rather than reaching the distance across several runs.">
         <input type="checkbox" id="longSingle" checked> Long run needs a single run
@@ -315,9 +318,9 @@
       </div>
     </div>
     <canvas id="chart"></canvas>
-    <div class="panel-title">Average run days per week, over the trailing <span class="winN">70</span> days</div>
+    <div class="panel-title">Average run days per week, over the trailing <span class="winFreqN">70</span> days</div>
     <canvas id="chart2"></canvas>
-    <div class="panel-title">Average runs per week, over the trailing <span class="winN">70</span> days</div>
+    <div class="panel-title">Average runs per week, over the trailing <span class="winFreqN">70</span> days</div>
     <canvas id="chart3"></canvas>
     <div class="hint">Scroll or pinch to zoom — the day under the cursor stays put while both sides scale around it. Drag to pan. Double-click to reset.
       Click a day to pin its numbers in the readout above; click it again, or press Esc, to release.</div>
@@ -636,10 +639,11 @@ if (DATA) {
 // ---- remembered settings -------------------------------------------------
 // Everything the controls row and the what-if box can be set to, so the page
 // opens the way it was left. Read here, at the very top, because recompute()
-// runs at load and reads WINDOW — see the declaration-order gotcha.
+// runs at load and reads WINDOW_VOL/WINDOW_FREQ — see the declaration-order gotcha.
 const LS_PREFS = 'runviz.prefs.v1';
 const PREF_DEFAULTS = {
-  window: 70,
+  windowVol: 70,
+  windowFreq: 70,
   stableBand: 0.01,
   longNeedsSingleRun: true,
   colourNormal: true,
@@ -652,8 +656,11 @@ function loadPrefs() {
   if (!raw || typeof raw !== 'object') return p;
   // Validated field by field, against the same limits as the controls, so a
   // stale or hand-edited entry can only ever produce a state the UI can reach.
+  // Both windows are set in whole weeks, so a stray value is rounded to one.
   const num = (v, lo, hi) => Number.isFinite(v) && v >= lo && v <= hi;
-  if (num(raw.window, 7, 365)) p.window = Math.round(raw.window);
+  const week = v => Math.min(364, Math.max(7, Math.round(v / 7) * 7));
+  if (num(raw.windowVol, 7, 364)) p.windowVol = week(raw.windowVol);
+  if (num(raw.windowFreq, 7, 364)) p.windowFreq = week(raw.windowFreq);
   if (num(raw.stableBand, 0, 0.05)) p.stableBand = raw.stableBand;
   for (const k of ['longNeedsSingleRun', 'colourNormal', 'colourLong']) {
     if (typeof raw[k] === 'boolean') p[k] = raw[k];
@@ -669,7 +676,8 @@ const prefs = loadPrefs();
 // never been touched leaves nothing behind, and Reset really does forget.
 function savePrefs() {
   const cur = {
-    window: WINDOW,
+    windowVol: WINDOW_VOL,
+    windowFreq: WINDOW_FREQ,
     stableBand,
     longNeedsSingleRun,
     colourNormal: colourScheme.normal,
@@ -681,7 +689,13 @@ function savePrefs() {
   if (changed) lsSet(LS_PREFS, cur); else lsDel(LS_PREFS);
 }
 
-let WINDOW = prefs.window;   // rolling window, in days — adjustable in the controls row
+// Two independent rolling windows, both in days but set in whole weeks from the
+// controls row: WINDOW_VOL drives the volume panel (bars, target, verdict) and
+// WINDOW_FREQ drives the two per-week panels below it. Kept separate because
+// "is my volume trending up" and "how often am I running" are different
+// questions with naturally different useful windows.
+let WINDOW_VOL = prefs.windowVol;
+let WINDOW_FREQ = prefs.windowFreq;
 
 // ---- derive series -------------------------------------------------------
 const daily = DATA.values;
@@ -691,37 +705,39 @@ const N = daily.length;
 const start = new Date(DATA.start + "T00:00:00");
 const dateAt = i => new Date(start.getTime() + i * 86400000);
 
-// Trailing WINDOW-day mean. The first WINDOW days have no full window behind them
-// and are still divided by the full WINDOW, so the series ramps up from zero rather
-// than reading a single 5 km run on day one as a 5 km/day "average".
-const avg = new Array(N);
-const runs = new Array(N);   // how many of the trailing WINDOW days had a run on them
-const totalRuns = new Array(N); // how many separate runs happened in the trailing WINDOW days
+// Trailing-window means. The first window's worth of days has no full window behind
+// it and is still divided by the full window, so each series ramps up from zero
+// rather than reading a single 5 km run on day one as a 5 km/day "average".
+const avg = new Array(N);       // WINDOW_VOL-day mean km/day
+const runs = new Array(N);      // how many of the trailing WINDOW_FREQ days had a run on them
+const totalRuns = new Array(N); // how many separate runs happened in the trailing WINDOW_FREQ days
 const target = new Array(N); // what each day's run had to be to hold the average (see computeTargets)
 const longOn = new Array(N); // was the long-run scheme in play that day at all?
 const rpwPrev = new Array(N); // run days per week as of the day before
 const weeklyPrev = new Array(N); // km per week as of the day before
 // Weekly rates are always taken over the full window, exactly like the average:
 // one run inside a 70-day window is 0.1 run days per week, not "7 a week" off a
-// single elapsed day. Volume and run count share the denominator, so their ratio
-// (mean km per running day) is untouched by it.
-const perWeekAt = i => runs[i] * 7 / WINDOW;
+// single elapsed day.
+const perWeekAt = i => runs[i] * 7 / WINDOW_FREQ;
 // Same idea as perWeekAt, but counting every run rather than run-having days, so a
 // double-run day shows up as 2 rather than being clumped into 1.
-const perWeekRunsAt = i => totalRuns[i] * 7 / WINDOW;
+const perWeekRunsAt = i => totalRuns[i] * 7 / WINDOW_FREQ;
 const LONG_MIN_RUNS_PER_WEEK = 3.0;
 function recompute() {
-  let running = 0, ran = 0, ranTotal = 0;
+  let running = 0;
   for (let i = 0; i < N; i++) {
     running += daily[i];
+    if (i >= WINDOW_VOL) running -= daily[i - WINDOW_VOL];
+    avg[i] = running / WINDOW_VOL;
+  }
+  let ran = 0, ranTotal = 0;
+  for (let i = 0; i < N; i++) {
     if (daily[i] > 0) ran++;
     ranTotal += nRuns[i];
-    if (i >= WINDOW) {
-      running -= daily[i - WINDOW];
-      if (daily[i - WINDOW] > 0) ran--;
-      ranTotal -= nRuns[i - WINDOW];
+    if (i >= WINDOW_FREQ) {
+      if (daily[i - WINDOW_FREQ] > 0) ran--;
+      ranTotal -= nRuns[i - WINDOW_FREQ];
     }
-    avg[i] = running / WINDOW;
     runs[i] = ran;
     totalRuns[i] = ranTotal;
   }
@@ -822,9 +838,9 @@ function computeTargets() {
     let rd = 0;
     for (let i = 1; i < N; i++) {
       if (daily[i-1] > 0) rd++;
-      const dropped = i - 1 - WINDOW;
+      const dropped = i - 1 - WINDOW_VOL;
       if (dropped >= 0 && daily[dropped] > 0) rd--;
-      rpwPrev[i] = rd * 7 / WINDOW;
+      rpwPrev[i] = rd * 7 / WINDOW_VOL;
       longOn[i] = rpwPrev[i] >= LONG_MIN_RUNS_PER_WEEK;
     }
     rpwPrev[0] = 0; longOn[0] = false; weeklyPrev[0] = 0;
@@ -837,9 +853,9 @@ function computeTargets() {
   let sum = 0;
   for (let i = 1; i < N; i++) {
     sum += daily[i-1];
-    const dropped = i - 1 - WINDOW;
+    const dropped = i - 1 - WINDOW_VOL;
     if (dropped >= 0) sum -= daily[dropped];
-    const weekly = sum * 7 / WINDOW;
+    const weekly = sum * 7 / WINDOW_VOL;
     weeklyPrev[i] = weekly;
     const divisor = rpwPrev[i] + (longOn[i] ? 1 : 0);
     target[i] = divisor > 0 ? weekly / divisor : 0;
@@ -923,7 +939,7 @@ function renderTiles() {
   ].map(([v,u]) => `<div class="cell"><span class="v">${v}</span><span class="u">${u}</span></div>`).join('');
 
   document.getElementById('tiles').innerHTML = totals +
-    `<div class="tile combo"><div class="k">Current ${WINDOW}-day average</div><div class="grid">${cells}</div></div>` +
+    `<div class="tile combo"><div class="k">Current ${WINDOW_VOL}-day average</div><div class="grid">${cells}</div></div>` +
     `<div class="tile combo target" id="target-tile"></div>`;
   renderTarget();
 }
@@ -1348,9 +1364,9 @@ function setReadout(i, pinned) {
                longOn[i] ? '' : 'no long runs',
                nRuns[i] > 1 ? 'longest ' + km(maxRun[i]) : ''])
         : 'no target yet'}</span></span>
-    <span class="pair rate"><span class="k">${WINDOW}-day average${i < WINDOW - 1 ? ' (partial)' : ''}</span><span class="v">${km(avg[i])} km/day</span><span class="v2">${rateSummary(avg[i])}</span></span>
-    <span class="pair"><span class="k">Run days per week</span><span class="v">${perWeekAt(i).toFixed(1)}<span class="sub-v"> · ${runs[i]} of ${WINDOW} days</span></span></span>
-    <span class="pair"><span class="k">Runs per week</span><span class="v">${perWeekRunsAt(i).toFixed(1)}<span class="sub-v"> · ${totalRuns[i]} runs in ${WINDOW} days</span></span></span>
+    <span class="pair rate"><span class="k">${WINDOW_VOL}-day average${i < WINDOW_VOL - 1 ? ' (partial)' : ''}</span><span class="v">${km(avg[i])} km/day</span><span class="v2">${rateSummary(avg[i])}</span></span>
+    <span class="pair"><span class="k">Run days per week</span><span class="v">${perWeekAt(i).toFixed(1)}<span class="sub-v"> · ${runs[i]} of ${WINDOW_FREQ} days</span></span></span>
+    <span class="pair"><span class="k">Runs per week</span><span class="v">${perWeekRunsAt(i).toFixed(1)}<span class="sub-v"> · ${totalRuns[i]} runs in ${WINDOW_FREQ} days</span></span></span>
     <span class="badge" style="color:${c ? fullColour(c) : 'var(--text-secondary)'}">${
       !c ? '— rest day'
          : `${DIR_ARROW[c.dir]} ${c.scheme === 'long' ? 'long run · ' : ''}${DIR_LABEL[c.dir]}${
@@ -1369,7 +1385,7 @@ const refreshReadout = () => setReadout(shownDay(), hover === null && selected !
 const tbody = document.getElementById('tbody');
 let tableKey = '';
 function renderTable(i0, i1) {
-  const key = i0 + ':' + i1 + ':' + WINDOW;
+  const key = i0 + ':' + i1 + ':' + WINDOW_VOL + ':' + WINDOW_FREQ;
   if (key === tableKey) return;
   tableKey = key;
   const rows = [];
@@ -1484,7 +1500,8 @@ window.addEventListener('keydown', e => {
 // keeps it holding just the what-if if that is still edited — so neither reset has
 // to know what the other one owns.
 document.getElementById('reset').onclick = () => {
-  WINDOW = PREF_DEFAULTS.window;
+  WINDOW_VOL = PREF_DEFAULTS.windowVol;
+  WINDOW_FREQ = PREF_DEFAULTS.windowFreq;
   stableBand = PREF_DEFAULTS.stableBand;
   longNeedsSingleRun = PREF_DEFAULTS.longNeedsSingleRun;
   colourScheme.normal = PREF_DEFAULTS.colourNormal;
@@ -1495,19 +1512,21 @@ document.getElementById('reset').onclick = () => {
   tSpan = N; tCenter = N / 2; kick();
 };
 function syncLabels() {
-  document.getElementById('h1win').textContent = WINDOW;
+  document.getElementById('h1win').textContent = WINDOW_VOL;
   const pct = +(stableBand * 100).toFixed(1);
   for (const el of document.querySelectorAll('.bandN')) el.textContent = pct;
   for (const el of document.querySelectorAll('.gradN')) el.textContent = +(50 - pct).toFixed(1);
-  for (const el of document.querySelectorAll('.winN')) el.textContent = WINDOW;
-  document.title = `Running history — ${WINDOW}-day rolling average`;
+  for (const el of document.querySelectorAll('.winN')) el.textContent = WINDOW_VOL;
+  for (const el of document.querySelectorAll('.winFreqN')) el.textContent = WINDOW_FREQ;
+  document.title = `Running history — ${WINDOW_VOL}-day rolling average`;
   renderTiles();
 }
 
 // The controls are the one place state has to be pushed *into* the DOM: at boot
 // they carry the markup defaults, which a remembered setting has to overwrite.
 function syncControls() {
-  winInput.value = WINDOW;
+  winVolInput.value = WINDOW_VOL / 7;
+  winFreqInput.value = WINDOW_FREQ / 7;
   bandInput.value = +(stableBand * 100).toFixed(1);
   longSingleBox.checked = longNeedsSingleRun;
   for (const [scheme, id] of [['normal', 'colourNormal'], ['long', 'colourLong']]) {
@@ -1552,11 +1571,19 @@ bandInput.onchange = bandInput.oninput = () => {
   tableKey = '';
   drawAll();
 };
-const winInput = document.getElementById('windowDays');
-winInput.onchange = winInput.oninput = () => {
-  const v = Math.round(Number(winInput.value));
-  if (!Number.isFinite(v) || v < 7 || v > 365) return;   // ignore half-typed values
-  WINDOW = v;
+const winVolInput = document.getElementById('windowVolWeeks');
+winVolInput.onchange = winVolInput.oninput = () => {
+  const v = Math.round(Number(winVolInput.value));
+  if (!Number.isFinite(v) || v < 1 || v > 52) return;   // ignore half-typed values
+  WINDOW_VOL = v * 7;
+  savePrefs();
+  applyWindow();
+};
+const winFreqInput = document.getElementById('windowFreqWeeks');
+winFreqInput.onchange = winFreqInput.oninput = () => {
+  const v = Math.round(Number(winFreqInput.value));
+  if (!Number.isFinite(v) || v < 1 || v > 52) return;   // ignore half-typed values
+  WINDOW_FREQ = v * 7;
   savePrefs();
   applyWindow();
 };

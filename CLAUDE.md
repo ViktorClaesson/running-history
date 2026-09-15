@@ -22,14 +22,14 @@ to refresh). After that the page opens straight into the chart.
 
 Three stacked panels sharing one x-axis, one bar/point per calendar day:
 
-1. **Bars** — height is the rolling average km/day over the trailing window
-   (default 70 days). Colour is a *verdict on that day's run* (see below).
-2. **Line** — average run days per week over the same window, on a fixed 0–7 axis
-   with a reference line per whole day. A day with two runs still counts as one
-   day here.
-3. **Line** — average runs per week over the same window: every run counts, so a
-   double-run day shows as 2. Axis is not fixed at 0–7 like the panel above it,
-   since it can run higher.
+1. **Bars** — height is the rolling average km/day over the trailing *volume*
+   window (default 70 days). Colour is a *verdict on that day's run* (see below).
+2. **Line** — average run days per week over the trailing *frequency* window
+   (also default 70 days, but set independently), on a fixed 0–7 axis with a
+   reference line per whole day. A day with two runs still counts as one day here.
+3. **Line** — average runs per week over the same frequency window: every run
+   counts, so a double-run day shows as 2. Axis is not fixed at 0–7 like the panel
+   above it, since it can run higher.
 
 Hovering a day fills a fixed-height readout: exact distance, the rolling average
 (also as km/wk, km/mo, km/yr), run days per week, the day's target, and the verdict.
@@ -84,8 +84,13 @@ line and the two-line reserve stops holding.
 
 All of it is derived in-browser from one array of daily distances.
 
-- **Rolling window** `WINDOW`, default 70 days (a clean multiple of 7), adjustable
-  7–365 in the controls.
+- **Rolling windows** — two independent ones, each set in whole weeks in the
+  controls (1–52) and stored internally in days. `WINDOW_VOL`, default 70 days,
+  drives the volume panel: the average, the target, and the verdict. `WINDOW_FREQ`,
+  also default 70 days, drives the two per-week panels below it (run days/week,
+  runs/week) and nothing else — changing it never moves a bar or a target. They're
+  split because "is my volume trending up" and "how often am I running" are useful
+  over different spans.
 - **Target** — what a run that day had to be to hold the average steady:
   **weekly volume ÷ (run days per week + 1)** when long runs are active, otherwise
   ÷ run days per week (which is just mean km per *running* day). The `+1` is because
@@ -108,12 +113,13 @@ All of it is derived in-browser from one array of daily distances.
   With a ±5% band the whole range tiles as: `<50 full un | 50–95 ramp | 95–105
   stable | 105–150 ramp pr` (normal, centre 1×) then `150–195 ramp un | 195–205
   stable | 205–250 ramp pr | >250 full pr` (long, centre 2×).
-- **Everything is divided by the full window, always** — the average, the weekly
-  volume and the run-days-per-week rate. The first `WINDOW` days therefore ramp in
-  from zero rather than being extrapolated: one run on day one is 0.1 run days/week
-  over a 70-day window, not "7 a week" off a single elapsed day. Volume and run
-  count share the denominator, so their ratio (mean km per running day) — and hence
-  the target during ramp-in — is unaffected by the choice. A "days elapsed"
+- **Everything is divided by its full window, always** — the average and target by
+  `WINDOW_VOL`, the run-days-per-week and runs-per-week rates by `WINDOW_FREQ`. The
+  first window's worth of days therefore ramps in from zero rather than being
+  extrapolated: one run on day one is 0.1 run days/week over a 70-day window, not "7
+  a week" off a single elapsed day. Volume and run count share the same denominator
+  within the target's own window, so their ratio (mean km per running day) — and
+  hence the target during ramp-in — is unaffected by the choice. A "days elapsed"
   ramp-in mode existed and was removed: it made the readout say "1 of 1 days" while
   the rate was computed against a 7-day floor, which was both inconsistent and not
   what the chart is for.
@@ -229,8 +235,9 @@ day) → `buildRamps`/`barColour` → `drawBars`/`drawFreq`/`drawAll` →
 
 ## Gotchas that have bitten before
 
-- **Declaration order.** `recompute()` runs at load. Anything it touches (`WINDOW`,
-  `compareMode`, `LONG_MIN_RUNS_PER_WEEK`, the series arrays) must be declared
+- **Declaration order.** `recompute()` runs at load. Anything it touches
+  (`WINDOW_VOL`, `WINDOW_FREQ`, `compareMode`, `LONG_MIN_RUNS_PER_WEEK`, the series
+  arrays) must be declared
   *above* that call or the whole script dies on a `const`/`let` TDZ error, which
   surfaces confusingly as "Cannot access 'C' before initialization". `loadPrefs()`
   therefore sits above `let WINDOW`; `savePrefs()` may *reference* things declared
