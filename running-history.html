@@ -135,9 +135,9 @@
     padding: 12px 16px; margin-bottom: 12px;
     display: flex; align-items: center; gap: 22px; flex-wrap: wrap; min-height: 100px;
   }
-  /* Allowed to shrink, so under pressure the "pinned" tag drops below the date
-     inside this column — two short lines still fit the reserve above, so it
-     costs no height, where a wrap of the whole row would cost 50px. */
+  /* Allowed to shrink; the "pinned" tag always sits on its own line below the
+     date (see .pin) — two short lines still fit the reserve above, so it costs
+     no height, where a wrap of the whole row would cost 50px. */
   .readout .date { font-size: 15px; font-weight: 600; flex: 0 1 auto; min-width: 150px; }
   /* The two detail lines are the variable-length strings in here, and they are the
      only items allowed to shrink: a long one wraps to a second row inside its own
@@ -173,9 +173,9 @@
     border: 1px solid currentColor;
   }
   .badge.rest { color: var(--text-secondary); }
-  .readout .pin { font-size: 10px; font-weight: 600; color: var(--muted);
-    border: 1px solid currentColor; border-radius: 999px; padding: 0 5px;
-    margin-left: 6px; white-space: nowrap; vertical-align: 1px; }
+  .readout .pin { display: block; width: fit-content; font-size: 10px; font-weight: 600;
+    color: var(--muted); border: 1px solid currentColor; border-radius: 999px;
+    padding: 0 5px; margin-top: 3px; white-space: nowrap; }
   .readout.idle .date { color: var(--text-secondary); font-weight: 400; }
   .readout .spacer-pair { width: 0; overflow: hidden; }
 
@@ -303,10 +303,10 @@
       <span class="spacer"></span>
       <div class="ctrls">
       <label class="chk">Volume window
-        <input type="number" id="windowVolWeeks" min="1" max="52" step="1" value="10"> weeks
+        <input type="number" id="windowVolWeeks" min="1" max="52" step="1" value="4"> weeks
       </label>
       <label class="chk">Frequency window
-        <input type="number" id="windowFreqWeeks" min="1" max="52" step="1" value="10"> weeks
+        <input type="number" id="windowFreqWeeks" min="1" max="52" step="1" value="16"> weeks
       </label>
       <label class="chk" title="Whether a day has to contain one long run on its own, rather than reaching the distance across several runs.">
         <input type="checkbox" id="longSingle" checked> Long run needs a single run
@@ -642,8 +642,8 @@ if (DATA) {
 // runs at load and reads WINDOW_VOL/WINDOW_FREQ — see the declaration-order gotcha.
 const LS_PREFS = 'runviz.prefs.v1';
 const PREF_DEFAULTS = {
-  windowVol: 70,
-  windowFreq: 70,
+  windowVol: 28,
+  windowFreq: 112,
   stableBand: 0.01,
   longNeedsSingleRun: true,
   colourNormal: true,
@@ -833,14 +833,16 @@ function computeTargets() {
   target[0] = 0;   // nothing behind day one, so any run counts as an increase
   // Rates over the window ending yesterday, and whether long runs apply at all.
   // Below 3 run days per week there is no room for a run to be "the long one", so
-  // the long scheme is switched off and everything is read against 1x.
+  // the long scheme is switched off and everything is read against 1x. This is a
+  // frequency question — how often, not how far — so it runs off WINDOW_FREQ,
+  // the same window the run days/week and runs/week panels use.
   {
     let rd = 0;
     for (let i = 1; i < N; i++) {
       if (daily[i-1] > 0) rd++;
-      const dropped = i - 1 - WINDOW_VOL;
+      const dropped = i - 1 - WINDOW_FREQ;
       if (dropped >= 0 && daily[dropped] > 0) rd--;
-      rpwPrev[i] = rd * 7 / WINDOW_VOL;
+      rpwPrev[i] = rd * 7 / WINDOW_FREQ;
       longOn[i] = rpwPrev[i] >= LONG_MIN_RUNS_PER_WEEK;
     }
     rpwPrev[0] = 0; longOn[0] = false; weeklyPrev[0] = 0;
@@ -1365,8 +1367,7 @@ function setReadout(i, pinned) {
                nRuns[i] > 1 ? 'longest ' + km(maxRun[i]) : ''])
         : 'no target yet'}</span></span>
     <span class="pair rate"><span class="k">${WINDOW_VOL}-day average${i < WINDOW_VOL - 1 ? ' (partial)' : ''}</span><span class="v">${km(avg[i])} km/day</span><span class="v2">${rateSummary(avg[i])}</span></span>
-    <span class="pair"><span class="k">Run days per week</span><span class="v">${perWeekAt(i).toFixed(1)}<span class="sub-v"> · ${runs[i]} of ${WINDOW_FREQ} days</span></span></span>
-    <span class="pair"><span class="k">Runs per week</span><span class="v">${perWeekRunsAt(i).toFixed(1)}<span class="sub-v"> · ${totalRuns[i]} runs in ${WINDOW_FREQ} days</span></span></span>
+    <span class="pair"><span class="k">Runs per week</span><span class="v">${perWeekAt(i).toFixed(1)} - ${runs[i]} of ${WINDOW_FREQ} days</span><span class="v2">${perWeekRunsAt(i).toFixed(1)} - ${totalRuns[i]} runs in ${WINDOW_FREQ} days</span></span>
     <span class="badge" style="color:${c ? fullColour(c) : 'var(--text-secondary)'}">${
       !c ? '— rest day'
          : `${DIR_ARROW[c.dir]} ${c.scheme === 'long' ? 'long run · ' : ''}${DIR_LABEL[c.dir]}${
