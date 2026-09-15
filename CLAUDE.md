@@ -133,8 +133,19 @@ what-if box follows real history, `{km, days}` = edited). Three rules:
 `syncControls()` is the one place state is pushed *into* the DOM — the markup carries
 the defaults, and a remembered setting has to overwrite them at boot.
 
-**Reset** (the button in the controls row) now means all of it: every remembered
-setting back to its default, the stored entry dropped, and the view zoomed back out.
+**There are two resets, and each owns only what sits next to it.**
+
+- **Reset** in the chart's controls row: window, stable band, the long-run rule and
+  both colour toggles back to their defaults, plus the view zoomed back out. It does
+  *not* touch the what-if.
+- **reset** in the Today's target tile: clears the what-if back to following real
+  history, and nothing else.
+
+Neither has to know what the other owns, because both just mutate their own state
+and call `savePrefs()` — which rewrites the whole entry from current state, keeping
+it if anything is still off-default and dropping it if nothing is. So a chart reset
+with an edited what-if leaves an entry holding only the plan, and vice versa.
+
 Double-clicking a panel still resets only the zoom, which is view state and
 deliberately *not* remembered — persisting it would fight the Reset button and open
 the page mid-history.
