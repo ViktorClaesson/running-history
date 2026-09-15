@@ -281,12 +281,6 @@
       <label class="chk" title="How close to the target still counts as holding steady.">Stable band &plusmn;
         <input type="number" id="stableBand" min="0" max="5" step="0.5" value="1">%
       </label>
-      <label class="chk" id="rampLabel">First <span id="rampN">70</span> days &divide;
-        <select id="rampMode">
-          <option value="full">the full window</option>
-          <option value="elapsed">days elapsed</option>
-        </select>
-      </label>
       <button id="reset">Reset</button>
       </div>
     </div>
@@ -602,25 +596,20 @@ const N = daily.length;
 const start = new Date(DATA.start + "T00:00:00");
 const dateAt = i => new Date(start.getTime() + i * 86400000);
 
-// Trailing 90-day mean. The first 90 days have no full window behind them, so the
-// denominator is a choice: a full 90 (the series ramps up from zero) or the days
-// actually elapsed (day 1 reads as a 5 km/day "average" off a single run).
-let fullWindow = true;
+// Trailing WINDOW-day mean. The first WINDOW days have no full window behind them
+// and are still divided by the full WINDOW, so the series ramps up from zero rather
+// than reading a single 5 km run on day one as a 5 km/day "average".
 const avg = new Array(N);
 const runs = new Array(N);   // how many of the trailing WINDOW days had a run on them
 const target = new Array(N); // what each day's run had to be to hold the average (see computeTargets)
 const longOn = new Array(N); // was the long-run scheme in play that day at all?
 const rpwPrev = new Array(N); // run days per week as of the day before
 const weeklyPrev = new Array(N); // km per week as of the day before
-// Days actually behind a given index — the window is short only at the very start.
-// Deliberately independent of the ramp-in setting, which describes the average
-// line, not the rates derived from the window (same reasoning as the target).
-const windowDays = i => Math.min(i + 1, WINDOW);
-// Never state a weekly rate off less than a week of history: one run on day one is
-// not "7 runs a week". Both the volume and the run count use this same floor, so
-// their ratio (mean km per run) is untouched by it.
-const rateDays  = i => Math.max(windowDays(i), 7);
-const perWeekAt = i => runs[i] * 7 / rateDays(i);
+// Weekly rates are always taken over the full window, exactly like the average:
+// one run inside a 70-day window is 0.1 run days per week, not "7 a week" off a
+// single elapsed day. Volume and run count share the denominator, so their ratio
+// (mean km per running day) is untouched by it.
+const perWeekAt = i => runs[i] * 7 / WINDOW;
 const LONG_MIN_RUNS_PER_WEEK = 3.0;
 function recompute() {
   let running = 0, ran = 0;
@@ -631,7 +620,7 @@ function recompute() {
       running -= daily[i - WINDOW];
       if (daily[i - WINDOW] > 0) ran--;
     }
-    avg[i] = running / (fullWindow ? WINDOW : Math.min(i + 1, WINDOW));
+    avg[i] = running / WINDOW;
     runs[i] = ran;
   }
   computeTargets();
@@ -733,7 +722,7 @@ function computeTargets() {
       if (daily[i-1] > 0) rd++;
       const dropped = i - 1 - WINDOW;
       if (dropped >= 0 && daily[dropped] > 0) rd--;
-      rpwPrev[i] = rd * 7 / Math.max(Math.min(i, WINDOW), 7);
+      rpwPrev[i] = rd * 7 / WINDOW;
       longOn[i] = rpwPrev[i] >= LONG_MIN_RUNS_PER_WEEK;
     }
     rpwPrev[0] = 0; longOn[0] = false; weeklyPrev[0] = 0;
@@ -743,16 +732,12 @@ function computeTargets() {
   // them is expected to be worth two, so a 3-runs-a-week week is 1+1+2 = 4
   // target-sized efforts, not 3: divide by runsPerWeek + 1.
   //
-  // Written from the window's own sum and day count rather than as
-  // avg x 7 / runsPerWeek, because those agree only while the window is full —
-  // the old form inflated the target by WINDOW/elapsed in "days elapsed" mode.
   let sum = 0;
   for (let i = 1; i < N; i++) {
     sum += daily[i-1];
     const dropped = i - 1 - WINDOW;
     if (dropped >= 0) sum -= daily[dropped];
-    const wd = Math.max(Math.min(i, WINDOW), 7);
-    const weekly = sum * 7 / wd;
+    const weekly = sum * 7 / WINDOW;
     weeklyPrev[i] = weekly;
     const divisor = rpwPrev[i] + (longOn[i] ? 1 : 0);
     target[i] = divisor > 0 ? weekly / divisor : 0;
@@ -1157,7 +1142,6 @@ function setReadout(i) {
     return;
   }
   const c = classify(i);
-  const wd = windowDays(i);
   ro.className = 'readout';
   ro.innerHTML = `
     <span class="date">${fmtDate.format(dateAt(i))}</span>
@@ -1169,7 +1153,7 @@ function setReadout(i) {
           + (nRuns[i] > 1 ? ' · longest ' + km(maxRun[i]) : '')
         : 'no target yet'}</span></span>
     <span class="pair"><span class="k">${WINDOW}-day average${i < WINDOW - 1 ? ' (partial)' : ''}</span><span class="v">${km(avg[i])} km/day</span><span class="v2">${rateSummary(avg[i])}</span></span>
-    <span class="pair"><span class="k">Run days per week</span><span class="v">${perWeekAt(i).toFixed(1)}<span class="sub-v"> · ${runs[i]} of ${wd} days</span></span></span>
+    <span class="pair"><span class="k">Run days per week</span><span class="v">${perWeekAt(i).toFixed(1)}<span class="sub-v"> · ${runs[i]} of ${WINDOW} days</span></span></span>
     <span class="badge" style="color:${c ? fullColour(c) : 'var(--text-secondary)'}">${
       !c ? '— rest day'
          : `${DIR_ARROW[c.dir]} ${c.scheme === 'long' ? 'long run · ' : ''}${DIR_LABEL[c.dir]}${
@@ -1181,7 +1165,7 @@ function setReadout(i) {
 const tbody = document.getElementById('tbody');
 let tableKey = '';
 function renderTable(i0, i1) {
-  const key = i0 + ':' + i1 + ':' + fullWindow + ':' + WINDOW;
+  const key = i0 + ':' + i1 + ':' + WINDOW;
   if (key === tableKey) return;
   tableKey = key;
   const rows = [];
@@ -1273,7 +1257,6 @@ function syncLabels() {
   const pct = +(stableBand * 100).toFixed(1);
   for (const el of document.querySelectorAll('.bandN')) el.textContent = pct;
   for (const el of document.querySelectorAll('.gradN')) el.textContent = +(50 - pct).toFixed(1);
-  document.getElementById('rampN').textContent = WINDOW;
   for (const el of document.querySelectorAll('.winN')) el.textContent = WINDOW;
   document.title = `Running history — ${WINDOW}-day rolling average`;
   renderTiles();
@@ -1287,10 +1270,6 @@ function applyWindow() {
   drawAll();
 }
 
-document.getElementById('rampMode').onchange = e => {
-  fullWindow = e.target.value === 'full';
-  applyWindow();
-};
 for (const [scheme, id] of [['normal', 'colourNormal'], ['long', 'colourLong']]) {
   const box = document.getElementById(id);
   box.onchange = () => {

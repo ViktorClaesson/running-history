@@ -66,11 +66,15 @@ All of it is derived in-browser from one array of daily distances.
   With a ±5% band the whole range tiles as: `<50 full un | 50–95 ramp | 95–105
   stable | 105–150 ramp pr` (normal, centre 1×) then `150–195 ramp un | 195–205
   stable | 205–250 ramp pr | >250 full pr` (long, centre 2×).
-- **Weekly rates are never extrapolated from under 7 days** of history — one run on
-  day one is not "7 runs a week". Both the volume and the run count share that floor,
-  so their ratio is unaffected.
-- The **"first N days ÷"** control only affects how the average *line* is drawn
-  during ramp-in. It deliberately does **not** touch the target.
+- **Everything is divided by the full window, always** — the average, the weekly
+  volume and the run-days-per-week rate. The first `WINDOW` days therefore ramp in
+  from zero rather than being extrapolated: one run on day one is 0.1 run days/week
+  over a 70-day window, not "7 a week" off a single elapsed day. Volume and run
+  count share the denominator, so their ratio (mean km per running day) — and hence
+  the target during ramp-in — is unaffected by the choice. A "days elapsed"
+  ramp-in mode existed and was removed: it made the readout say "1 of 1 days" while
+  the rate was computed against a 7-day floor, which was both inconsistent and not
+  what the chart is for.
 
 ## Colour system
 
