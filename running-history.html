@@ -34,6 +34,7 @@
     --nocolour:       #b5b3aa;   /* a run whose scheme has colouring switched off */
     --rest:           #e7e5dd;   /* no run at all */
     --freq:           #52514e;
+    --freq2:          #2f8f7a;
     --ghost:          rgba(11,11,11,0.05);
   }
   @media (prefers-color-scheme: dark) {
@@ -60,6 +61,7 @@
       --nocolour:       #5c5a54;
       --rest:           #333230;
       --freq:           #c3c2b7;
+      --freq2:          #5fc9ae;
     }
   }
   :root[data-theme="dark"] {
@@ -85,6 +87,7 @@
     --nocolour:       #5c5a54;
     --rest:           #333230;
     --freq:           #c3c2b7;
+    --freq2:          #5fc9ae;
   }
 
   * { box-sizing: border-box; }
@@ -132,9 +135,9 @@
     padding: 12px 16px; margin-bottom: 12px;
     display: flex; align-items: center; gap: 22px; flex-wrap: wrap; min-height: 100px;
   }
-  /* Allowed to shrink, so under pressure the "pinned" tag drops below the date
-     inside this column — two short lines still fit the reserve above, so it
-     costs no height, where a wrap of the whole row would cost 50px. */
+  /* Allowed to shrink; the "pinned" tag always sits on its own line below the
+     date (see .pin) — two short lines still fit the reserve above, so it costs
+     no height, where a wrap of the whole row would cost 50px. */
   .readout .date { font-size: 15px; font-weight: 600; flex: 0 1 auto; min-width: 150px; }
   /* The two detail lines are the variable-length strings in here, and they are the
      only items allowed to shrink: a long one wraps to a second row inside its own
@@ -170,9 +173,9 @@
     border: 1px solid currentColor;
   }
   .badge.rest { color: var(--text-secondary); }
-  .readout .pin { font-size: 10px; font-weight: 600; color: var(--muted);
-    border: 1px solid currentColor; border-radius: 999px; padding: 0 5px;
-    margin-left: 6px; white-space: nowrap; vertical-align: 1px; }
+  .readout .pin { display: block; width: fit-content; font-size: 10px; font-weight: 600;
+    color: var(--muted); border: 1px solid currentColor; border-radius: 999px;
+    padding: 0 5px; margin-top: 3px; white-space: nowrap; }
   .readout.idle .date { color: var(--text-secondary); font-weight: 400; }
   .readout .spacer-pair { width: 0; overflow: hidden; }
 
@@ -214,6 +217,7 @@
     width: 46px; text-align: right; padding: 0 2px; }
   #chart  { display: block; width: 100%; height: 300px; touch-action: none; cursor: crosshair; }
   #chart2 { display: block; width: 100%; height: 156px; touch-action: none; cursor: crosshair; }
+  #chart3 { display: block; width: 100%; height: 156px; touch-action: none; cursor: crosshair; }
   .panel-title { font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
     color: var(--muted); padding: 4px 0 2px 54px; }
   .hint { padding: 6px 4px 0; font-size: 11px; color: var(--muted); }
@@ -298,8 +302,11 @@
       </div>
       <span class="spacer"></span>
       <div class="ctrls">
-      <label class="chk">Window
-        <input type="number" id="windowDays" min="7" max="365" step="7" value="70"> days
+      <label class="chk">Volume window
+        <input type="number" id="windowVolWeeks" min="1" max="52" step="1" value="4"> weeks
+      </label>
+      <label class="chk">Frequency window
+        <input type="number" id="windowFreqWeeks" min="1" max="52" step="1" value="16"> weeks
       </label>
       <label class="chk" title="Whether a day has to contain one long run on its own, rather than reaching the distance across several runs.">
         <input type="checkbox" id="longSingle" checked> Long run needs a single run
@@ -311,8 +318,10 @@
       </div>
     </div>
     <canvas id="chart"></canvas>
-    <div class="panel-title">Average run days per week, over the trailing <span class="winN">70</span> days</div>
+    <div class="panel-title">Average run days per week, over the trailing <span class="winFreqN">70</span> days</div>
     <canvas id="chart2"></canvas>
+    <div class="panel-title">Average runs per week, over the trailing <span class="winFreqN">70</span> days</div>
+    <canvas id="chart3"></canvas>
     <div class="hint">Scroll or pinch to zoom — the day under the cursor stays put while both sides scale around it. Drag to pan. Double-click to reset.
       Click a day to pin its numbers in the readout above; click it again, or press Esc, to release.</div>
   </div>
@@ -321,7 +330,7 @@
     <summary>Data table (days currently in view)</summary>
     <div class="tablewrap">
       <table>
-        <thead><tr><th>Date</th><th>Distance (km)</th><th><span class="winN">70</span>-day avg (km/day)</th><th>Run days / week</th><th>Target (km)</th><th>Verdict</th></tr></thead>
+        <thead><tr><th>Date</th><th>Distance (km)</th><th><span class="winN">70</span>-day avg (km/day)</th><th>Run days / week</th><th>Runs / week</th><th>Target (km)</th><th>Verdict</th></tr></thead>
         <tbody id="tbody"></tbody>
       </table>
     </div>
@@ -630,10 +639,11 @@ if (DATA) {
 // ---- remembered settings -------------------------------------------------
 // Everything the controls row and the what-if box can be set to, so the page
 // opens the way it was left. Read here, at the very top, because recompute()
-// runs at load and reads WINDOW — see the declaration-order gotcha.
+// runs at load and reads WINDOW_VOL/WINDOW_FREQ — see the declaration-order gotcha.
 const LS_PREFS = 'runviz.prefs.v1';
 const PREF_DEFAULTS = {
-  window: 70,
+  windowVol: 28,
+  windowFreq: 112,
   stableBand: 0.01,
   longNeedsSingleRun: true,
   colourNormal: true,
@@ -646,8 +656,11 @@ function loadPrefs() {
   if (!raw || typeof raw !== 'object') return p;
   // Validated field by field, against the same limits as the controls, so a
   // stale or hand-edited entry can only ever produce a state the UI can reach.
+  // Both windows are set in whole weeks, so a stray value is rounded to one.
   const num = (v, lo, hi) => Number.isFinite(v) && v >= lo && v <= hi;
-  if (num(raw.window, 7, 365)) p.window = Math.round(raw.window);
+  const week = v => Math.min(364, Math.max(7, Math.round(v / 7) * 7));
+  if (num(raw.windowVol, 7, 364)) p.windowVol = week(raw.windowVol);
+  if (num(raw.windowFreq, 7, 364)) p.windowFreq = week(raw.windowFreq);
   if (num(raw.stableBand, 0, 0.05)) p.stableBand = raw.stableBand;
   for (const k of ['longNeedsSingleRun', 'colourNormal', 'colourLong']) {
     if (typeof raw[k] === 'boolean') p[k] = raw[k];
@@ -663,7 +676,8 @@ const prefs = loadPrefs();
 // never been touched leaves nothing behind, and Reset really does forget.
 function savePrefs() {
   const cur = {
-    window: WINDOW,
+    windowVol: WINDOW_VOL,
+    windowFreq: WINDOW_FREQ,
     stableBand,
     longNeedsSingleRun,
     colourNormal: colourScheme.normal,
@@ -675,7 +689,13 @@ function savePrefs() {
   if (changed) lsSet(LS_PREFS, cur); else lsDel(LS_PREFS);
 }
 
-let WINDOW = prefs.window;   // rolling window, in days — adjustable in the controls row
+// Two independent rolling windows, both in days but set in whole weeks from the
+// controls row: WINDOW_VOL drives the volume panel (bars, target, verdict) and
+// WINDOW_FREQ drives the two per-week panels below it. Kept separate because
+// "is my volume trending up" and "how often am I running" are different
+// questions with naturally different useful windows.
+let WINDOW_VOL = prefs.windowVol;
+let WINDOW_FREQ = prefs.windowFreq;
 
 // ---- derive series -------------------------------------------------------
 const daily = DATA.values;
@@ -685,32 +705,41 @@ const N = daily.length;
 const start = new Date(DATA.start + "T00:00:00");
 const dateAt = i => new Date(start.getTime() + i * 86400000);
 
-// Trailing WINDOW-day mean. The first WINDOW days have no full window behind them
-// and are still divided by the full WINDOW, so the series ramps up from zero rather
-// than reading a single 5 km run on day one as a 5 km/day "average".
-const avg = new Array(N);
-const runs = new Array(N);   // how many of the trailing WINDOW days had a run on them
+// Trailing-window means. The first window's worth of days has no full window behind
+// it and is still divided by the full window, so each series ramps up from zero
+// rather than reading a single 5 km run on day one as a 5 km/day "average".
+const avg = new Array(N);       // WINDOW_VOL-day mean km/day
+const runs = new Array(N);      // how many of the trailing WINDOW_FREQ days had a run on them
+const totalRuns = new Array(N); // how many separate runs happened in the trailing WINDOW_FREQ days
 const target = new Array(N); // what each day's run had to be to hold the average (see computeTargets)
 const longOn = new Array(N); // was the long-run scheme in play that day at all?
 const rpwPrev = new Array(N); // run days per week as of the day before
 const weeklyPrev = new Array(N); // km per week as of the day before
 // Weekly rates are always taken over the full window, exactly like the average:
 // one run inside a 70-day window is 0.1 run days per week, not "7 a week" off a
-// single elapsed day. Volume and run count share the denominator, so their ratio
-// (mean km per running day) is untouched by it.
-const perWeekAt = i => runs[i] * 7 / WINDOW;
+// single elapsed day.
+const perWeekAt = i => runs[i] * 7 / WINDOW_FREQ;
+// Same idea as perWeekAt, but counting every run rather than run-having days, so a
+// double-run day shows up as 2 rather than being clumped into 1.
+const perWeekRunsAt = i => totalRuns[i] * 7 / WINDOW_FREQ;
 const LONG_MIN_RUNS_PER_WEEK = 3.0;
 function recompute() {
-  let running = 0, ran = 0;
+  let running = 0;
   for (let i = 0; i < N; i++) {
     running += daily[i];
+    if (i >= WINDOW_VOL) running -= daily[i - WINDOW_VOL];
+    avg[i] = running / WINDOW_VOL;
+  }
+  let ran = 0, ranTotal = 0;
+  for (let i = 0; i < N; i++) {
     if (daily[i] > 0) ran++;
-    if (i >= WINDOW) {
-      running -= daily[i - WINDOW];
-      if (daily[i - WINDOW] > 0) ran--;
+    ranTotal += nRuns[i];
+    if (i >= WINDOW_FREQ) {
+      if (daily[i - WINDOW_FREQ] > 0) ran--;
+      ranTotal -= nRuns[i - WINDOW_FREQ];
     }
-    avg[i] = running / WINDOW;
     runs[i] = ran;
+    totalRuns[i] = ranTotal;
   }
   computeTargets();
 }
@@ -804,14 +833,16 @@ function computeTargets() {
   target[0] = 0;   // nothing behind day one, so any run counts as an increase
   // Rates over the window ending yesterday, and whether long runs apply at all.
   // Below 3 run days per week there is no room for a run to be "the long one", so
-  // the long scheme is switched off and everything is read against 1x.
+  // the long scheme is switched off and everything is read against 1x. This is a
+  // frequency question — how often, not how far — so it runs off WINDOW_FREQ,
+  // the same window the run days/week and runs/week panels use.
   {
     let rd = 0;
     for (let i = 1; i < N; i++) {
       if (daily[i-1] > 0) rd++;
-      const dropped = i - 1 - WINDOW;
+      const dropped = i - 1 - WINDOW_FREQ;
       if (dropped >= 0 && daily[dropped] > 0) rd--;
-      rpwPrev[i] = rd * 7 / WINDOW;
+      rpwPrev[i] = rd * 7 / WINDOW_FREQ;
       longOn[i] = rpwPrev[i] >= LONG_MIN_RUNS_PER_WEEK;
     }
     rpwPrev[0] = 0; longOn[0] = false; weeklyPrev[0] = 0;
@@ -824,9 +855,9 @@ function computeTargets() {
   let sum = 0;
   for (let i = 1; i < N; i++) {
     sum += daily[i-1];
-    const dropped = i - 1 - WINDOW;
+    const dropped = i - 1 - WINDOW_VOL;
     if (dropped >= 0) sum -= daily[dropped];
-    const weekly = sum * 7 / WINDOW;
+    const weekly = sum * 7 / WINDOW_VOL;
     weeklyPrev[i] = weekly;
     const divisor = rpwPrev[i] + (longOn[i] ? 1 : 0);
     target[i] = divisor > 0 ? weekly / divisor : 0;
@@ -910,7 +941,7 @@ function renderTiles() {
   ].map(([v,u]) => `<div class="cell"><span class="v">${v}</span><span class="u">${u}</span></div>`).join('');
 
   document.getElementById('tiles').innerHTML = totals +
-    `<div class="tile combo"><div class="k">Current ${WINDOW}-day average</div><div class="grid">${cells}</div></div>` +
+    `<div class="tile combo"><div class="k">Current ${WINDOW_VOL}-day average</div><div class="grid">${cells}</div></div>` +
     `<div class="tile combo target" id="target-tile"></div>`;
   renderTarget();
 }
@@ -980,6 +1011,8 @@ const cv  = document.getElementById('chart');
 const ctx = cv.getContext('2d');
 const cv2  = document.getElementById('chart2');
 const ctx2 = cv2.getContext('2d');
+const cv3  = document.getElementById('chart3');
+const ctx3 = cv3.getContext('2d');
 
 let span = N;             // days visible
 let center = N / 2;       // index at the horizontal centre
@@ -1014,7 +1047,8 @@ const kick = () => { clampTarget(); if (!raf) raf = requestAnimationFrame(animat
 // at the same screen x in each.
 const PAD  = { l: 54, r: 14 };
 const BARS = { t: 14, b: 12 };    // top panel insets
-const FREQ = { t: 10, b: 26 };   // bottom panel insets (carries the x labels)
+const FREQ  = { t: 10, b: 12 };  // middle panel insets
+const FREQ2 = { t: 10, b: 26 };  // bottom panel insets (carries the x labels)
 let W = 0;
 const plotW = () => W - PAD.l - PAD.r;
 const barW  = () => plotW() / span;
@@ -1196,11 +1230,80 @@ function drawFreq() {
   if (seen(selected) && selected !== hover) dot(selected, true);
   if (seen(hover)) dot(hover, false);
   c.restore();
+}
 
-  // x axis labels live on the bottom panel only; both panels share the x mapping
+// ---- panel 3: runs per week, without clumping same-day runs into one -----
+// Same shape as drawFreq, but counts every run rather than run-having days, so
+// a double-run day shows as 2 instead of being folded into the 7-day ceiling.
+// The axis is therefore not fixed at 0–7 the way run-days/week is.
+function drawRuns() {
+  const { w, h } = fitCanvas(cv3, ctx3);
+  const plotH = h - FREQ2.t - FREQ2.b;
+  const [i0, i1] = visibleRange();
+  const perWeek = perWeekRunsAt;
+  let yMax = 0;
+  for (let i = i0; i <= i1; i++) if (perWeek(i) > yMax) yMax = perWeek(i);
+  const ticks = niceTicks(Math.max(yMax * 1.12, 1));
+  yMax = ticks[ticks.length - 1];
+  const dec = ticks.step < 1 ? 1 : 0;
+  const yOf = v => FREQ2.t + plotH * (1 - v / yMax);
+  const c = ctx3;
+
+  const pxAt = i => xOf(i) + barW() / 2;
+  c.save();
+  c.beginPath(); c.rect(PAD.l, FREQ2.t - 4, plotW(), plotH + 8); c.clip();
+  c.beginPath();
+  c.moveTo(pxAt(i0), FREQ2.t + plotH);
+  for (let i = i0; i <= i1; i++) c.lineTo(pxAt(i), yOf(perWeek(i)));
+  c.lineTo(pxAt(i1), FREQ2.t + plotH);
+  c.closePath();
+  c.fillStyle = C('--freq2'); c.globalAlpha = 0.10; c.fill(); c.globalAlpha = 1;
+  c.restore();
+
+  c.font = '11px system-ui, -apple-system, sans-serif';
+  c.textAlign = 'right'; c.textBaseline = 'middle';
+  for (const t of ticks) {
+    const y = Math.round(yOf(t)) + 0.5;
+    c.strokeStyle = t === 0 ? C('--baseline') : C('--grid');
+    c.lineWidth = 1;
+    c.beginPath(); c.moveTo(PAD.l, y); c.lineTo(w - PAD.r, y); c.stroke();
+    c.fillStyle = C('--muted');
+    c.fillText(t.toFixed(dec), PAD.l - 8, y);
+  }
+  c.save();
+  c.translate(13, FREQ2.t + plotH/2); c.rotate(-Math.PI/2);
+  c.textAlign = 'center'; c.fillStyle = C('--muted');
+  c.fillText('runs / week', 0, 0);
+  c.restore();
+
+  c.save();
+  c.beginPath(); c.rect(PAD.l, FREQ2.t - 4, plotW(), plotH + 8); c.clip();
+  const px = i => xOf(i) + barW() / 2;
+
+  c.beginPath();
+  for (let i = i0; i <= i1; i++) {
+    const x = px(i), y = yOf(perWeek(i));
+    if (i === i0) c.moveTo(x, y); else c.lineTo(x, y);
+  }
+  c.strokeStyle = C('--freq2'); c.lineWidth = 2;
+  c.lineJoin = 'round'; c.lineCap = 'round';
+  c.stroke();
+
+  if (hover !== null && hover >= i0 && hover <= i1) {
+    const x = Math.round(px(hover)) + 0.5, y = yOf(perWeek(hover));
+    c.strokeStyle = C('--text-primary'); c.lineWidth = 1; c.globalAlpha = 0.25;
+    c.beginPath(); c.moveTo(x, FREQ2.t); c.lineTo(x, FREQ2.t + plotH); c.stroke();
+    c.globalAlpha = 1;
+    c.beginPath(); c.arc(x, y, 4.5, 0, Math.PI * 2);
+    c.fillStyle = C('--freq2'); c.fill();
+    c.strokeStyle = C('--surface-1'); c.lineWidth = 2; c.stroke();
+  }
+  c.restore();
+
+  // x axis labels live on the bottom panel only; all three panels share the x mapping
   c.textAlign = 'center'; c.textBaseline = 'top';
   c.fillStyle = C('--muted');
-  const ty = FREQ.t + plotH + 7;
+  const ty = FREQ2.t + plotH + 7;
   const labelEvery = (() => {
     if (span <= 21) return { kind: 'day', n: Math.ceil(span / 10) };
     if (span <= 120) return { kind: 'week' };
@@ -1234,6 +1337,7 @@ function drawFreq() {
 function drawAll() {
   drawBars();
   drawFreq();
+  drawRuns();
   const [i0, i1] = visibleRange();
   renderTable(i0, i1);
 }
@@ -1262,8 +1366,8 @@ function setReadout(i, pinned) {
                longOn[i] ? '' : 'no long runs',
                nRuns[i] > 1 ? 'longest ' + km(maxRun[i]) : ''])
         : 'no target yet'}</span></span>
-    <span class="pair rate"><span class="k">${WINDOW}-day average${i < WINDOW - 1 ? ' (partial)' : ''}</span><span class="v">${km(avg[i])} km/day</span><span class="v2">${rateSummary(avg[i])}</span></span>
-    <span class="pair"><span class="k">Run days per week</span><span class="v">${perWeekAt(i).toFixed(1)}<span class="sub-v"> · ${runs[i]} of ${WINDOW} days</span></span></span>
+    <span class="pair rate"><span class="k">${WINDOW_VOL}-day average${i < WINDOW_VOL - 1 ? ' (partial)' : ''}</span><span class="v">${km(avg[i])} km/day</span><span class="v2">${rateSummary(avg[i])}</span></span>
+    <span class="pair"><span class="k">Runs per week</span><span class="v">${perWeekAt(i).toFixed(1)} - ${runs[i]} of ${WINDOW_FREQ} days</span><span class="v2">${perWeekRunsAt(i).toFixed(1)} - ${totalRuns[i]} runs in ${WINDOW_FREQ} days</span></span>
     <span class="badge" style="color:${c ? fullColour(c) : 'var(--text-secondary)'}">${
       !c ? '— rest day'
          : `${DIR_ARROW[c.dir]} ${c.scheme === 'long' ? 'long run · ' : ''}${DIR_LABEL[c.dir]}${
@@ -1282,16 +1386,16 @@ const refreshReadout = () => setReadout(shownDay(), hover === null && selected !
 const tbody = document.getElementById('tbody');
 let tableKey = '';
 function renderTable(i0, i1) {
-  const key = i0 + ':' + i1 + ':' + WINDOW;
+  const key = i0 + ':' + i1 + ':' + WINDOW_VOL + ':' + WINDOW_FREQ;
   if (key === tableKey) return;
   tableKey = key;
   const rows = [];
   for (let i = Math.min(i1, i0 + 400); i >= i0; i--) {
-    rows.push(`<tr><td>${fmtShort.format(dateAt(i))}</td><td>${daily[i] > 0 ? km(daily[i]) : '—'}</td><td>${km(avg[i])}</td><td>${perWeekAt(i).toFixed(1)}</td><td>${target[i] > 0 ? km(target[i]) : '—'}</td><td>${(() => { const c = classify(i);
+    rows.push(`<tr><td>${fmtShort.format(dateAt(i))}</td><td>${daily[i] > 0 ? km(daily[i]) : '—'}</td><td>${km(avg[i])}</td><td>${perWeekAt(i).toFixed(1)}</td><td>${perWeekRunsAt(i).toFixed(1)}</td><td>${target[i] > 0 ? km(target[i]) : '—'}</td><td>${(() => { const c = classify(i);
         return c ? `<span style="color:${fullColour(c)}">${DIR_ARROW[c.dir]} ${c.scheme === 'long' ? 'long · ' : ''}${DIR_LABEL[c.dir]}</span>${c.ratio === null ? '' : ' <span style="color:var(--muted)">' + Math.round(c.ratio * 100) + '%</span>'}`
                   : '<span style="color:var(--text-secondary)">— no run</span>'; })()}</td></tr>`);
   }
-  if (i1 - i0 > 400) rows.push(`<tr><td colspan="6" style="text-align:left;color:var(--muted)">Showing the most recent 400 of ${i1-i0+1} days in view — zoom in for the rest.</td></tr>`);
+  if (i1 - i0 > 400) rows.push(`<tr><td colspan="7" style="text-align:left;color:var(--muted)">Showing the most recent 400 of ${i1-i0+1} days in view — zoom in for the rest.</td></tr>`);
   tbody.innerHTML = rows.join('');
 }
 
@@ -1354,7 +1458,7 @@ function onTouchMove(e) {
   }
 }
 
-for (const el of [cv, cv2]) {
+for (const el of [cv, cv2, cv3]) {
   el.addEventListener('mousemove', onMove);
   el.addEventListener('mouseleave', () => { hover = null; refreshReadout(); drawAll(); });
   el.addEventListener('wheel', onWheel, { passive: false });
@@ -1381,7 +1485,7 @@ for (const el of [cv, cv2]) {
 }
 window.addEventListener('mouseup', () => {
   draggedNotClicked = !!(drag && drag.moved);
-  drag = null; cv.style.cursor = 'crosshair'; cv2.style.cursor = 'crosshair';
+  drag = null; cv.style.cursor = 'crosshair'; cv2.style.cursor = 'crosshair'; cv3.style.cursor = 'crosshair';
 });
 window.addEventListener('keydown', e => {
   if (e.key !== 'Escape' || selected === null) return;
@@ -1397,7 +1501,8 @@ window.addEventListener('keydown', e => {
 // keeps it holding just the what-if if that is still edited — so neither reset has
 // to know what the other one owns.
 document.getElementById('reset').onclick = () => {
-  WINDOW = PREF_DEFAULTS.window;
+  WINDOW_VOL = PREF_DEFAULTS.windowVol;
+  WINDOW_FREQ = PREF_DEFAULTS.windowFreq;
   stableBand = PREF_DEFAULTS.stableBand;
   longNeedsSingleRun = PREF_DEFAULTS.longNeedsSingleRun;
   colourScheme.normal = PREF_DEFAULTS.colourNormal;
@@ -1408,19 +1513,21 @@ document.getElementById('reset').onclick = () => {
   tSpan = N; tCenter = N / 2; kick();
 };
 function syncLabels() {
-  document.getElementById('h1win').textContent = WINDOW;
+  document.getElementById('h1win').textContent = WINDOW_VOL;
   const pct = +(stableBand * 100).toFixed(1);
   for (const el of document.querySelectorAll('.bandN')) el.textContent = pct;
   for (const el of document.querySelectorAll('.gradN')) el.textContent = +(50 - pct).toFixed(1);
-  for (const el of document.querySelectorAll('.winN')) el.textContent = WINDOW;
-  document.title = `Running history — ${WINDOW}-day rolling average`;
+  for (const el of document.querySelectorAll('.winN')) el.textContent = WINDOW_VOL;
+  for (const el of document.querySelectorAll('.winFreqN')) el.textContent = WINDOW_FREQ;
+  document.title = `Running history — ${WINDOW_VOL}-day rolling average`;
   renderTiles();
 }
 
 // The controls are the one place state has to be pushed *into* the DOM: at boot
 // they carry the markup defaults, which a remembered setting has to overwrite.
 function syncControls() {
-  winInput.value = WINDOW;
+  winVolInput.value = WINDOW_VOL / 7;
+  winFreqInput.value = WINDOW_FREQ / 7;
   bandInput.value = +(stableBand * 100).toFixed(1);
   longSingleBox.checked = longNeedsSingleRun;
   for (const [scheme, id] of [['normal', 'colourNormal'], ['long', 'colourLong']]) {
@@ -1465,11 +1572,19 @@ bandInput.onchange = bandInput.oninput = () => {
   tableKey = '';
   drawAll();
 };
-const winInput = document.getElementById('windowDays');
-winInput.onchange = winInput.oninput = () => {
-  const v = Math.round(Number(winInput.value));
-  if (!Number.isFinite(v) || v < 7 || v > 365) return;   // ignore half-typed values
-  WINDOW = v;
+const winVolInput = document.getElementById('windowVolWeeks');
+winVolInput.onchange = winVolInput.oninput = () => {
+  const v = Math.round(Number(winVolInput.value));
+  if (!Number.isFinite(v) || v < 1 || v > 52) return;   // ignore half-typed values
+  WINDOW_VOL = v * 7;
+  savePrefs();
+  applyWindow();
+};
+const winFreqInput = document.getElementById('windowFreqWeeks');
+winFreqInput.onchange = winFreqInput.oninput = () => {
+  const v = Math.round(Number(winFreqInput.value));
+  if (!Number.isFinite(v) || v < 1 || v > 52) return;   // ignore half-typed values
+  WINDOW_FREQ = v * 7;
   savePrefs();
   applyWindow();
 };
