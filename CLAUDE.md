@@ -30,22 +30,30 @@ Two stacked panels sharing one x-axis, one bar/point per calendar day:
 Hovering a day fills a fixed-height readout: exact distance, the rolling average
 (also as km/wk, km/mo, km/yr), run days per week, the day's target, and the verdict.
 
+The **Today's target** tile is a what-if calculator: both inputs (km/wk and runs/wk)
+are editable, so a change in volume or frequency can be tried out, and it shows the
+resulting per-run target plus the 1.5× long-run floor and 2× long-run target. It is
+seeded from the exact quantities behind today's real target (`weeklyPrev[N-1]`,
+`rpwPrev[N-1]`) so the default figure matches the chart and the hover readout. Editing
+it never changes the bars — those keep their own per-day targets from actual history —
+and once touched it shows the real figure alongside and offers a reset.
+
 ## The model (this is the part worth understanding)
 
 All of it is derived in-browser from one array of daily distances.
 
 - **Rolling window** `WINDOW`, default 70 days (a clean multiple of 7), adjustable
   7–365 in the controls.
-- **Target** — what a run that day had to be to hold the average steady. Computed
-  **only from the window ending yesterday**, never including the day being judged
-  (comparing a run to an average it is part of is circular; and the raw average also
-  moves when an old run drops out of the window).
-  - `mean` mode: weekly volume ÷ (run days per week + 1) when long runs are active,
-    otherwise ÷ run days per week — which is just mean km per *running* day. The
-    `+1` is because one run per week is expected to be the long one, so a
-    3-runs/week week is 1+1+2 = 4 target-sized efforts.
-  - `median` mode: the middle run of the previous window. The `+1` correction does
-    not apply (it is a property of the mean decomposition).
+- **Target** — what a run that day had to be to hold the average steady:
+  **weekly volume ÷ (run days per week + 1)** when long runs are active, otherwise
+  ÷ run days per week (which is just mean km per *running* day). The `+1` is because
+  one run per week is expected to be the long one, so a 3-runs/week week is
+  1+1+2 = 4 target-sized efforts.
+  Computed **only from the window ending yesterday**, never including the day being
+  judged (comparing a run to an average it is part of is circular; and the raw
+  average also moves when an old run drops out of the window).
+  A median-run mode existed briefly and was removed — once the long run is counted
+  as an extra day the mean is no longer skewed the way that was meant to fix.
 - **Long runs** — a second scheme read against **2×** target instead of 1×, for days
   past the 1.5× midpoint. Gated two ways: only at **≥3.0 run days/week**
   (`LONG_MIN_RUNS_PER_WEEK`), and by default only when a **single** run clears 1.5×
@@ -159,8 +167,8 @@ redeclaring an existing top-level name in the probe (`const ro`, `const out`) �
 is a `SyntaxError` that kills the whole block.
 
 Assert against an independent implementation where the maths matters: the target
-formula and the rolling median were both checked by brute-forcing every day in the
-probe and comparing (agreement to ~1e-14).
+formula was checked by brute-forcing every day inside the probe and comparing
+(agreement to ~1e-14). Do the same for anything new.
 
 For colour changes, run the `dataviz` skill's validator before committing to hexes —
 `node validate_palette.js "#hex,#hex,…" --mode light --pairs all` — and treat a
