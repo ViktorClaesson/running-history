@@ -189,6 +189,16 @@ today's — a hard rep from years ago is read against years-ago fitness. Empty w
 the day has no run, or predates the very first logged run (VDOT isn't a
 meaningful zero, so there's nothing to bin against).
 
+Hovering a bin (this redraws the whole 50-bar canvas — cheap, unlike the lap walk
+above it, which only runs once per pin) shows its pace range in `#zoneHoverInfo`:
+the two %VDOT bounds either side of the bin, converted back to pace via
+`velocityFromVo2()`. Higher %VDOT is faster (lower min/km), so the bin's *slow*
+edge comes from its *lower* bound and vice versa. The two outer bins — easy's
+slowest, repetition's fastest — read off `ZONE_BOUND_PCT`'s practical 40%/120%
+floor and ceiling (see the comment on that constant) rather than a real boundary,
+so they're reported as open-ended ("slower than", "faster than") instead of a
+two-sided range.
+
 **Colour**: five hues (blue/green/gold/orange/red) validated with the `dataviz`
 skill's palette checker using **adjacent** pairs, not all-pairs — this is an
 ordered bar histogram where neighbours are what matters, the same basis the

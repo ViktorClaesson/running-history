@@ -262,6 +262,8 @@
   .zone-legend { display: flex; gap: 14px; flex-wrap: wrap; padding: 0 4px 8px; font-size: 12px; color: var(--text-secondary); }
   .zone-legend .item { display: inline-flex; align-items: center; gap: 6px; }
   .zone-empty { padding: 18px 4px; color: var(--muted); font-size: 13px; }
+  .zone-hover { padding: 0 4px 8px; font-size: 12px; color: var(--text-secondary);
+    font-variant-numeric: tabular-nums; }
 
   .datarow { display: flex; align-items: center; gap: 10px; font-size: 12px;
     color: var(--text-secondary); margin: -16px 0 20px; flex-wrap: wrap; }
@@ -1138,6 +1140,13 @@ const fmtDate = new Intl.DateTimeFormat(undefined, { weekday:'short', year:'nume
 const fmtShort = new Intl.DateTimeFormat(undefined, { year:'numeric', month:'short', day:'numeric' });
 const fmtMon = new Intl.DateTimeFormat(undefined, { month:'short' });
 const km = v => v.toFixed(2);
+// min/km -> "m:ss", for anything pace-shaped (VDOT zone ranges, lap paces)
+const paceStr = v => {
+  if (!(v > 0) || !Number.isFinite(v)) return '—';
+  const m = Math.floor(v);
+  const s = Math.round((v - m) * 60);
+  return (s === 60 ? `${m + 1}:00` : `${m}:${String(s).padStart(2, '0')}`);
+};
 // The same rolling rate, expressed over longer spans. A month is 365/12 days so
 // the three figures stay consistent with each other rather than with the calendar.
 const nf0 = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
@@ -1725,7 +1734,9 @@ function renderZonePanel() {
   }
   buildRamps();   // ensures zoneRamps is built before it's read below
   const legend = ZONES.map(z => `<span class="item"><span class="swatch" style="background:${C(z.strong)}"></span>${z.label}</span>`).join('');
-  zoneBody.innerHTML = `<div class="zone-legend">${legend}</div><canvas id="chartZone"></canvas>`;
+  zoneBody.innerHTML = `<div class="zone-legend">${legend}</div>` +
+    `<div class="zone-hover" id="zoneHoverInfo">Hover a bar to see its pace range</div>` +
+    `<canvas id="chartZone"></canvas>`;
   const cvZ = document.getElementById('chartZone');
   const ctxZ = cvZ.getContext('2d');
   const { w, h } = fitCanvas(cvZ, ctxZ);
@@ -1736,37 +1747,84 @@ function renderZonePanel() {
   const yMax = ticks[ticks.length - 1];
   const yOf = v => pad.t + ph * (1 - v / yMax);
   const bw = pw / 50;
+  const vdotHere = vdot[selected];
 
-  ctxZ.font = '11px system-ui, -apple-system, sans-serif';
-  ctxZ.textAlign = 'right'; ctxZ.textBaseline = 'middle';
-  for (const t of ticks) {
-    const y = Math.round(yOf(t)) + 0.5;
-    ctxZ.strokeStyle = t === 0 ? C('--baseline') : C('--grid');
-    ctxZ.lineWidth = 1;
-    ctxZ.beginPath(); ctxZ.moveTo(pad.l, y); ctxZ.lineTo(w - pad.r, y); ctxZ.stroke();
-    ctxZ.fillStyle = C('--muted');
-    ctxZ.fillText(t.toFixed(0), pad.l - 8, y);
-  }
-  ctxZ.save();
-  ctxZ.translate(13, pad.t + ph / 2); ctxZ.rotate(-Math.PI / 2);
-  ctxZ.textAlign = 'center'; ctxZ.fillStyle = C('--muted');
-  ctxZ.fillText('minutes', 0, 0);
-  ctxZ.restore();
-
-  for (let b = 0; b < 50; b++) {
+  // The pace *range* a bin covers, from the two %VDOT bounds either side of it —
+  // this is what item 3 asked for: what pace is "marathon 3" actually asking for.
+  // The two outer edges (easy's slowest bin, repetition's fastest) are read off
+  // ZONE_BOUND_PCT's practical 40%/120% floor and ceiling — see the comment on
+  // that constant — so they're reported as open-ended rather than exact.
+  function paceRangeFor(b) {
     const zone = Math.floor(b / 10), sub = b % 10;
-    const x0 = Math.round(pad.l + b * bw), x1 = Math.round(pad.l + (b + 1) * bw);
-    const y = yOf(bins[b]);
-    ctxZ.fillStyle = zoneRamps[zone][sub];
-    ctxZ.fillRect(x0, y, Math.max(1, x1 - x0 - 1), pad.t + ph - y);
+    const lo = ZONE_BOUND_PCT[zone], hi = ZONE_BOUND_PCT[zone + 1];
+    const pctLo = lo + sub / 10 * (hi - lo), pctHi = lo + (sub + 1) / 10 * (hi - lo);
+    // higher %VDOT -> faster pace (lower min/km), so the slow edge comes from pctLo
+    const paceSlow = 1000 / velocityFromVo2(vdotHere * pctLo);
+    const paceFast = 1000 / velocityFromVo2(vdotHere * pctHi);
+    const openSlow = b === 0, openFast = b === 49;
+    return { paceSlow, paceFast, openSlow, openFast };
   }
-  // a divider between zones, and the zone name centred under its own 10 bars
-  ctxZ.textAlign = 'center'; ctxZ.textBaseline = 'top';
-  for (let z = 0; z <= 5; z++) {
-    const x = Math.round(pad.l + z * 10 * bw) + 0.5;
-    if (z > 0 && z < 5) { ctxZ.strokeStyle = C('--grid'); ctxZ.lineWidth = 1; ctxZ.beginPath(); ctxZ.moveTo(x, pad.t); ctxZ.lineTo(x, pad.t + ph); ctxZ.stroke(); }
-    if (z < 5) { ctxZ.fillStyle = C('--muted'); ctxZ.fillText(ZONES[z].label, pad.l + (z + 0.5) * 10 * bw, pad.t + ph + 6); }
+
+  function drawBars(hoverBin) {
+    ctxZ.clearRect(0, 0, w, h);
+    ctxZ.font = '11px system-ui, -apple-system, sans-serif';
+    ctxZ.textAlign = 'right'; ctxZ.textBaseline = 'middle';
+    for (const t of ticks) {
+      const y = Math.round(yOf(t)) + 0.5;
+      ctxZ.strokeStyle = t === 0 ? C('--baseline') : C('--grid');
+      ctxZ.lineWidth = 1;
+      ctxZ.beginPath(); ctxZ.moveTo(pad.l, y); ctxZ.lineTo(w - pad.r, y); ctxZ.stroke();
+      ctxZ.fillStyle = C('--muted');
+      ctxZ.fillText(t.toFixed(0), pad.l - 8, y);
+    }
+    ctxZ.save();
+    ctxZ.translate(13, pad.t + ph / 2); ctxZ.rotate(-Math.PI / 2);
+    ctxZ.textAlign = 'center'; ctxZ.fillStyle = C('--muted');
+    ctxZ.fillText('minutes', 0, 0);
+    ctxZ.restore();
+
+    for (let b = 0; b < 50; b++) {
+      const zone = Math.floor(b / 10), sub = b % 10;
+      const x0 = Math.round(pad.l + b * bw), x1 = Math.round(pad.l + (b + 1) * bw);
+      const y = yOf(bins[b]);
+      ctxZ.fillStyle = zoneRamps[zone][sub];
+      ctxZ.fillRect(x0, y, Math.max(1, x1 - x0 - 1), pad.t + ph - y);
+      if (b === hoverBin) {
+        ctxZ.strokeStyle = C('--text-primary'); ctxZ.lineWidth = 1.5;
+        ctxZ.strokeRect(x0 + 0.75, pad.t, Math.max(1, x1 - x0 - 1.5), ph);
+      }
+    }
+    // a divider between zones, and the zone name centred under its own 10 bars
+    ctxZ.textAlign = 'center'; ctxZ.textBaseline = 'top';
+    for (let z = 0; z <= 5; z++) {
+      const x = Math.round(pad.l + z * 10 * bw) + 0.5;
+      if (z > 0 && z < 5) { ctxZ.strokeStyle = C('--grid'); ctxZ.lineWidth = 1; ctxZ.beginPath(); ctxZ.moveTo(x, pad.t); ctxZ.lineTo(x, pad.t + ph); ctxZ.stroke(); }
+      if (z < 5) { ctxZ.fillStyle = C('--muted'); ctxZ.fillText(ZONES[z].label, pad.l + (z + 0.5) * 10 * bw, pad.t + ph + 6); }
+    }
   }
+  drawBars(null);
+
+  const hoverInfo = document.getElementById('zoneHoverInfo');
+  const binAt = px => {
+    const b = Math.floor((px - pad.l) / bw);
+    return (b >= 0 && b < 50) ? b : null;
+  };
+  cvZ.addEventListener('mousemove', e => {
+    const rect = cvZ.getBoundingClientRect();
+    const b = binAt(e.clientX - rect.left);
+    drawBars(b);
+    if (b === null) { hoverInfo.textContent = 'Hover a bar to see its pace range'; return; }
+    const zone = Math.floor(b / 10), sub = b % 10;
+    const { paceSlow, paceFast, openSlow, openFast } = paceRangeFor(b);
+    const range = openSlow ? `slower than ${paceStr(paceSlow)}/km`
+      : openFast ? `faster than ${paceStr(paceFast)}/km`
+      : `${paceStr(paceSlow)}–${paceStr(paceFast)}/km`;
+    hoverInfo.textContent = `${ZONES[zone].label} ${sub} · ${range} · ${bins[b].toFixed(1)} min`;
+  });
+  cvZ.addEventListener('mouseleave', () => {
+    drawBars(null);
+    hoverInfo.textContent = 'Hover a bar to see its pace range';
+  });
 }
 
 // ---- table ---------------------------------------------------------------
