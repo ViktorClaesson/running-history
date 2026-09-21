@@ -34,6 +34,14 @@ Four stacked panels sharing one x-axis, one bar/point per calendar day:
    (default 50 weeks, set independently — see "VDOT and pace zones" below).
    Undefined (a gap, not a zero) before the first-ever logged run.
 
+Panels 2–4 and the pace-zone histogram each have their own show/hide checkbox in
+the settings sidebar (`visPanels`, persisted in `runviz.prefs.v1` as `panels`) —
+panel 1 (the bars) always stays up as the anchor chart. The x-axis date labels
+live on whichever of panels 1–4 is currently the lowest *visible* one
+(`bottomPanel()`), not hard-wired to panel 4, so hiding panels never leaves the
+chart without dates; that panel's bottom inset also widens to fit them, same as
+panel 4's always did.
+
 Hovering a day fills the readout sidebar: exact distance, the rolling average
 (also as km/wk, km/mo, km/yr), runs per week — as two lines, run days/week on top
 and every-run-counted below it — the day's peak VDOT (plus what that day's own
@@ -52,14 +60,24 @@ and once touched it shows the real figure alongside and offers a reset.
 ## The readout: pinning, and why it lives in a sticky sidebar
 
 **Pinning.** Clicking a day sets `selected`; clicking it again, or Esc, releases it.
-`shownDay()` is `hover ?? selected` — hover always wins, and the pinned day is only
-what the readout *falls back* to. So moving the pointer off a bar, off the chart, or
-onto another window leaves the numbers up and selectable instead of going idle. All
-the "the model changed, redraw the readout" call sites go through `refreshReadout()`
-rather than `setReadout(hover)`, or a window/band change would blank a pinned day.
-The pinned day is drawn **dashed** (bars) and as a **hollow ring** (frequency panel)
-against hover's solid outline and filled dot, so both can be on screen at once and
-still read as two different things. Like zoom, it is view state and deliberately not
+`shownDay()` is hover, else the pinned day, else `lastRunIdx` — the most recent
+day with a run — so the readout (and the pace-zone histogram below, which also
+reads off `shownDay()`) always has something to show rather than sitting idle
+from page load until the first hover. Hover always wins over both. So moving
+the pointer off a bar, off the chart, or onto another window leaves whichever
+of pinned/most-recent was showing up and selectable instead of going idle. All
+the "the model changed, redraw the readout" call sites go through
+`refreshReadout()` rather than `setReadout(hover)`, or a window/band change
+would blank a pinned day — this also means the boot sequence has to call
+`refreshReadout()` itself (there is no hover yet to trigger it), unlike before
+this fallback existed, when the static idle markup in the HTML was already
+correct at load. `dayTag()` names *why* `shownDay()` is showing what it's
+showing — `'pinned'`, `'most recent run'`, or `''` for a live hover — shared by
+`setReadout(i, tag)`'s pill and the zone panel's title tag, so the two always
+agree without each deciding for itself. The pinned day is drawn **dashed**
+(bars) and as a **hollow ring** (frequency panel) against hover's solid
+outline and filled dot, so both can be on screen at once and still read as two
+different things. Like zoom, the pin itself is view state and deliberately not
 persisted in `runviz.prefs.v1`.
 
 A pan ends in a mouseup on the canvas, which the browser then reports as a click —
@@ -219,17 +237,38 @@ towards easy's own weak blue for Walking and Recovery — see `leadRamps` in
 `buildRamps()`), so the transition visually previews "getting closer to real
 training" without implying they're graded pace zones themselves.
 
-**The pace-zone histogram** (below the four main panels) is pinned-day-only,
-deliberately keyed on `selected` rather than `shownDay()` — it's the one place on
-the page that does not follow hover, because a lap walk plus a full-canvas
-redraw on every mouse-move would be the wrong trade. It judges the pinned day's
-laps against **that day's own rolling VDOT** (the fitness level at the time), not
-today's — a hard rep from years ago is read against years-ago fitness. Empty when
-the day has no run, or predates the very first logged run (VDOT isn't a
-meaningful zero, so there's nothing to bin against).
+**The pace-zone histogram** (below the four main panels) is always up rather than
+hidden until something is pinned, and follows `shownDay()` exactly like the
+readout: hover, else the pin, else `lastRunIdx` (the most recent day with a
+run), tagged with the same `dayTag()` pill the readout uses ("pinned" /
+"most recent run" / nothing while actively hovering) so it's always clear
+*why* that day is showing. It used to be deliberately pinned-day-only and NOT
+follow hover — a lap walk plus a full-canvas redraw on every mouse-move looked
+like the wrong trade — but that traded away too much: the panel is far more
+useful when it tracks whatever you're actually looking at, and in practice a
+single day's lap walk is cheap enough that following hover doesn't cost
+anything noticeable. It judges its day's laps against **that day's own rolling
+VDOT** (the fitness level at the time), not today's — a hard rep from years ago
+is read against years-ago fitness.
+
+A day with no run, or one that predates the very first logged run (VDOT isn't
+a meaningful zero, so there's nothing to bin against — `paceHistogramFor()`
+returns `null` for both), still renders the full legend, axes, grid and zone
+dividers exactly as usual — just with an all-zero stand-in in place of real
+`bins`, and "No run that day." (or the VDOT-not-yet-available wording) centred
+over the empty canvas via `.zone-empty-overlay`. It used to swap in a small
+"nothing here" block instead of the canvas, which shrank the whole card on
+every rest day and grew it back on every run day — a distracting flicker when
+scanning quickly through a run of days while following hover (see above). The
+card is only ever hidden completely (`zonecard.hidden`) when there is no day to
+show at all — panel toggled off, or no run anywhere in history yet. An empty
+day also skips the bin-hover interaction entirely (there's nothing behind the
+zero-height bars to report, and `vdotHere` may not even exist) rather than
+wiring up a `mousemove` listener that would have nothing real to say.
 
 Hovering a bin (this redraws the whole bar canvas — cheap, unlike the lap walk
-above it, which only runs once per pin) shows its pace range in `#zoneHoverInfo`:
+above it, which only runs once per triggering event) shows its pace range in
+`#zoneHoverInfo`:
 the two %VDOT bounds either side of the bin, converted back to pace via
 `velocityFromVo2()`. Higher %VDOT is faster (lower min/km), so the bin's *slow*
 edge comes from its *lower* bound and vice versa. Repetition's fastest bin reads
@@ -239,35 +278,104 @@ that constant) rather than a real boundary, so it's reported as open-ended
 aren't %VDOT bins at all, so their hover text reports their own fixed or per-day
 pace bounds directly rather than going through `paceRangeFor()`.
 
-**Colour**: five hues (blue/green/gold/orange/red) validated with the `dataviz`
+**Colour**: five hues (blue/green/yellow/orange/red) validated with the `dataviz`
 skill's palette checker using **adjacent** pairs, not all-pairs — this is an
 ordered bar histogram where neighbours are what matters, the same basis the
-checker itself uses for stacks/bars/lines. Light mode's worst adjacent CVD ΔE is
-20.0, dark mode's is 12.5, both comfortably above the 8.0 target. "Threshold"
-reads as gold/mustard rather than a bright lemon yellow: true yellow's natural
-lightness sits outside the band usable once chroma and CVD separation both have
-to hold, so gold is the closest a five-hue ordered set gets while still passing.
+checker itself uses for stacks/bars/lines. Light mode's worst adjacent CVD ΔE
+was 20.0, dark mode's 12.5, both comfortably above the 8.0 target — **for the
+four zones other than Threshold**; Threshold in both modes is now a deliberate,
+documented exception to that check (below), not an oversight.
 
-Threshold's light-mode `--z-threshold` (the "strong" end of its weak→strong
-pair) is picked to sit at nearly the same OKLab *hue* as `--z-threshold-weak`
-(~84°), not just any hex that independently passes the CVD/lightness/chroma
-checks. The zone histogram interpolates weak→strong per sub-band (`zoneRamps` in
-`buildRamps()`), so a colour that passes validation on its own but drifts hue
-partway to a different colour still breaks visually: the original strong
-(`#923c00`) drifted ~38° toward red, so a zone meant to read as "gold
+Threshold's own weak→strong pair is picked to share nearly the same OKLab
+*hue* at both ends in a given mode, not just any hex that independently passes
+lightness/chroma. The zone histogram interpolates weak→strong per sub-band
+(`zoneRamps` in `buildRamps()`), so a colour that's fine on its own but drifts
+hue partway to a different colour still breaks visually: an early light-mode
+strong (`#923c00`) drifted ~38° toward red, so a zone meant to read as "gold
 throughout, just deeper" visibly turned red-brown at its fastest sub-bands —
-which is what "Threshold 4 looks like dark red" was. Dark mode's pair only
-drifts ~7° and didn't need the same fix. When picking a zone's "strong" colour,
-check both: passes validation standalone, AND stays close in hue to its own
-"weak" partner.
+which is what "Threshold 4 looks like dark red" was. When picking a zone's
+"strong" colour, check that it stays close in hue to its own "weak" partner,
+independent of whether CVD is even in scope for that zone.
+
+**Threshold trades colourblind-safety for brightness and a true yellow, in
+both modes — this is a private, single-user page, and that trade was made
+explicitly, twice.** Two real problems, found with the validator and a gamut
+search rather than by eye:
+
+1. Gold/mustard hues (OKLCH H ≈ 70–100°) are gamut-starved in sRGB — max
+   achievable chroma is only ~0.10–0.14 across the whole lightness range
+   (confirmed by bisecting the sRGB gamut boundary per hue/lightness, not by
+   eyeballing it), which is *why* the original palette landed on a muddy,
+   barely-above-the-chroma-floor gold to begin with: nothing more saturated
+   passing CVD is achievable in this hue family at any lightness.
+2. Dark mode's original `--z-threshold-weak` (`#3d2d00`, OKLCH L 0.307) had a
+   WCAG contrast of only 1.3 against the dark card surface (`#1a1a19`) —
+   every sibling zone's weak swatch sits at 2.0–2.4 — so "Threshold 0" read as
+   nearly invisible. That bug, not the muddiness, was the dominant complaint.
+
+This went through two wrong attempts before landing — both worth recording
+because each broke a different thing the validator can't see:
+
+1. **First attempt** pushed dark mode's pair to a genuinely bright true yellow
+   (L 0.85/0.75) — which then stood out as far *brighter* than all four other
+   zones (whose strongs sit at L 0.51–0.66), an inconsistency the CVD checker
+   doesn't catch because it only compares Threshold's neighbours, not its
+   absolute brightness against the rest of the palette. **Brightness parity
+   with sibling zones has to be checked by eye, not by re-running the
+   validator.**
+2. **Second attempt** matched light mode's lightness to its siblings (L 0.60
+   strong / L 0.78 weak) but kept chroma roughly flat across the ramp (0.121 /
+   0.13) while lightness dropped from weak to strong. The result went the
+   *opposite direction* from every other zone: Marathon and Interval get
+   visibly *more vivid* left→right (pale swatch → saturated swatch); this
+   Threshold got visibly *muddier* left→right, because a dark, moderately-
+   desaturated yellow reads to the eye as olive-brown, not "a deep yellow" —
+   there is no perceptually "deep vivid yellow" the way there is a deep vivid
+   blue or red. **A weak→strong ramp has to be checked for which *direction*
+   it appears to move in, not just its endpoint lightness/chroma numbers** —
+   this is also not something the categorical validator checks, since it only
+   ever looks at the "strong" endpoints of each zone in isolation.
+
+The fix for #2 (confirmed against the user with rendered swatches before
+committing, given two wrong guesses already) was letting go of light-mode
+brightness parity with siblings in favour of ramp *direction* parity: keep
+both ends bright/pale rather than pulling strong down to match Easy/
+Repetition's darker L≈0.51 cluster, so chroma still climbs from weak to
+strong the same way Marathon/Interval's does.
+
+- **Dark** (unaffected by the direction bug — its weak end is already the
+  *lower*-lightness one, so chroma naturally climbs weak→strong just like
+  every other zone): `--z-threshold` `#b18904` (L 0.65, C 0.132, H 88° — L
+  matches Interval's 0.657 almost exactly), `--z-threshold-weak` `#8d6d05` (L
+  0.55, C 0.111 — contrast 3.58 against the dark surface, now *better* than
+  Interval weak's 2.36, not the worst of the five).
+- **Light**: `--z-threshold` `#cfaa0a` (L 0.75, C at the gamut ceiling for
+  that L/hue, H 93° — L sits with the Marathon/Interval cluster at L≈0.70–0.72,
+  not the darker Easy/Repetition one), `--z-threshold-weak` `#ebdeb1` (L 0.90,
+  a pale cream — deliberately much paler than strong so the ramp still reads
+  as "gaining colour" left→right, at the cost of low contrast against the
+  near-white surface, ~1.3, which the user has explicitly accepted here).
+
+Hue differs slightly between modes now (88° dark, 93° light) since light's fix
+came from a fresh search seeded at H 93; each mode's pair still shares one hue
+end-to-end (avoiding the original hue-drift bug), which is the part that
+actually matters for the ramp reading as one coherent colour. Neither pair is
+CVD-validated against Marathon/Interval and neither should be — that check was
+deliberately dropped for this zone. If colourblind-safety ever matters here
+again, don't re-run the CVD search expecting a better answer: the gamut math
+above already shows no more-saturated CVD-safe gold exists in this hue family,
+so the honest fallback is the old muddy gold (`#7c5000` / `#b48b2e` light,
+`#855e00` / `#3d2d00` dark) with the weak-end contrast bug fixed — not a hunt
+for a yellow that passes, because none does.
 
 ## Remembered settings
 
 `runviz.prefs.v1` holds everything the settings sidebar and the what-if box can be
 set to, so the page opens the way it was left: `windowVol`, `windowFreq`,
 `windowVdot`, `minLapM`, `stableBand`, `longNeedsSingleRun`, `colourNormal`,
-`colourLong`, `zoneBars`, and `plan` (`null` = the what-if box follows real history,
-`{km, days}` = edited). Three rules:
+`colourLong`, `zoneBars`, `panels` (`{freq, runs, vdot, zone}`, each independently
+show/hide — see below), and `plan` (`null` = the what-if box follows real
+history, `{km, days}` = edited). Three rules:
 
 - **Read at the very top of the `if (DATA)` block**, above `let WINDOW_VOL` /
   `let WINDOW_FREQ` / `let WINDOW_VDOT`, because `recompute()` runs at load and
@@ -294,9 +402,9 @@ the defaults, and a remembered setting has to overwrite them at boot.
 **There are two resets, and each owns only what sits next to it.**
 
 - **Reset** in the settings sidebar: all three windows, the min-lap distance,
-  stable band, the pace-zone bar count, the long-run rule and both colour toggles
-  back to their defaults, plus the view zoomed back out. It does *not* touch the
-  what-if.
+  stable band, the pace-zone bar count, the long-run rule, both colour toggles and
+  the four panel show/hide toggles back to their defaults (all shown), plus the
+  view zoomed back out. It does *not* touch the what-if.
 - **reset** in the Today's target tile: clears the what-if back to following real
   history, and nothing else.
 

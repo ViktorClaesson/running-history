@@ -39,25 +39,35 @@
     /* Pace-zone histogram: easy/marathon/threshold/interval/repetition, ordered
        fast→slow around the visible spectrum. Adjacent-pair CVD ΔE validated (not
        all-pairs — this is an ordered bar histogram where neighbours are what
-       matters, same basis the skill's validator uses for stacks/bars/lines):
-       light worst-adjacent ΔE 20.0, dark 12.5, both well above the 8.0 target.
-       "Threshold" reads as gold/mustard rather than a bright lemon yellow —
-       true yellow's natural lightness sits outside the usable band once chroma
-       and CVD separation are both satisfied, so gold is the closest a five-hue
-       ordered set gets while still passing. Its light-mode --z-threshold is
-       picked to sit at nearly the SAME OKLab hue as --z-threshold-weak (~84°)
-       rather than just any colour that passes CVD/lightness/chroma on its own —
-       the zone histogram interpolates weak→strong per sub-band (see zoneRamps in
-       buildRamps()), and the original strong (#923c00) drifted ~38° towards red,
-       so a zone meant to read as "gold throughout" visibly turned red-brown at
-       its fastest sub-bands. Dark mode's pair drifts only ~7° and didn't need
-       the same fix. */
+       matters, same basis the skill's validator uses for stacks/bars/lines) for
+       every zone EXCEPT threshold: light worst-adjacent ΔE 20.0, dark 12.5, both
+       well above the 8.0 target for the other four.
+       Threshold trades that colourblind-safety away on purpose, in both modes —
+       see CLAUDE.md for the two wrong attempts this took before landing, each
+       breaking something the validator can't see: (1) true yellow's gamut in
+       sRGB is starved everywhere a CVD-safe pair could sit (max chroma
+       ~0.10-0.14), and dark --z-threshold-weak additionally had a real contrast
+       bug (1.3:1 against the card vs every sibling's 2.0-2.4) — fixing only the
+       chroma/hue made dark mode's fix look far brighter than its siblings,
+       which has to be checked by eye, the validator only compares Threshold
+       against its own neighbours, not the whole palette's brightness; (2) light
+       mode's fix then matched sibling lightness but kept chroma flat across the
+       ramp, so it went visibly muddier weak-to-strong instead of more vivid
+       like every other zone — a dark, desaturated yellow reads as olive-brown,
+       there's no "deep vivid yellow" the way there's a deep vivid blue or red,
+       so light's pair now keeps both ends bright (siding with Marathon/
+       Interval's L≈0.70-0.72 cluster over Easy/Repetition's darker one) so
+       chroma still climbs weak→strong. Each mode's own weak→strong pair still
+       shares one hue (avoiding the earlier drift bug: an early light strong,
+       #923c00, drifted ~38° towards red, turning a "gold throughout" zone
+       red-brown at its fastest sub-bands) even though the two modes no longer
+       share the same hue as each other. */
     --z-easy-weak:        #869fe3;
     --z-easy:             #3554da;
     --z-marathon-weak:    #80e1bc;
     --z-marathon:         #00c17f;
-    --z-threshold-weak:   #b48b2e;
-    --z-threshold:        #7c5000;
+    --z-threshold-weak:   #ebdeb1;
+    --z-threshold:        #cfaa0a;
     --z-interval-weak:    #f5be8c;
     --z-interval:         #e97f00;
     --z-repetition-weak:  #cf8d95;
@@ -94,8 +104,8 @@
       --z-easy:             #008ae9;
       --z-marathon-weak:    #005b3c;
       --z-marathon:         #00a764;
-      --z-threshold-weak:   #3d2d00;
-      --z-threshold:        #855e00;
+      --z-threshold-weak:   #8d6d05;
+      --z-threshold:        #b18904;
       --z-interval-weak:    #724e30;
       --z-interval:         #ca7c30;
       --z-repetition-weak:  #5e1b21;
@@ -131,8 +141,8 @@
     --z-easy:             #008ae9;
     --z-marathon-weak:    #005b3c;
     --z-marathon:         #00a764;
-    --z-threshold-weak:   #3d2d00;
-    --z-threshold:        #855e00;
+    --z-threshold-weak:   #8d6d05;
+    --z-threshold:        #b18904;
     --z-interval-weak:    #724e30;
     --z-interval:         #ca7c30;
     --z-repetition-weak:  #5e1b21;
@@ -216,9 +226,9 @@
     border: 1px solid currentColor;
   }
   .badge.rest { color: var(--text-secondary); }
-  .readout .pin { display: block; width: fit-content; font-size: 10px; font-weight: 600;
+  .pin { display: inline-block; vertical-align: middle; width: fit-content; font-size: 10px; font-weight: 600;
     color: var(--muted); border: 1px solid currentColor; border-radius: 999px;
-    padding: 0 5px; margin-top: 3px; white-space: nowrap; }
+    padding: 0 5px; margin-left: 6px; white-space: nowrap; }
   .readout.idle .date { color: var(--text-secondary); font-weight: 400; }
 
   .chartcard {
@@ -272,8 +282,14 @@
   #chartZone { display: block; width: 100%; height: 220px; }
   .zone-legend { display: flex; gap: 14px; flex-wrap: wrap; padding: 0 4px 8px; font-size: 12px; color: var(--text-secondary); }
   .zone-legend .item { display: inline-flex; align-items: center; gap: 6px; }
-  .zone-empty { padding: 18px 4px; color: var(--muted); font-size: 13px; }
-  .zone-note { padding: 0 4px 8px; color: var(--muted); font-size: 12px; }
+  /* The canvas itself always renders — same axes/grid whether or not the day has
+     data — so this overlay is what actually says "nothing here", centred over it
+     rather than replacing it. Keeping the canvas up avoids the whole card
+     growing/shrinking on every hover while scanning quickly through days. */
+  .zone-canvas-wrap { position: relative; }
+  .zone-empty-overlay { position: absolute; inset: 0; display: flex; align-items: center;
+    justify-content: center; text-align: center; padding: 0 24px;
+    color: var(--muted); font-size: 13px; pointer-events: none; }
   .zone-hover { padding: 0 4px 8px; font-size: 12px; color: var(--text-secondary);
     font-variant-numeric: tabular-nums; }
 
@@ -334,6 +350,10 @@
     </div>
   </div>
   <div class="ctrls">
+  <label class="chk"><input type="checkbox" id="showFreq" checked> Run days/week panel</label>
+  <label class="chk"><input type="checkbox" id="showRuns" checked> Runs/week panel</label>
+  <label class="chk"><input type="checkbox" id="showVdot" checked> VDOT panel</label>
+  <label class="chk"><input type="checkbox" id="showZone" checked> Pace-zone histogram</label>
   <label class="chk">Volume window
     <input type="number" id="windowVolWeeks" min="1" max="52" step="1" value="4"> weeks
   </label>
@@ -377,18 +397,24 @@
 
   <div class="chartcard">
     <canvas id="chart"></canvas>
-    <div class="panel-title">Average run days per week, over the trailing <span class="winFreqN">70</span> days</div>
-    <canvas id="chart2"></canvas>
-    <div class="panel-title">Average runs per week, over the trailing <span class="winFreqN">70</span> days</div>
-    <canvas id="chart3"></canvas>
-    <div class="panel-title">Highest VDOT in the trailing <span class="winVdotN">910</span> days</div>
-    <canvas id="chart4"></canvas>
+    <div class="chart-panel" id="panel-freq">
+      <div class="panel-title">Average run days per week, over the trailing <span class="winFreqN">70</span> days</div>
+      <canvas id="chart2"></canvas>
+    </div>
+    <div class="chart-panel" id="panel-runs">
+      <div class="panel-title">Average runs per week, over the trailing <span class="winFreqN">70</span> days</div>
+      <canvas id="chart3"></canvas>
+    </div>
+    <div class="chart-panel" id="panel-vdot">
+      <div class="panel-title">Highest VDOT in the trailing <span class="winVdotN">910</span> days</div>
+      <canvas id="chart4"></canvas>
+    </div>
     <div class="hint">Scroll or pinch to zoom — the day under the cursor stays put while both sides scale around it. Drag to pan. Double-click to reset.
       Click a day to pin its numbers in the readout above; click it again, or press Esc, to release.</div>
   </div>
 
   <div class="chartcard" id="zonecard" hidden>
-    <div class="panel-title" id="zone-title" style="padding-left:4px">Pace zones for the pinned day</div>
+    <div class="panel-title" id="zone-title" style="padding-left:4px">Pace zones</div>
     <div id="zone-body"></div>
   </div>
 
@@ -750,10 +776,11 @@ const PREF_DEFAULTS = {
   colourNormal: true,
   colourLong: true,
   zoneBars: 5,       // sub-bands per pace zone in the pace-zone histogram
+  panels: { freq: true, runs: true, vdot: true, zone: true },   // which optional panels are shown
   plan: null,        // null = the what-if box follows real history; {km, days} = edited
 };
 function loadPrefs() {
-  const p = { ...PREF_DEFAULTS };
+  const p = { ...PREF_DEFAULTS, panels: { ...PREF_DEFAULTS.panels } };
   const raw = lsGet(LS_PREFS);
   if (!raw || typeof raw !== 'object') return p;
   // Validated field by field, against the same limits as the controls, so a
@@ -769,6 +796,11 @@ function loadPrefs() {
   if (num(raw.zoneBars, 1, 20)) p.zoneBars = Math.round(raw.zoneBars);
   for (const k of ['longNeedsSingleRun', 'colourNormal', 'colourLong']) {
     if (typeof raw[k] === 'boolean') p[k] = raw[k];
+  }
+  if (raw.panels && typeof raw.panels === 'object') {
+    for (const k of ['freq', 'runs', 'vdot', 'zone']) {
+      if (typeof raw.panels[k] === 'boolean') p.panels[k] = raw.panels[k];
+    }
   }
   if (raw.plan && num(raw.plan.km, 0, 700) && num(raw.plan.days, 0, 7)) {
     p.plan = { km: raw.plan.km, days: raw.plan.days };
@@ -790,10 +822,15 @@ function savePrefs() {
     colourNormal: colourScheme.normal,
     colourLong: colourScheme.long,
     zoneBars: ZONE_BARS,
+    panels: { ...visPanels },
     plan: planEdited ? { km: plan.km, days: plan.days } : null,
   };
   const changed = Object.keys(PREF_DEFAULTS)
-    .some(k => k === 'plan' ? cur.plan !== null : cur[k] !== PREF_DEFAULTS[k]);
+    .some(k => {
+      if (k === 'plan') return cur.plan !== null;
+      if (k === 'panels') return Object.keys(PREF_DEFAULTS.panels).some(pk => cur.panels[pk] !== PREF_DEFAULTS.panels[pk]);
+      return cur[k] !== PREF_DEFAULTS[k];
+    });
   if (changed) lsSet(LS_PREFS, cur); else lsDel(LS_PREFS);
 }
 
@@ -818,6 +855,11 @@ const dayLaps = DATA.laps || [];  // that day's parsed lap splits ({km, sec}[]),
 const N = daily.length;
 const start = new Date(DATA.start + "T00:00:00");
 const dateAt = i => new Date(start.getTime() + i * 86400000);
+// The pace-zone histogram's fallback day when nothing is pinned — the most
+// recent day with a run — so the panel always has something to show rather
+// than sitting empty until a bar is clicked.
+let lastRunIdx = -1;
+for (let i = N - 1; i >= 0; i--) { if (daily[i] > 0) { lastRunIdx = i; break; } }
 
 // Trailing-window means. The first window's worth of days has no full window behind
 // it and is still divided by the full window, so each series ramps up from zero
@@ -1133,6 +1175,9 @@ const ZONES = [
 // Walking and Recovery (below) are never sub-divided by this — they're not real
 // training zones, just where non-zone effort gets sorted out of easy's way.
 let ZONE_BARS = prefs.zoneBars;
+// Independent show/hide for the three optional line panels and the pace-zone
+// histogram — the distance bars (panel 1) always stay up as the anchor chart.
+let visPanels = { ...prefs.panels };
 const ZONE_ANCHOR_PCT = [0.657, 0.818, 0.880, 0.976, 1.062];
 const ZONE_BOUND_PCT = [null,   // easy's floor is per-day now — see easyFloorPct()
   (ZONE_ANCHOR_PCT[0] + ZONE_ANCHOR_PCT[1]) / 2,
@@ -1377,6 +1422,15 @@ const BARS = { t: 14, b: 12 };    // top panel insets
 const FREQ  = { t: 10, b: 12 };  // run days/week panel insets
 const FREQ2 = { t: 10, b: 12 };  // runs/week panel insets
 const VDOTI = { t: 10, b: 26 };  // bottom panel insets (carries the x labels)
+// Whichever of bars/freq/runs/vdot is the lowest currently-visible panel carries
+// the x-axis date labels, so hiding a panel never leaves the chart without dates.
+// Its bottom inset is widened to VDOTI.b's label-sized padding to fit them.
+function bottomPanel() {
+  if (visPanels.vdot) return 'vdot';
+  if (visPanels.runs) return 'runs';
+  if (visPanels.freq) return 'freq';
+  return 'bars';
+}
 let W = 0;
 const plotW = () => W - PAD.l - PAD.r;
 const barW  = () => plotW() / span;
@@ -1418,6 +1472,8 @@ function drawBars() {
   buildRamps();
   const { w, h } = fitCanvas(cv, ctx);
   W = w;
+  const isBottom = bottomPanel() === 'bars';
+  BARS.b = isBottom ? VDOTI.b : 12;
   const plotH = h - BARS.t - BARS.b;
   const [i0, i1] = visibleRange();
 
@@ -1487,11 +1543,14 @@ function drawBars() {
   if (inView(selected) && selected !== hover) outline(selected, true);
   if (inView(hover)) outline(hover, false);
   ctx.restore();
+  if (isBottom) drawXAxisLabels(ctx, w, BARS.t, plotH, i0, i1);
 }
 
 // ---- panel 2: run days per week over the trailing window -----------------
 function drawFreq() {
   const { w, h } = fitCanvas(cv2, ctx2);
+  const isBottom = bottomPanel() === 'freq';
+  FREQ.b = isBottom ? VDOTI.b : 12;
   const plotH = h - FREQ.t - FREQ.b;
   const [i0, i1] = visibleRange();
   // The window is a rate now: run days per week, so windows of different lengths
@@ -1558,6 +1617,7 @@ function drawFreq() {
   if (seen(selected) && selected !== hover) dot(selected, true);
   if (seen(hover)) dot(hover, false);
   c.restore();
+  if (isBottom) drawXAxisLabels(c, w, FREQ.t, plotH, i0, i1);
 }
 
 // ---- panel 3: runs per week, without clumping same-day runs into one -----
@@ -1566,6 +1626,8 @@ function drawFreq() {
 // The axis is therefore not fixed at 0–7 the way run-days/week is.
 function drawRuns() {
   const { w, h } = fitCanvas(cv3, ctx3);
+  const isBottom = bottomPanel() === 'runs';
+  FREQ2.b = isBottom ? VDOTI.b : 12;
   const plotH = h - FREQ2.t - FREQ2.b;
   const [i0, i1] = visibleRange();
   const perWeek = perWeekRunsAt;
@@ -1627,6 +1689,7 @@ function drawRuns() {
     c.strokeStyle = C('--surface-1'); c.lineWidth = 2; c.stroke();
   }
   c.restore();
+  if (isBottom) drawXAxisLabels(c, w, FREQ2.t, plotH, i0, i1);
 }
 
 // x-axis labels live on the bottom panel only; every panel shares the x mapping,
@@ -1746,9 +1809,9 @@ function drawVdot() {
 
 function drawAll() {
   drawBars();
-  drawFreq();
-  drawRuns();
-  drawVdot();
+  if (visPanels.freq) drawFreq();
+  if (visPanels.runs) drawRuns();
+  if (visPanels.vdot) drawVdot();
   const [i0, i1] = visibleRange();
   renderTable(i0, i1);
 }
@@ -1766,7 +1829,7 @@ function vdotBasisText(i) {
 
 // ---- readout -------------------------------------------------------------
 const ro = document.getElementById('readout');
-function setReadout(i, pinned) {
+function setReadout(i, tag) {
   if (i === null) {
     // The sidebar is out of the main flow now, so its own height changing
     // between idle and hovered doesn't reflow the chart next to it — no need for
@@ -1778,7 +1841,7 @@ function setReadout(i, pinned) {
   const c = classify(i);
   ro.className = 'readout';
   ro.innerHTML = `
-    <span class="date">${fmtDate.format(dateAt(i))}${pinned ? '<span class="pin">pinned</span>' : ''}</span>
+    <span class="date">${fmtDate.format(dateAt(i))}${tag ? `<span class="pin">${tag}</span>` : ''}</span>
     <span class="pair detail"><span class="k">Distance that day</span><span class="v">${daily[i] > 0 ? km(daily[i]) + ' km' : 'no run'}${nRuns[i] > 1 ? `<span class="sub-v"> in ${nRuns[i]} runs</span>` : ''}</span><span class="v2">${
       target[i] > 0
         ? seg(['target ' + km(target[i]) + ' km',
@@ -1796,35 +1859,57 @@ function setReadout(i, pinned) {
     }</span>`;
 }
 
-// Hover always wins; the pinned day is only what the readout falls back to. So
-// moving the pointer off a bar — or off the chart, or onto another window
-// entirely — leaves the pinned day's numbers up instead of going idle, which is
-// the point: they stay readable and selectable.
-const shownDay = () => hover !== null ? hover : selected;
-const refreshReadout = () => setReadout(shownDay(), hover === null && selected !== null);
+// Hover always wins; the pinned day is next, and the most recent run after
+// that, so both the readout and the pace-zone histogram below always have
+// something to show instead of sitting idle. Moving the pointer off a bar —
+// or off the chart, or onto another window entirely — leaves whichever of
+// those was showing up instead of going idle, which is the point: it stays
+// readable. `dayTag()` names *why* shownDay() is showing what it's showing —
+// shared by the readout's pill and the zone panel's title tag, so the two
+// stay in sync automatically rather than each deciding for itself.
+const shownDay = () => {
+  if (hover !== null) return hover;
+  if (selected !== null) return selected;
+  return lastRunIdx >= 0 ? lastRunIdx : null;
+};
+const dayTag = () => hover !== null ? '' : selected !== null ? 'pinned' : 'most recent run';
+const refreshReadout = () => {
+  const i = shownDay();
+  setReadout(i, i === null ? '' : dayTag());
+};
 
-// ---- pace-zone histogram, pinned day only ---------------------------------
-// Deliberately keyed on `selected`, not `shownDay()` — this is the one place in
-// the page that does NOT follow hover, because it's expensive enough (a lap walk
-// plus a 50-bin canvas redraw) that doing it on every mouse-move would be the
-// wrong trade. It only ever recomputes when the pin itself, the VDOT window, the
-// zoom/resize, or the colour theme actually changes.
+// ---- pace-zone histogram, following the same day as the readout ---------
+// Keyed on `shownDay()` — hover, else the pin, else the most recent run — same
+// as the readout. This used to be pinned-day-only, deliberately not following
+// hover, because a lap walk plus a 50-bin canvas redraw on every mouse-move
+// seemed like the wrong trade; it turned out to be worth it for how much more
+// useful the panel is when it tracks whatever you're actually looking at, and
+// a single day's lap walk is cheap enough in practice. It still only ever
+// recomputes on a real trigger (mouse-move/click/pin/Esc, the VDOT window, the
+// zoom/resize, the panel visibility, or the colour theme) rather than on a timer.
 const zonecard = document.getElementById('zonecard');
 const zoneTitle = document.getElementById('zone-title');
 const zoneBody = document.getElementById('zone-body');
 function renderZonePanel() {
-  if (selected === null) { zonecard.hidden = true; return; }
+  if (!visPanels.zone) { zonecard.hidden = true; return; }
+  const zoneDay = shownDay();
+  if (zoneDay === null) { zonecard.hidden = true; return; }   // no run anywhere in history yet
   zonecard.hidden = false;
-  zoneTitle.textContent = `Pace zones for ${fmtDate.format(dateAt(selected))}`;
-  const bins = paceHistogramFor(selected);
-  if (!bins) {
-    zoneBody.innerHTML = `<div class="zone-empty">${
-      daily[selected] > 0 ? 'No VDOT yet this far back in history — nothing to judge the pace against.' : 'No run that day.'
-    }</div>`;
-    return;
-  }
+  zoneTitle.innerHTML = `Pace zones for ${fmtDate.format(dateAt(zoneDay))}` +
+    (dayTag() ? ` <span class="pin">${dayTag()}</span>` : '');
   buildRamps();   // ensures zoneRamps/leadRamps are built before they're read below
-  const vdotHere = vdot[selected];
+  const vdotHere = vdot[zoneDay];
+  // Real bins, or — a day with no run, or one that predates the first-ever
+  // logged run — an all-zero stand-in of the same shape. Rendering the same
+  // legend/axes/grid either way (just with nothing in it, plus a centred
+  // message) keeps the panel's height constant while scanning day to day;
+  // it used to swap in a tiny "no run that day" block instead, which made the
+  // whole card shrink and grow on every hover across a rest day — a distracting
+  // flicker when scanning quickly through a run of days.
+  const realBins = paceHistogramFor(zoneDay);
+  const bins = realBins || new Array(ZONE_BIN_OFFSET + 5 * ZONE_BARS).fill(0);
+  const emptyMsg = realBins ? null
+    : (daily[zoneDay] > 0 ? 'No VDOT yet this far back in history — nothing to judge the pace against.' : 'No run that day.');
   const legend = `<span class="item"><span class="swatch" style="background:${leadRamps.standing}"></span>Standing</span>` +
     `<span class="item"><span class="swatch" style="background:${leadRamps.walking}"></span>Walking</span>` +
     `<span class="item"><span class="swatch" style="background:${leadRamps.recovery}"></span>Recovery</span>` +
@@ -1833,15 +1918,13 @@ function renderZonePanel() {
   // didn't save any splits for this day (an older activity, a device that
   // doesn't autolap, a manual entry), paceHistogramFor() falls back to treating
   // the whole day as one lap at its average pace, and every minute lands in a
-  // single bin no matter how many ZONE_BARS are configured. Said so up front,
-  // since "the whole run is in one bar" otherwise reads as a binning bug.
-  const noSplits = !(dayLaps[selected] && dayLaps[selected].length);
-  const note = noSplits
-    ? `<div class="zone-note">No lap splits recorded for this day — Runalyze has only the day's total distance and time, so it's judged as one uniform pace rather than broken down further.</div>`
-    : '';
-  zoneBody.innerHTML = `<div class="zone-legend">${legend}</div>` + note +
-    `<div class="zone-hover" id="zoneHoverInfo">Hover a bar to see its pace range</div>` +
-    `<canvas id="chartZone"></canvas>`;
+  // single bin no matter how many ZONE_BARS are configured.
+  zoneBody.innerHTML = `<div class="zone-legend">${legend}</div>` +
+    `<div class="zone-hover" id="zoneHoverInfo">${realBins ? 'Hover a bar to see its pace range' : '&nbsp;'}</div>` +
+    `<div class="zone-canvas-wrap">` +
+      `<canvas id="chartZone"></canvas>` +
+      (emptyMsg ? `<div class="zone-empty-overlay">${emptyMsg}</div>` : '') +
+    `</div>`;
   const cvZ = document.getElementById('chartZone');
   const ctxZ = cvZ.getContext('2d');
   const { w, h } = fitCanvas(cvZ, ctxZ);
@@ -1927,6 +2010,11 @@ function renderZonePanel() {
   }
   drawBars(null);
 
+  // No bin-hover interaction on an empty stand-in day — there's nothing behind
+  // the zero-height bars to report (and vdotHere may not even exist), so the
+  // canvas just sits there showing the same axes/grid as a real day, quietly.
+  if (!realBins) return;
+
   const hoverInfo = document.getElementById('zoneHoverInfo');
   const binAt = px => {
     const slot = Math.floor((px - pad.l) / bw);
@@ -1998,7 +2086,7 @@ function onMove(e) {
   }
   const i = idxAt(mx);
   const next = (i >= 0 && i < N && mx >= PAD.l && mx <= W - PAD.r) ? i : null;
-  if (next !== hover) { hover = next; refreshReadout(); drawAll(); }
+  if (next !== hover) { hover = next; refreshReadout(); renderZonePanel(); drawAll(); }
 }
 
 function onWheel(e) {
@@ -2016,7 +2104,7 @@ function onWheel(e) {
   tSpan = span; tCenter = center;
   const i = idxAt(mx);
   const next = (i >= 0 && i < N) ? i : null;
-  if (next !== hover) { hover = next; refreshReadout(); }
+  if (next !== hover) { hover = next; refreshReadout(); renderZonePanel(); }
   drawAll();
 }
 
@@ -2042,7 +2130,7 @@ function onTouchMove(e) {
 
 for (const el of [cv, cv2, cv3, cv4]) {
   el.addEventListener('mousemove', onMove);
-  el.addEventListener('mouseleave', () => { hover = null; refreshReadout(); drawAll(); });
+  el.addEventListener('mouseleave', () => { hover = null; refreshReadout(); renderZonePanel(); drawAll(); });
   el.addEventListener('wheel', onWheel, { passive: false });
   el.addEventListener('mousedown', e => {
     const rect = el.getBoundingClientRect();
@@ -2093,6 +2181,7 @@ document.getElementById('reset').onclick = () => {
   colourScheme.normal = PREF_DEFAULTS.colourNormal;
   colourScheme.long = PREF_DEFAULTS.colourLong;
   ZONE_BARS = PREF_DEFAULTS.zoneBars;
+  visPanels = { ...PREF_DEFAULTS.panels };
   savePrefs();
   syncControls();
   recomputeDayVdot();
@@ -2115,6 +2204,21 @@ function syncLabels() {
 
 // The controls are the one place state has to be pushed *into* the DOM: at boot
 // they carry the markup defaults, which a remembered setting has to overwrite.
+// Pushes visPanels into both the checkboxes and the panel wrapper divs' `hidden`
+// attribute — the one place panel visibility is written to the DOM, same idea as
+// syncControls() below.
+const PANEL_CHK = { freq: 'showFreq', runs: 'showRuns', vdot: 'showVdot', zone: 'showZone' };
+const PANEL_EL = { freq: 'panel-freq', runs: 'panel-runs', vdot: 'panel-vdot', zone: 'zonecard' };
+function syncPanelVisibility() {
+  for (const k of ['freq', 'runs', 'vdot', 'zone']) {
+    document.getElementById(PANEL_CHK[k]).checked = visPanels[k];
+    // 'zone' also depends on whether there's a day to show it for — renderZonePanel()
+    // owns that half of its `hidden` state, this only ever forces it fully hidden.
+    if (!visPanels[k]) document.getElementById(PANEL_EL[k]).hidden = true;
+    else if (k !== 'zone') document.getElementById(PANEL_EL[k]).hidden = false;
+  }
+}
+
 function syncControls() {
   winVolInput.value = WINDOW_VOL / 7;
   winFreqInput.value = WINDOW_FREQ / 7;
@@ -2127,6 +2231,7 @@ function syncControls() {
     document.getElementById(id).checked = colourScheme[scheme];
     document.getElementById('row-' + scheme).classList.toggle('off', !colourScheme[scheme]);
   }
+  syncPanelVisibility();
 }
 
 function applyWindow() {
@@ -2213,11 +2318,26 @@ zoneBarsInput.onchange = zoneBarsInput.oninput = () => {
   savePrefs();
   renderZonePanel();
 };
+for (const k of ['freq', 'runs', 'vdot']) {
+  document.getElementById(PANEL_CHK[k]).onchange = e => {
+    visPanels[k] = e.target.checked;
+    savePrefs();
+    syncPanelVisibility();
+    drawAll();
+  };
+}
+document.getElementById(PANEL_CHK.zone).onchange = e => {
+  visPanels.zone = e.target.checked;
+  savePrefs();
+  syncPanelVisibility();
+  renderZonePanel();
+};
 syncControls();
 syncLabels();
 
 window.addEventListener('resize', () => { drawAll(); renderZonePanel(); });
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { drawAll(); renderZonePanel(); });
+refreshReadout();
 drawAll();
 renderZonePanel();
 }
