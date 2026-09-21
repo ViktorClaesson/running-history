@@ -147,9 +147,18 @@ a genuinely hard lap implies close to the runner's real ceiling. Verified agains
 vdoto2.com's own worked example — VDOT 51.8 round-trips to its quoted easy/marathon/
 threshold/interval/repetition paces (5:14/4:23/4:08/3:48/3:33 min/km) within rounding.
 
-A day's own VDOT is the **max implied VDOT over its laps** — every lap, warmup and
-rest included, no tag filtering, since a slow lap simply never wins that search on
-its own. The **VDOT panel** is the rolling max of that across the trailing *VDOT*
+A day's own VDOT is the higher of **the whole day treated as one effort**, and the
+**max implied VDOT over its laps that are at least `MIN_LAP_M` long** (default
+1500m, adjustable 100–5000m). The length floor exists because `pctVo2max()` is
+calibrated against race durations — roughly 3.5 minutes and up — and a very short,
+very fast lap (a sprint, the last few strides of a rep) computes a VO2 cost far
+beyond what's actually reached in that time, wildly overstating VDOT: a real
+export surfaced a day reading VDOT 70+ against a true ceiling around 52, traced to
+a short fast lap. No *tag* filtering beyond the length floor — a slow warmup or
+rest lap that happens to clear it still never wins the search on its own. Checking
+the whole day too (not just as a fallback for days with no lap data) is what makes
+an evenly-paced tempo run or race its own best evidence when it beats every
+individual lap. The **VDOT panel** is the rolling max of that across the trailing *VDOT*
 window (`WINDOW_VDOT`, default 130 weeks — the only one of the three windows that
 wants years, not weeks, because "what's my fitness ceiling" and "how often am I
 running" are different-timescale questions). It's a plain sliding-window max
@@ -193,19 +202,23 @@ to hold, so gold is the closest a five-hue ordered set gets while still passing.
 
 `runviz.prefs.v1` holds everything the controls row and the what-if box can be set
 to, so the page opens the way it was left: `windowVol`, `windowFreq`, `windowVdot`,
-`stableBand`, `longNeedsSingleRun`, `colourNormal`, `colourLong`, and `plan`
-(`null` = the what-if box follows real history, `{km, days}` = edited). Three rules:
+`minLapM`, `stableBand`, `longNeedsSingleRun`, `colourNormal`, `colourLong`, and
+`plan` (`null` = the what-if box follows real history, `{km, days}` = edited).
+Three rules:
 
 - **Read at the very top of the `if (DATA)` block**, above `let WINDOW_VOL` /
   `let WINDOW_FREQ` / `let WINDOW_VDOT`, because `recompute()` runs at load and
   reads the first two — the declaration-order gotcha below. (`WINDOW_VDOT` isn't
-  read by `recompute()`, but is declared alongside the other two for the same reason.)
+  read by `recompute()`, but is declared alongside the other two for the same
+  reason. `MIN_LAP_M` is declared further down, right next to `recomputeDayVdot()`
+  — nothing earlier touches it, so it doesn't need to move.)
 - **Validated field by field on load** (`loadPrefs`), against the same limits as the
   inputs, so a stale or hand-edited entry can only produce a state the UI can reach.
   All three windows are additionally rounded to the nearest whole week, since
   that's the only unit the controls can produce — `windowVdot`'s range is 1–260
   weeks, wider than the other two's 1–52, since it wants years rather than weeks.
-  Anything that fails falls back to `PREF_DEFAULTS` for that field alone.
+  `minLapM` is rounded to the nearest 100m, range 100–5000. Anything that fails
+  falls back to `PREF_DEFAULTS` for that field alone.
 - **Written only when something is off-default** (`savePrefs`), and the entry is
   *removed* the moment everything is back to default. A page whose settings have
   never been touched leaves nothing behind.
@@ -215,9 +228,9 @@ the defaults, and a remembered setting has to overwrite them at boot.
 
 **There are two resets, and each owns only what sits next to it.**
 
-- **Reset** in the chart's controls row: all three windows, stable band, the
-  long-run rule and both colour toggles back to their defaults, plus the view
-  zoomed back out. It does *not* touch the what-if.
+- **Reset** in the chart's controls row: all three windows, the min-lap distance,
+  stable band, the long-run rule and both colour toggles back to their defaults,
+  plus the view zoomed back out. It does *not* touch the what-if.
 - **reset** in the Today's target tile: clears the what-if back to following real
   history, and nothing else.
 

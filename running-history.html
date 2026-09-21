@@ -348,13 +348,16 @@
       <label class="chk">VDOT window
         <input type="number" id="windowVdotWeeks" min="1" max="260" step="1" value="130"> weeks
       </label>
+      <label class="chk" title="A lap shorter than this can't be trusted on its own for VDOT — too short and fast a rep overstates it wildly. The whole workout is always checked too, and the higher of the two wins.">Min lap for VDOT
+        <input type="number" id="minLapM" min="100" max="5000" step="100" value="1500"> m
+      </label>
       <label class="chk" title="Whether a day has to contain one long run on its own, rather than reaching the distance across several runs.">
         <input type="checkbox" id="longSingle" checked> Long run needs a single run
       </label>
       <label class="chk" title="How close to the target still counts as holding steady.">Stable band &plusmn;
         <input type="number" id="stableBand" min="0" max="5" step="0.5" value="1">%
       </label>
-      <button id="reset" title="Put the windows, stable band, colour toggles and long-run rule back to their defaults, and zoom back out. Leaves the what-if target alone — that has its own reset.">Reset</button>
+      <button id="reset" title="Put the windows, min lap distance, stable band, colour toggles and long-run rule back to their defaults, and zoom back out. Leaves the what-if target alone — that has its own reset.">Reset</button>
       </div>
     </div>
     <canvas id="chart"></canvas>
@@ -725,6 +728,7 @@ const PREF_DEFAULTS = {
   windowVol: 28,
   windowFreq: 112,
   windowVdot: 910,   // 130 weeks — ~2.5 years, the middle of "a couple of years"
+  minLapM: 1500,     // laps shorter than this can't be trusted for VDOT on their own
   stableBand: 0.01,
   longNeedsSingleRun: true,
   colourNormal: true,
@@ -743,6 +747,7 @@ function loadPrefs() {
   if (num(raw.windowVol, 7, 364)) p.windowVol = week(raw.windowVol, 364);
   if (num(raw.windowFreq, 7, 364)) p.windowFreq = week(raw.windowFreq, 364);
   if (num(raw.windowVdot, 7, 1820)) p.windowVdot = week(raw.windowVdot, 1820);
+  if (num(raw.minLapM, 100, 5000)) p.minLapM = Math.round(raw.minLapM / 100) * 100;
   if (num(raw.stableBand, 0, 0.05)) p.stableBand = raw.stableBand;
   for (const k of ['longNeedsSingleRun', 'colourNormal', 'colourLong']) {
     if (typeof raw[k] === 'boolean') p[k] = raw[k];
@@ -761,6 +766,7 @@ function savePrefs() {
     windowVol: WINDOW_VOL,
     windowFreq: WINDOW_FREQ,
     windowVdot: WINDOW_VDOT,
+    minLapM: MIN_LAP_M,
     stableBand,
     longNeedsSingleRun,
     colourNormal: colourScheme.normal,
@@ -859,18 +865,38 @@ function impliedVdot(km, sec) {
   return vo2FromVelocity(v) / pctVo2max(sec / 60);
 }
 
-// The day's own best effort: the max implied VDOT over its laps (every lap, no
-// tag filtering — a slow warmup or rest lap never wins this search on its own).
-// Falls back to the whole day as a single lap when there is no parsed split for
-// it (older exports, or an activity Runalyze didn't record laps for).
+// The day's own best effort. A lap has to be at least MIN_LAP_KM long to be
+// trusted on its own: pctVo2max() is calibrated against race durations (roughly
+// 3.5 minutes and up), and a very short, very fast rep — a 200m sprint, a few
+// strides at the end of a set — computes a VO2 cost way beyond what a runner
+// actually reaches in that time, wildly overstating VDOT (this is the bug a real
+// export surfaced: a short fast lap was implying VDOT 70+ against a real ceiling
+// around 52). No tag filtering beyond the length cutoff — a slow warmup or rest
+// lap that happens to clear it still never wins this search on its own. Compared
+// against the whole day treated as a single effort either way, and the higher of
+// the two wins — a long tempo run IS its own best evidence when it beats every
+// individual lap (e.g. an evenly-paced race with no lap data at all).
+let MIN_LAP_M = prefs.minLapM;
 const dayVdot = new Array(N);
-for (let i = 0; i < N; i++) {
-  const laps = (dayLaps[i] && dayLaps[i].length) ? dayLaps[i]
-    : (daily[i] > 0 && daySec[i] > 0 ? [{ km: daily[i], sec: daySec[i] }] : []);
-  let best = 0;
-  for (const lap of laps) best = Math.max(best, impliedVdot(lap.km, lap.sec));
-  dayVdot[i] = best;
+const dayVdotSource = new Array(N);   // {km, sec, kind:'lap'|'day'} behind dayVdot[i], or null
+function recomputeDayVdot() {
+  const minLapKm = MIN_LAP_M / 1000;
+  for (let i = 0; i < N; i++) {
+    let best = 0, bestSrc = null;
+    if (daily[i] > 0 && daySec[i] > 0) {
+      best = impliedVdot(daily[i], daySec[i]);
+      bestSrc = { km: daily[i], sec: daySec[i], kind: 'day' };
+    }
+    for (const lap of (dayLaps[i] || [])) {
+      if (lap.km < minLapKm) continue;
+      const v = impliedVdot(lap.km, lap.sec);
+      if (v > best) { best = v; bestSrc = { km: lap.km, sec: lap.sec, kind: 'lap' }; }
+    }
+    dayVdot[i] = best;
+    dayVdotSource[i] = bestSrc;
+  }
 }
+recomputeDayVdot();
 
 // Rolling max over the trailing WINDOW_VDOT days, inclusive of today — unlike the
 // volume/frequency targets this isn't compared against itself, it's just read off
@@ -1866,12 +1892,14 @@ document.getElementById('reset').onclick = () => {
   WINDOW_VOL = PREF_DEFAULTS.windowVol;
   WINDOW_FREQ = PREF_DEFAULTS.windowFreq;
   WINDOW_VDOT = PREF_DEFAULTS.windowVdot;
+  MIN_LAP_M = PREF_DEFAULTS.minLapM;
   stableBand = PREF_DEFAULTS.stableBand;
   longNeedsSingleRun = PREF_DEFAULTS.longNeedsSingleRun;
   colourScheme.normal = PREF_DEFAULTS.colourNormal;
   colourScheme.long = PREF_DEFAULTS.colourLong;
   savePrefs();
   syncControls();
+  recomputeDayVdot();
   recomputeVdot();
   applyWindow();         // recompute + relabels + rebuilds the tiles + redraws
   renderZonePanel();
@@ -1895,6 +1923,7 @@ function syncControls() {
   winVolInput.value = WINDOW_VOL / 7;
   winFreqInput.value = WINDOW_FREQ / 7;
   winVdotInput.value = WINDOW_VDOT / 7;
+  minLapInput.value = MIN_LAP_M;
   bandInput.value = +(stableBand * 100).toFixed(1);
   longSingleBox.checked = longNeedsSingleRun;
   for (const [scheme, id] of [['normal', 'colourNormal'], ['long', 'colourLong']]) {
@@ -1963,6 +1992,18 @@ winVdotInput.onchange = winVdotInput.oninput = () => {
   savePrefs();
   recomputeVdot();
   syncLabels();
+  refreshReadout();
+  renderZonePanel();
+  drawAll();
+};
+const minLapInput = document.getElementById('minLapM');
+minLapInput.onchange = minLapInput.oninput = () => {
+  const v = Math.round(Number(minLapInput.value) / 100) * 100;
+  if (!Number.isFinite(v) || v < 100 || v > 5000) return;   // ignore half-typed values
+  MIN_LAP_M = v;
+  savePrefs();
+  recomputeDayVdot();
+  recomputeVdot();
   refreshReadout();
   renderZonePanel();
   drawAll();
