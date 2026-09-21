@@ -40,17 +40,24 @@
        fast→slow around the visible spectrum. Adjacent-pair CVD ΔE validated (not
        all-pairs — this is an ordered bar histogram where neighbours are what
        matters, same basis the skill's validator uses for stacks/bars/lines):
-       light worst-adjacent ΔE 22.0, dark 12.5, both well above the 8.0 target.
+       light worst-adjacent ΔE 20.0, dark 12.5, both well above the 8.0 target.
        "Threshold" reads as gold/mustard rather than a bright lemon yellow —
        true yellow's natural lightness sits outside the usable band once chroma
        and CVD separation are both satisfied, so gold is the closest a five-hue
-       ordered set gets while still passing. */
+       ordered set gets while still passing. Its light-mode --z-threshold is
+       picked to sit at nearly the SAME OKLab hue as --z-threshold-weak (~84°)
+       rather than just any colour that passes CVD/lightness/chroma on its own —
+       the zone histogram interpolates weak→strong per sub-band (see zoneRamps in
+       buildRamps()), and the original strong (#923c00) drifted ~38° towards red,
+       so a zone meant to read as "gold throughout" visibly turned red-brown at
+       its fastest sub-bands. Dark mode's pair drifts only ~7° and didn't need
+       the same fix. */
     --z-easy-weak:        #869fe3;
     --z-easy:             #3554da;
     --z-marathon-weak:    #80e1bc;
     --z-marathon:         #00c17f;
     --z-threshold-weak:   #b48b2e;
-    --z-threshold:        #923c00;
+    --z-threshold:        #7c5000;
     --z-interval-weak:    #f5be8c;
     --z-interval:         #e97f00;
     --z-repetition-weak:  #cf8d95;
@@ -266,6 +273,7 @@
   .zone-legend { display: flex; gap: 14px; flex-wrap: wrap; padding: 0 4px 8px; font-size: 12px; color: var(--text-secondary); }
   .zone-legend .item { display: inline-flex; align-items: center; gap: 6px; }
   .zone-empty { padding: 18px 4px; color: var(--muted); font-size: 13px; }
+  .zone-note { padding: 0 4px 8px; color: var(--muted); font-size: 12px; }
   .zone-hover { padding: 0 4px 8px; font-size: 12px; color: var(--text-secondary);
     font-variant-numeric: tabular-nums; }
 
@@ -333,10 +341,13 @@
     <input type="number" id="windowFreqWeeks" min="1" max="52" step="1" value="16"> weeks
   </label>
   <label class="chk">VDOT window
-    <input type="number" id="windowVdotWeeks" min="1" max="260" step="1" value="130"> weeks
+    <input type="number" id="windowVdotWeeks" min="1" max="260" step="1" value="50"> weeks
   </label>
   <label class="chk" title="A lap shorter than this can't be trusted on its own for VDOT — too short and fast a rep overstates it wildly. The whole workout is always checked too, and the higher of the two wins.">Min lap for VDOT
     <input type="number" id="minLapM" min="100" max="5000" step="100" value="1500"> m
+  </label>
+  <label class="chk" title="How many sub-bands each of the five pace zones splits into in the pace-zone histogram.">Pace-zone bars
+    <input type="number" id="zoneBars" min="1" max="20" step="1" value="5"> per zone
   </label>
   <label class="chk" title="Whether a day has to contain one long run on its own, rather than reaching the distance across several runs.">
     <input type="checkbox" id="longSingle" checked> Long run needs a single run
@@ -732,12 +743,13 @@ const LS_PREFS = 'runviz.prefs.v1';
 const PREF_DEFAULTS = {
   windowVol: 28,
   windowFreq: 112,
-  windowVdot: 910,   // 130 weeks — ~2.5 years, the middle of "a couple of years"
+  windowVdot: 350,   // 50 weeks
   minLapM: 1500,     // laps shorter than this can't be trusted for VDOT on their own
   stableBand: 0.01,
   longNeedsSingleRun: true,
   colourNormal: true,
   colourLong: true,
+  zoneBars: 5,       // sub-bands per pace zone in the pace-zone histogram
   plan: null,        // null = the what-if box follows real history; {km, days} = edited
 };
 function loadPrefs() {
@@ -754,6 +766,7 @@ function loadPrefs() {
   if (num(raw.windowVdot, 7, 1820)) p.windowVdot = week(raw.windowVdot, 1820);
   if (num(raw.minLapM, 100, 5000)) p.minLapM = Math.round(raw.minLapM / 100) * 100;
   if (num(raw.stableBand, 0, 0.05)) p.stableBand = raw.stableBand;
+  if (num(raw.zoneBars, 1, 20)) p.zoneBars = Math.round(raw.zoneBars);
   for (const k of ['longNeedsSingleRun', 'colourNormal', 'colourLong']) {
     if (typeof raw[k] === 'boolean') p[k] = raw[k];
   }
@@ -776,6 +789,7 @@ function savePrefs() {
     longNeedsSingleRun,
     colourNormal: colourScheme.normal,
     colourLong: colourScheme.long,
+    zoneBars: ZONE_BARS,
     plan: planEdited ? { km: plan.km, days: plan.days } : null,
   };
   const changed = Object.keys(PREF_DEFAULTS)
@@ -947,7 +961,8 @@ function oklabToCss([L, A, B]) {
 // rather than once per bar.
 const RAMP_STEPS = 24;
 let ramps = null;
-let zoneRamps = null;   // set in buildRamps(); indexed [zone][subBand 0-9] -> css colour
+let zoneRamps = null;   // set in buildRamps(); indexed [zone][subBand 0-(ZONE_BARS-1)] -> css colour
+let leadRamps = null;   // set in buildRamps(); { standing, walking, recovery } bar colours
 function buildRamps() {
   const make = (weak, strong) => {
     const a = hexToOklab(weak), b = hexToOklab(strong), out = [];
@@ -961,12 +976,20 @@ function buildRamps() {
     normal: { un: make(C('--n-un-weak'), C('--n-un')), pr: make(C('--n-pr-weak'), C('--n-pr')) },
     long:   { un: make(C('--l-un-weak'), C('--l-un')), pr: make(C('--l-pr-weak'), C('--l-pr')) },
   };
-  // One 10-step ramp per zone, for the pace histogram's sub-bands: same OKLab
-  // interpolation, just sampled at 10 points off the 24-step ramp instead of 25.
+  // One ZONE_BARS-step ramp per zone, for the pace histogram's sub-bands: same
+  // OKLab interpolation, just sampled at ZONE_BARS points off the 24-step ramp
+  // instead of 25 (a single sub-band samples the strong end on its own).
   zoneRamps = ZONES.map(z => {
     const full = make(C(z.weak), C(z.strong));
-    return Array.from({ length: 10 }, (_, k) => full[Math.round(k / 9 * RAMP_STEPS)]);
+    return Array.from({ length: ZONE_BARS }, (_, k) =>
+      full[ZONE_BARS === 1 ? RAMP_STEPS : Math.round(k / (ZONE_BARS - 1) * RAMP_STEPS)]);
   });
+  // Standing/Walking/Recovery aren't a pace zone, so they don't get a hue — but a
+  // flat grey for all three would read as one undifferentiated "junk" block. A
+  // short fade from --nocolour towards easy's own weak blue visually previews
+  // "getting closer to real training" as the buckets approach Easy.
+  const leadIn = make(C('--nocolour'), C('--z-easy-weak'));
+  leadRamps = { standing: C('--nocolour'), walking: leadIn[8], recovery: leadIn[16] };
 }
 function barColour(c) {
   if (!ramps) buildRamps();
@@ -1089,11 +1112,14 @@ function classify(i) {
 //   easy 65.7%, marathon 81.8%, threshold 88.0%, interval 97.6%, repetition 106.2%
 // The boundary between two neighbouring zones is the midpoint of their anchors,
 // so the five zones tile the %VDOT axis contiguously with no gap or overlap.
-// The two open ends need a finite bound to split into 10 sub-bands each: 40%
-// (a jog easy enough that going slower stops being informative) and 120% (faster
-// than anyone sustains even a single stride's worth of "repetition" pace) are
-// practical outer bounds for that binning, not physiological limits — anything
-// beyond either just clamps into that zone's bottom or top sub-band.
+// The fast end is still open — split into ZONE_BARS sub-bands up to a practical
+// 120% ceiling (faster than anyone sustains even a single stride's worth of
+// "repetition" pace), not a physiological limit, so anything beyond just clamps
+// into repetition's top sub-band. The slow end is a real, deliberately narrow
+// floor rather than an open "slower than" reading — see EASY_FLOOR_PCT and the
+// Standing/Walking/Recovery buckets below, which is where a slow recovery jog,
+// actual walking, and standing still at a light are told apart instead of all
+// three landing in easy's bottom bin.
 const ZONES = [
   { key: 'easy',       label: 'Easy',       weak: '--z-easy-weak',       strong: '--z-easy' },
   { key: 'marathon',   label: 'Marathon',   weak: '--z-marathon-weak',   strong: '--z-marathon' },
@@ -1101,40 +1127,88 @@ const ZONES = [
   { key: 'interval',   label: 'Interval',   weak: '--z-interval-weak',   strong: '--z-interval' },
   { key: 'repetition', label: 'Repetition', weak: '--z-repetition-weak', strong: '--z-repetition' },
 ];
+// Sub-bands per zone in the pace-zone histogram — adjustable 1-20, default 5.
+// Nothing earlier in the script touches this, so it's declared right here rather
+// than up with the other prefs (see the declaration-order gotcha). Standing,
+// Walking and Recovery (below) are never sub-divided by this — they're not real
+// training zones, just where non-zone effort gets sorted out of easy's way.
+let ZONE_BARS = prefs.zoneBars;
 const ZONE_ANCHOR_PCT = [0.657, 0.818, 0.880, 0.976, 1.062];
-const ZONE_BOUND_PCT = [0.40,
+const ZONE_BOUND_PCT = [null,   // easy's floor is per-day now — see easyFloorPct()
   (ZONE_ANCHOR_PCT[0] + ZONE_ANCHOR_PCT[1]) / 2,
   (ZONE_ANCHOR_PCT[1] + ZONE_ANCHOR_PCT[2]) / 2,
   (ZONE_ANCHOR_PCT[2] + ZONE_ANCHOR_PCT[3]) / 2,
   (ZONE_ANCHOR_PCT[3] + ZONE_ANCHOR_PCT[4]) / 2,
   1.20];
-// Bin 0-49: zone*10 + sub-band, continuous easy0..easy9, marathon0..marathon9, ...
-function zoneBandFor(pctOfVdot) {
-  const p = Math.min(ZONE_BOUND_PCT[5], Math.max(ZONE_BOUND_PCT[0], pctOfVdot));
+// Below this, a lap counts as not running at all — paused at a light, stopped
+// for water, GPS drift while stationary. Fixed in absolute pace, not %VDOT: "am
+// I moving" doesn't scale with fitness the way effort zones do.
+const STANDING_MAX_VEL = 1000 / 20;   // m/min, i.e. slower than 20:00/km
+// Below this, a lap counts as walking rather than running, full stop — also
+// fixed in absolute pace, since walking speed doesn't scale with running
+// fitness the way jogging effort does. Between here and STANDING_MAX_VEL is
+// the Walking bucket.
+const WALKING_MAX_VEL = 1000 / 10;   // m/min, i.e. slower than 10:00/km
+// Easy's real floor, in %VDOT — everything from WALKING_MAX_VEL up to this is
+// Recovery: a real jog, just too slow relative to THIS runner's fitness to call
+// genuinely "easy". 45% was picked (not back-solved from anything) so that a
+// mid-50s VDOT lands its Easy floor around 7:00/km — slower reads as recovery,
+// not easy.
+const EASY_FLOOR_PCT = 0.45;
+// The %VDOT that WALKING_MAX_VEL works out to for THIS runner on THIS day (a
+// fast runner's 10:00/km is a smaller %VDOT than a slow runner's). Easy's actual
+// floor is never allowed below this — otherwise Recovery would have to cover
+// paces faster than walking, which makes no sense — nor above the marathon
+// boundary, so an extremely low VDOT can't invert the range. For a low enough
+// VDOT this collapses Recovery to nothing: if walking pace is already real
+// aerobic effort for this runner, there's no slower-than-easy jog left to call
+// recovery.
+function easyFloorPct(vdotHere) {
+  const walkingPct = vo2FromVelocity(WALKING_MAX_VEL) / vdotHere;
+  return Math.min(ZONE_BOUND_PCT[1] - 0.05, Math.max(EASY_FLOOR_PCT, walkingPct));
+}
+// Bin 0-(5*ZONE_BARS-1): zone*ZONE_BARS + sub-band, continuous easy0.. , marathon0.., ...
+// Only ever called for a lap already faster than easyFloorPct(vdotHere) — see
+// paceHistogramFor, which routes anything slower to the standing/walking/recovery
+// buckets instead.
+function zoneBandFor(pctOfVdot, vdotHere) {
+  const lo0 = easyFloorPct(vdotHere);
+  const p = Math.min(ZONE_BOUND_PCT[5], Math.max(lo0, pctOfVdot));
   for (let z = 0; z < 5; z++) {
-    const lo = ZONE_BOUND_PCT[z], hi = ZONE_BOUND_PCT[z + 1];
+    const lo = z === 0 ? lo0 : ZONE_BOUND_PCT[z], hi = ZONE_BOUND_PCT[z + 1];
     if (p <= hi || z === 4) {
-      const sub = Math.min(9, Math.max(0, Math.floor((p - lo) / (hi - lo) * 10)));
-      return z * 10 + sub;
+      const sub = Math.min(ZONE_BARS - 1, Math.max(0, Math.floor((p - lo) / (hi - lo) * ZONE_BARS)));
+      return z * ZONE_BARS + sub;
     }
   }
 }
-// Minutes spent in each of the 50 bins on day i, judged against that day's own
-// rolling VDOT (the fitness level AT THE TIME, not today's) — so a hard rep from
-// years ago is read against years-ago fitness, not retroactively against today's.
-// Only meaningful for a day that both has a run and has a defined VDOT yet
-// (there wasn't one before the first-ever logged run), hence the two early-outs.
+// The three non-zone buckets always occupy bins 0-2, leftmost (slowest) in the
+// histogram; the five real zones start right after at ZONE_BIN_OFFSET. Kept as
+// plain constants rather than computed, since nothing about them scales with
+// ZONE_BARS.
+const STANDING_BIN = 0, WALKING_BIN = 1, RECOVERY_BIN = 2, ZONE_BIN_OFFSET = 3;
+// Minutes spent in each bin on day i, judged against that day's own rolling VDOT
+// (the fitness level AT THE TIME, not today's) — so a hard rep from years ago is
+// read against years-ago fitness. Bins 0-2 are Standing/Walking/Recovery (see
+// above); bins ZONE_BIN_OFFSET.. are the 5*ZONE_BARS pace-zone sub-bands. Only
+// meaningful for a day that both has a run and has a defined VDOT yet (there
+// wasn't one before the first-ever logged run), hence the two early-outs.
 function paceHistogramFor(i) {
   const v = vdot[i];
   if (!(v > 0)) return null;
   const laps = (dayLaps[i] && dayLaps[i].length) ? dayLaps[i]
     : (daily[i] > 0 && daySec[i] > 0 ? [{ km: daily[i], sec: daySec[i] }] : []);
   if (!laps.length) return null;
-  const bins = new Array(50).fill(0);
+  const bins = new Array(ZONE_BIN_OFFSET + 5 * ZONE_BARS).fill(0);
+  const floor = easyFloorPct(v);
   for (const lap of laps) {
     const vel = lap.km * 1000 / (lap.sec / 60);
+    const mins = lap.sec / 60;
+    if (vel < STANDING_MAX_VEL) { bins[STANDING_BIN] += mins; continue; }
+    if (vel < WALKING_MAX_VEL) { bins[WALKING_BIN] += mins; continue; }
     const pct = vo2FromVelocity(vel) / v;
-    bins[zoneBandFor(pct)] += lap.sec / 60;   // minutes
+    if (pct < floor) { bins[RECOVERY_BIN] += mins; continue; }
+    bins[ZONE_BIN_OFFSET + zoneBandFor(pct, v)] += mins;
   }
   return bins;
 }
@@ -1749,9 +1823,23 @@ function renderZonePanel() {
     }</div>`;
     return;
   }
-  buildRamps();   // ensures zoneRamps is built before it's read below
-  const legend = ZONES.map(z => `<span class="item"><span class="swatch" style="background:${C(z.strong)}"></span>${z.label}</span>`).join('');
-  zoneBody.innerHTML = `<div class="zone-legend">${legend}</div>` +
+  buildRamps();   // ensures zoneRamps/leadRamps are built before they're read below
+  const vdotHere = vdot[selected];
+  const legend = `<span class="item"><span class="swatch" style="background:${leadRamps.standing}"></span>Standing</span>` +
+    `<span class="item"><span class="swatch" style="background:${leadRamps.walking}"></span>Walking</span>` +
+    `<span class="item"><span class="swatch" style="background:${leadRamps.recovery}"></span>Recovery</span>` +
+    ZONES.map(z => `<span class="item"><span class="swatch" style="background:${C(z.strong)}"></span>${z.label}</span>`).join('');
+  // The histogram is only ever as granular as the recorded laps — if Runalyze
+  // didn't save any splits for this day (an older activity, a device that
+  // doesn't autolap, a manual entry), paceHistogramFor() falls back to treating
+  // the whole day as one lap at its average pace, and every minute lands in a
+  // single bin no matter how many ZONE_BARS are configured. Said so up front,
+  // since "the whole run is in one bar" otherwise reads as a binning bug.
+  const noSplits = !(dayLaps[selected] && dayLaps[selected].length);
+  const note = noSplits
+    ? `<div class="zone-note">No lap splits recorded for this day — Runalyze has only the day's total distance and time, so it's judged as one uniform pace rather than broken down further.</div>`
+    : '';
+  zoneBody.innerHTML = `<div class="zone-legend">${legend}</div>` + note +
     `<div class="zone-hover" id="zoneHoverInfo">Hover a bar to see its pace range</div>` +
     `<canvas id="chartZone"></canvas>`;
   const cvZ = document.getElementById('chartZone');
@@ -1763,23 +1851,32 @@ function renderZonePanel() {
   const ticks = niceTicks(maxMin * 1.12);
   const yMax = ticks[ticks.length - 1];
   const yOf = v => pad.t + ph * (1 - v / yMax);
-  const bw = pw / 50;
-  const vdotHere = vdot[selected];
+  // Standing/Walking/Recovery sit apart from the five pace zones, leftmost since
+  // they're the slow end — they aren't real training paces, so they don't belong
+  // on the same tiled continuum — separated by one bar-width of empty space
+  // (GAP_BARS) rather than a divider line.
+  const nZoneBins = 5 * ZONE_BARS;
+  const GAP_BARS = 1;
+  const zoneSlotStart = ZONE_BIN_OFFSET + GAP_BARS;   // 3 lead bars + 1 gap
+  const nSlots = zoneSlotStart + nZoneBins;
+  const bw = pw / nSlots;
+  const xOf = slot => pad.l + slot * bw;
 
   // The pace *range* a bin covers, from the two %VDOT bounds either side of it —
   // this is what item 3 asked for: what pace is "marathon 3" actually asking for.
-  // The two outer edges (easy's slowest bin, repetition's fastest) are read off
-  // ZONE_BOUND_PCT's practical 40%/120% floor and ceiling — see the comment on
-  // that constant — so they're reported as open-ended rather than exact.
+  // Easy's slow edge and repetition's fast edge come from ZONE_BOUND_PCT/easyFloorPct
+  // — see the comments there for why one is exact and the other stays open.
+  // Standing/Walking/Recovery aren't %VDOT bins, so they report their own fixed or
+  // per-day pace bounds instead of going through this at all.
   function paceRangeFor(b) {
-    const zone = Math.floor(b / 10), sub = b % 10;
-    const lo = ZONE_BOUND_PCT[zone], hi = ZONE_BOUND_PCT[zone + 1];
-    const pctLo = lo + sub / 10 * (hi - lo), pctHi = lo + (sub + 1) / 10 * (hi - lo);
+    const zb = b - ZONE_BIN_OFFSET, zone = Math.floor(zb / ZONE_BARS), sub = zb % ZONE_BARS;
+    const lo = zone === 0 ? easyFloorPct(vdotHere) : ZONE_BOUND_PCT[zone], hi = ZONE_BOUND_PCT[zone + 1];
+    const pctLo = lo + sub / ZONE_BARS * (hi - lo), pctHi = lo + (sub + 1) / ZONE_BARS * (hi - lo);
     // higher %VDOT -> faster pace (lower min/km), so the slow edge comes from pctLo
     const paceSlow = 1000 / velocityFromVo2(vdotHere * pctLo);
     const paceFast = 1000 / velocityFromVo2(vdotHere * pctHi);
-    const openSlow = b === 0, openFast = b === 49;
-    return { paceSlow, paceFast, openSlow, openFast };
+    const openFast = zb === nZoneBins - 1;
+    return { paceSlow, paceFast, openFast };
   }
 
   function drawBars(hoverBin) {
@@ -1800,41 +1897,64 @@ function renderZonePanel() {
     ctxZ.fillText('minutes', 0, 0);
     ctxZ.restore();
 
-    for (let b = 0; b < 50; b++) {
-      const zone = Math.floor(b / 10), sub = b % 10;
-      const x0 = Math.round(pad.l + b * bw), x1 = Math.round(pad.l + (b + 1) * bw);
-      const y = yOf(bins[b]);
-      ctxZ.fillStyle = zoneRamps[zone][sub];
+    const barAt = (slot, y, colour, hovered) => {
+      const x0 = Math.round(xOf(slot)), x1 = Math.round(xOf(slot + 1));
+      ctxZ.fillStyle = colour;
       ctxZ.fillRect(x0, y, Math.max(1, x1 - x0 - 1), pad.t + ph - y);
-      if (b === hoverBin) {
+      if (hovered) {
         ctxZ.strokeStyle = C('--text-primary'); ctxZ.lineWidth = 1.5;
         ctxZ.strokeRect(x0 + 0.75, pad.t, Math.max(1, x1 - x0 - 1.5), ph);
       }
+    };
+    barAt(STANDING_BIN, yOf(bins[STANDING_BIN]), leadRamps.standing, hoverBin === STANDING_BIN);
+    barAt(WALKING_BIN, yOf(bins[WALKING_BIN]), leadRamps.walking, hoverBin === WALKING_BIN);
+    barAt(RECOVERY_BIN, yOf(bins[RECOVERY_BIN]), leadRamps.recovery, hoverBin === RECOVERY_BIN);
+    for (let b = ZONE_BIN_OFFSET; b < ZONE_BIN_OFFSET + nZoneBins; b++) {
+      const zb = b - ZONE_BIN_OFFSET, zone = Math.floor(zb / ZONE_BARS), sub = zb % ZONE_BARS;
+      barAt(zoneSlotStart + zb, yOf(bins[b]), zoneRamps[zone][sub], b === hoverBin);
     }
-    // a divider between zones, and the zone name centred under its own 10 bars
-    ctxZ.textAlign = 'center'; ctxZ.textBaseline = 'top';
+
+    // A divider between zones, and the zone name centred under its own ZONE_BARS
+    // bars. The three lead bars get no axis label of their own — each is only one
+    // bar wide, too narrow for "Standing"/"Walking"/"Recovery" to fit without
+    // colliding — their legend swatch and hover text carry that instead.
+    ctxZ.textAlign = 'center'; ctxZ.textBaseline = 'top'; ctxZ.fillStyle = C('--muted');
     for (let z = 0; z <= 5; z++) {
-      const x = Math.round(pad.l + z * 10 * bw) + 0.5;
+      const x = Math.round(xOf(zoneSlotStart + z * ZONE_BARS)) + 0.5;
       if (z > 0 && z < 5) { ctxZ.strokeStyle = C('--grid'); ctxZ.lineWidth = 1; ctxZ.beginPath(); ctxZ.moveTo(x, pad.t); ctxZ.lineTo(x, pad.t + ph); ctxZ.stroke(); }
-      if (z < 5) { ctxZ.fillStyle = C('--muted'); ctxZ.fillText(ZONES[z].label, pad.l + (z + 0.5) * 10 * bw, pad.t + ph + 6); }
+      if (z < 5) { ctxZ.fillStyle = C('--muted'); ctxZ.fillText(ZONES[z].label, xOf(zoneSlotStart + (z + 0.5) * ZONE_BARS), pad.t + ph + 6); }
     }
   }
   drawBars(null);
 
   const hoverInfo = document.getElementById('zoneHoverInfo');
   const binAt = px => {
-    const b = Math.floor((px - pad.l) / bw);
-    return (b >= 0 && b < 50) ? b : null;
+    const slot = Math.floor((px - pad.l) / bw);
+    if (slot === STANDING_BIN || slot === WALKING_BIN || slot === RECOVERY_BIN) return slot;
+    const zb = slot - zoneSlotStart;
+    return (zb >= 0 && zb < nZoneBins) ? ZONE_BIN_OFFSET + zb : null;
   };
   cvZ.addEventListener('mousemove', e => {
     const rect = cvZ.getBoundingClientRect();
     const b = binAt(e.clientX - rect.left);
     drawBars(b);
     if (b === null) { hoverInfo.textContent = 'Hover a bar to see its pace range'; return; }
-    const zone = Math.floor(b / 10), sub = b % 10;
-    const { paceSlow, paceFast, openSlow, openFast } = paceRangeFor(b);
-    const range = openSlow ? `slower than ${paceStr(paceSlow)}/km`
-      : openFast ? `faster than ${paceStr(paceFast)}/km`
+    if (b === STANDING_BIN) {
+      hoverInfo.textContent = `Standing · slower than ${paceStr(1000 / STANDING_MAX_VEL)}/km · ${bins[b].toFixed(1)} min`;
+      return;
+    }
+    if (b === WALKING_BIN) {
+      hoverInfo.textContent = `Walking · ${paceStr(1000 / STANDING_MAX_VEL)}–${paceStr(1000 / WALKING_MAX_VEL)}/km · ${bins[b].toFixed(1)} min`;
+      return;
+    }
+    if (b === RECOVERY_BIN) {
+      const floorPace = 1000 / velocityFromVo2(vdotHere * easyFloorPct(vdotHere));
+      hoverInfo.textContent = `Recovery · ${paceStr(1000 / WALKING_MAX_VEL)}–${paceStr(floorPace)}/km · ${bins[b].toFixed(1)} min`;
+      return;
+    }
+    const zb = b - ZONE_BIN_OFFSET, zone = Math.floor(zb / ZONE_BARS), sub = zb % ZONE_BARS;
+    const { paceSlow, paceFast, openFast } = paceRangeFor(b);
+    const range = openFast ? `faster than ${paceStr(paceFast)}/km`
       : `${paceStr(paceSlow)}–${paceStr(paceFast)}/km`;
     hoverInfo.textContent = `${ZONES[zone].label} ${sub} · ${range} · ${bins[b].toFixed(1)} min`;
   });
@@ -1972,6 +2092,7 @@ document.getElementById('reset').onclick = () => {
   longNeedsSingleRun = PREF_DEFAULTS.longNeedsSingleRun;
   colourScheme.normal = PREF_DEFAULTS.colourNormal;
   colourScheme.long = PREF_DEFAULTS.colourLong;
+  ZONE_BARS = PREF_DEFAULTS.zoneBars;
   savePrefs();
   syncControls();
   recomputeDayVdot();
@@ -1999,6 +2120,7 @@ function syncControls() {
   winFreqInput.value = WINDOW_FREQ / 7;
   winVdotInput.value = WINDOW_VDOT / 7;
   minLapInput.value = MIN_LAP_M;
+  zoneBarsInput.value = ZONE_BARS;
   bandInput.value = +(stableBand * 100).toFixed(1);
   longSingleBox.checked = longNeedsSingleRun;
   for (const [scheme, id] of [['normal', 'colourNormal'], ['long', 'colourLong']]) {
@@ -2082,6 +2204,14 @@ minLapInput.onchange = minLapInput.oninput = () => {
   refreshReadout();
   renderZonePanel();
   drawAll();
+};
+const zoneBarsInput = document.getElementById('zoneBars');
+zoneBarsInput.onchange = zoneBarsInput.oninput = () => {
+  const v = Math.round(Number(zoneBarsInput.value));
+  if (!Number.isFinite(v) || v < 1 || v > 20) return;   // ignore half-typed values
+  ZONE_BARS = v;
+  savePrefs();
+  renderZonePanel();
 };
 syncControls();
 syncLabels();

@@ -31,7 +31,7 @@ Four stacked panels sharing one x-axis, one bar/point per calendar day:
    counts, so a double-run day shows as 2. Axis is not fixed at 0–7 like the panel
    above it, since it can run higher.
 4. **Line** — highest VDOT achieved by any workout in the trailing *VDOT* window
-   (default 130 weeks, set independently — see "VDOT and pace zones" below).
+   (default 50 weeks, set independently — see "VDOT and pace zones" below).
    Undefined (a gap, not a zero) before the first-ever logged run.
 
 Hovering a day fills the readout sidebar: exact distance, the rolling average
@@ -161,7 +161,7 @@ rest lap that happens to clear it still never wins the search on its own. Checki
 the whole day too (not just as a fallback for days with no lap data) is what makes
 an evenly-paced tempo run or race its own best evidence when it beats every
 individual lap. The **VDOT panel** is the rolling max of that across the trailing *VDOT*
-window (`WINDOW_VDOT`, default 130 weeks — the only one of the three windows that
+window (`WINDOW_VDOT`, default 50 weeks — the only one of the three windows that
 wants years, not weeks, because "what's my fitness ceiling" and "how often am I
 running" are different-timescale questions). It's a plain sliding-window max
 (monotonic deque, O(N)), not a target, so — unlike the volume/frequency target math
@@ -176,46 +176,97 @@ back to treating the whole day as a single lap.
 **Pace zones** (easy/marathon/threshold/interval/repetition) are five %VDOT bands,
 anchored at 65.7/81.8/88.0/97.6/106.2% (back-solved from the vdoto2.com example
 above) with the boundary between two neighbours at their midpoint, so the bands
-tile the %VDOT axis with no gap or overlap. The two open ends (below easy, above
-repetition) are closed off at 40% and 120% purely so the outer zones have something
-finite to split into 10 sub-bands each — not physiological limits, just where the
-binning stops mattering. `zoneBandFor()` maps a %VDOT to one of the 50 bins
-(`zone*10 + subBand`, continuous easy0..easy9, marathon0..marathon9, ...).
+tile the %VDOT axis with no gap or overlap. The fast end (above repetition) is
+still closed off at a practical 120% ceiling purely so the top zone has something
+finite to split into sub-bands — not a physiological limit, just where the binning
+stops mattering. The sub-band count per zone is `ZONE_BARS`, a setting (default 5,
+adjustable 1–20 — "Pace-zone bars" in the settings sidebar). `zoneBandFor()` maps
+a %VDOT to one of the `5 * ZONE_BARS` bins (`zone*ZONE_BARS + subBand`, continuous
+easy0.. , marathon0.., ...).
+
+Easy's slow end used to be closed off the same way, at a practical 40% floor —
+which meant a genuinely slow recovery jog, actual walking, and standing still at
+a red light all landed in the same bin. They no longer do. Three fixed or
+per-day thresholds sort a lap out **before** it ever reaches `zoneBandFor()`:
+
+- **Standing** — slower than `STANDING_MAX_VEL` (20:00/km), fixed in absolute
+  pace rather than %VDOT, because "am I moving at all" doesn't scale with
+  fitness the way effort zones do.
+- **Walking** — between `STANDING_MAX_VEL` and `WALKING_MAX_VEL` (10:00/km),
+  also fixed in absolute pace for the same reason: walking speed doesn't scale
+  with running fitness.
+- **Recovery** — between `WALKING_MAX_VEL` and easy's real floor (below): a
+  genuine jog, just too slow relative to *this* runner's fitness to call
+  properly "easy".
+
+Easy's own floor, `EASY_FLOOR_PCT` (45% VDOT, picked so a mid-50s VDOT lands it
+around 7:00/km rather than back-solved from anything), is what separates
+Recovery from real Easy training. `easyFloorPct()` also clamps that floor to
+never sit below what `WALKING_MAX_VEL` works out to in %VDOT terms for that
+runner's VDOT — otherwise Recovery would have to cover paces faster than
+walking, which makes no sense — nor above the marathon boundary. For a low
+enough VDOT this collapses Recovery to nothing: if walking pace is already real
+aerobic effort for that runner, there's no slower-than-easy jog left to call
+recovery. Only repetition's fast edge is still reported open-ended; every other
+edge, including easy's floor, is now a real two-sided range.
+
+Standing, Walking and Recovery are each a single, undivided bar — `ZONE_BARS`
+only ever splits the five real Daniels zones — drawn leftmost (slowest first),
+in that order, separated from the five zones by a bar width of empty space
+rather than a divider line. They're flat neutral greys rather than a zone hue
+(`--nocolour` for Standing, then two steps of an OKLab fade from `--nocolour`
+towards easy's own weak blue for Walking and Recovery — see `leadRamps` in
+`buildRamps()`), so the transition visually previews "getting closer to real
+training" without implying they're graded pace zones themselves.
 
 **The pace-zone histogram** (below the four main panels) is pinned-day-only,
 deliberately keyed on `selected` rather than `shownDay()` — it's the one place on
-the page that does not follow hover, because a lap walk plus a 50-bin canvas
+the page that does not follow hover, because a lap walk plus a full-canvas
 redraw on every mouse-move would be the wrong trade. It judges the pinned day's
 laps against **that day's own rolling VDOT** (the fitness level at the time), not
 today's — a hard rep from years ago is read against years-ago fitness. Empty when
 the day has no run, or predates the very first logged run (VDOT isn't a
 meaningful zero, so there's nothing to bin against).
 
-Hovering a bin (this redraws the whole 50-bar canvas — cheap, unlike the lap walk
+Hovering a bin (this redraws the whole bar canvas — cheap, unlike the lap walk
 above it, which only runs once per pin) shows its pace range in `#zoneHoverInfo`:
 the two %VDOT bounds either side of the bin, converted back to pace via
 `velocityFromVo2()`. Higher %VDOT is faster (lower min/km), so the bin's *slow*
-edge comes from its *lower* bound and vice versa. The two outer bins — easy's
-slowest, repetition's fastest — read off `ZONE_BOUND_PCT`'s practical 40%/120%
-floor and ceiling (see the comment on that constant) rather than a real boundary,
-so they're reported as open-ended ("slower than", "faster than") instead of a
-two-sided range.
+edge comes from its *lower* bound and vice versa. Repetition's fastest bin reads
+its open ceiling off `ZONE_BOUND_PCT`'s practical 120% bound (see the comment on
+that constant) rather than a real boundary, so it's reported as open-ended
+("faster than") instead of a two-sided range. Standing, Walking and Recovery
+aren't %VDOT bins at all, so their hover text reports their own fixed or per-day
+pace bounds directly rather than going through `paceRangeFor()`.
 
 **Colour**: five hues (blue/green/gold/orange/red) validated with the `dataviz`
 skill's palette checker using **adjacent** pairs, not all-pairs — this is an
 ordered bar histogram where neighbours are what matters, the same basis the
 checker itself uses for stacks/bars/lines. Light mode's worst adjacent CVD ΔE is
-22.0, dark mode's is 12.5, both comfortably above the 8.0 target. "Threshold"
+20.0, dark mode's is 12.5, both comfortably above the 8.0 target. "Threshold"
 reads as gold/mustard rather than a bright lemon yellow: true yellow's natural
 lightness sits outside the band usable once chroma and CVD separation both have
 to hold, so gold is the closest a five-hue ordered set gets while still passing.
+
+Threshold's light-mode `--z-threshold` (the "strong" end of its weak→strong
+pair) is picked to sit at nearly the same OKLab *hue* as `--z-threshold-weak`
+(~84°), not just any hex that independently passes the CVD/lightness/chroma
+checks. The zone histogram interpolates weak→strong per sub-band (`zoneRamps` in
+`buildRamps()`), so a colour that passes validation on its own but drifts hue
+partway to a different colour still breaks visually: the original strong
+(`#923c00`) drifted ~38° toward red, so a zone meant to read as "gold
+throughout, just deeper" visibly turned red-brown at its fastest sub-bands —
+which is what "Threshold 4 looks like dark red" was. Dark mode's pair only
+drifts ~7° and didn't need the same fix. When picking a zone's "strong" colour,
+check both: passes validation standalone, AND stays close in hue to its own
+"weak" partner.
 
 ## Remembered settings
 
 `runviz.prefs.v1` holds everything the settings sidebar and the what-if box can be
 set to, so the page opens the way it was left: `windowVol`, `windowFreq`,
 `windowVdot`, `minLapM`, `stableBand`, `longNeedsSingleRun`, `colourNormal`,
-`colourLong`, and `plan` (`null` = the what-if box follows real history,
+`colourLong`, `zoneBars`, and `plan` (`null` = the what-if box follows real history,
 `{km, days}` = edited). Three rules:
 
 - **Read at the very top of the `if (DATA)` block**, above `let WINDOW_VOL` /
@@ -223,14 +274,16 @@ set to, so the page opens the way it was left: `windowVol`, `windowFreq`,
   reads the first two — the declaration-order gotcha below. (`WINDOW_VDOT` isn't
   read by `recompute()`, but is declared alongside the other two for the same
   reason. `MIN_LAP_M` is declared further down, right next to `recomputeDayVdot()`
-  — nothing earlier touches it, so it doesn't need to move.)
+  — nothing earlier touches it, so it doesn't need to move. `ZONE_BARS` is declared
+  right next to the `ZONES` constant, for the same reason.)
 - **Validated field by field on load** (`loadPrefs`), against the same limits as the
   inputs, so a stale or hand-edited entry can only produce a state the UI can reach.
   All three windows are additionally rounded to the nearest whole week, since
   that's the only unit the controls can produce — `windowVdot`'s range is 1–260
   weeks, wider than the other two's 1–52, since it wants years rather than weeks.
-  `minLapM` is rounded to the nearest 100m, range 100–5000. Anything that fails
-  falls back to `PREF_DEFAULTS` for that field alone.
+  `minLapM` is rounded to the nearest 100m, range 100–5000. `zoneBars` is rounded
+  to the nearest whole number, range 1–20. Anything that fails falls back to
+  `PREF_DEFAULTS` for that field alone.
 - **Written only when something is off-default** (`savePrefs`), and the entry is
   *removed* the moment everything is back to default. A page whose settings have
   never been touched leaves nothing behind.
@@ -241,8 +294,9 @@ the defaults, and a remembered setting has to overwrite them at boot.
 **There are two resets, and each owns only what sits next to it.**
 
 - **Reset** in the settings sidebar: all three windows, the min-lap distance,
-  stable band, the long-run rule and both colour toggles back to their defaults,
-  plus the view zoomed back out. It does *not* touch the what-if.
+  stable band, the pace-zone bar count, the long-run rule and both colour toggles
+  back to their defaults, plus the view zoomed back out. It does *not* touch the
+  what-if.
 - **reset** in the Today's target tile: clears the what-if back to following real
   history, and nothing else.
 
