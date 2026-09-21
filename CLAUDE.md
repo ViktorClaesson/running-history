@@ -47,7 +47,7 @@ seeded from the exact quantities behind today's real target (`weeklyPrev[N-1]`,
 it never changes the bars — those keep their own per-day targets from actual history —
 and once touched it shows the real figure alongside and offers a reset.
 
-## The readout: pinning, and why it is a fixed height
+## The readout: pinning, and why it lives in a sticky sidebar
 
 **Pinning.** Clicking a day sets `selected`; clicking it again, or Esc, releases it.
 `shownDay()` is `hover ?? selected` — hover always wins, and the pinned day is only
@@ -64,25 +64,25 @@ A pan ends in a mouseup on the canvas, which the browser then reports as a click
 `draggedNotClicked` (set from `drag.moved`, threshold 3px) is what stops a pan from
 pinning whatever it happened to finish over.
 
-**Fixed height.** The verdict pill used to get shoved onto a second row by a long
-detail line, growing the box. Three things hold it to one height now:
+**Sidebar, not inline.** The readout used to sit directly above the chart, so
+scrolling down past a tall chart lost sight of it — no good once there were four
+stacked panels plus the pace-zone histogram to scroll through. It now lives in
+`<aside class="sidebar" id="readoutSidebar">`, a flex sibling of `.wrap` with
+`position: sticky; top: 20px`, so it stays in view while the page scrolls.
+`.page` wraps both as `display: flex; flex-wrap: wrap`; below **1300px** viewport
+width the sidebar drops `position: sticky` (there's no longer room for two columns
+side by side, so it just falls back to sitting in the normal flow).
 
-- The detail line and the rate line are the only shrinkable items, and their
-  `flex-basis` is the small **floor**, not `auto`. This matters: a wrapping flex
-  container packs lines using each item's *hypothetical* size, so an `auto`-basis
-  item forces a line break before it will ever shrink. `max-width: max-content` caps
-  the grow, so with room to spare nothing moves from where it sat before.
-- `.readout .pair .v2` reserves **two line boxes** (`min-height: 2lh`, px fallback
-  first) whether or not the text needs them. A wrap therefore costs no height, and
-  idle matches hovered by construction rather than by a guessed `min-height`.
-- `.readout .seg` keeps each `·`-separated piece unbreakable, so a wrap lands on a
-  separator and never mid-phrase ("no / long runs", "564 / km/yr").
-
-The floors sum to ~861px, so the row holds together down to roughly a **943px**
-viewport (it was ~1120px before). Below that it wraps to two rows and the box grows
-— that is a genuinely narrow window, where the tiles above already wrap. Don't
-shrink the floors to chase it: at much under 160px the detail line needs a *third*
-line and the two-line reserve stops holding.
+Being pulled out of the main flow changes what "fixed height" needs to mean: the
+sidebar's *own* height changing between idle and hovered no longer reflows the
+chart next to it, so the old horizontal layout's flex-basis/max-width engineering
+(needed only to stop a wrapping detail line from shoving the verdict pill onto a
+second row) is gone — `.readout` is just a vertical list of full-width `.pair`
+rows now. The one thing still worth keeping: `.readout .pair .v2` still reserves
+**two line boxes** (`min-height: 2lh`) so a detail line wrapping to two lines
+doesn't visibly nudge the sidebar's height on every hover, and `.readout .seg`
+still keeps each `·`-separated piece unbreakable so a wrap lands on a separator
+and never mid-phrase ("no / long runs", "564 / km/yr").
 
 ## The model (this is the part worth understanding)
 

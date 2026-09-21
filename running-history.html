@@ -138,7 +138,16 @@
     background: var(--page); color: var(--text-primary);
     font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
   }
-  .wrap { max-width: 1120px; margin: 0 auto; }
+  /* .wrap (the chart/tiles/table) and .sidebar (the readout) are independent flex
+     items so the sidebar's own height changing — hover vs idle, one line vs two —
+     never reflows the chart next to it; only wrapping/stacking is a concern now,
+     handled by flex-wrap plus turning off sticky once there's no room for two
+     side-by-side columns. */
+  .page { display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; align-items: flex-start; }
+  .wrap { max-width: 1120px; flex: 1 1 1120px; min-width: 0; }
+  .sidebar { flex: 0 1 280px; min-width: 240px; position: sticky; top: 20px;
+    max-height: calc(100vh - 40px); overflow: auto; }
+  @media (max-width: 1300px) { .sidebar { position: static; max-height: none; } }
   h1 { font-size: 20px; font-weight: 600; margin: 0 0 4px; letter-spacing: -0.01em; }
   .sub { color: var(--text-secondary); margin: 0 0 24px; font-size: 13px; }
 
@@ -172,43 +181,28 @@
   .tile.combo .cell .v { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
   .tile.combo .cell .u { font-size: 12px; font-weight: 400; color: var(--text-secondary); }
 
+  /* A vertical list now — one pair per row, in a sidebar rather than inline above
+     the chart. The old horizontal layout needed a lot of flex-basis/max-width
+     engineering purely to stop a wrapping detail line from shoving the verdict
+     pill onto a second row of an otherwise fixed-height box; none of that applies
+     to a column of full-width rows, so it's gone. The one thing worth keeping is
+     the two-line reserve on `.v2` below, so a hovered day's detail line wrapping
+     to two lines doesn't visibly nudge the sidebar's height on every hover. */
   .readout {
     background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px;
-    padding: 12px 16px; margin-bottom: 12px;
-    display: flex; align-items: center; gap: 22px; flex-wrap: wrap; min-height: 100px;
+    padding: 14px 16px; display: flex; flex-direction: column; gap: 10px;
   }
-  /* Allowed to shrink; the "pinned" tag always sits on its own line below the
-     date (see .pin) — two short lines still fit the reserve above, so it costs
-     no height, where a wrap of the whole row would cost 50px. */
-  .readout .date { font-size: 15px; font-weight: 600; flex: 0 1 auto; min-width: 150px; }
-  /* The two detail lines are the variable-length strings in here, and they are the
-     only items allowed to shrink: a long one wraps to a second row inside its own
-     column rather than shoving the verdict pill onto a second row of the box.
-     min-height above reserves those two lines, so the box is one fixed height
-     whatever is showing — idle, hovered, one detail line or two.
-     flex-basis has to be the small floor rather than `auto`: a wrapping flex
-     container packs lines using each item's *hypothetical* size, so an auto-basis
-     item forces a line break before it will ever shrink. `max-width: max-content`
-     then caps the grow, so with room to spare nothing moves from where it sits
-     today and the slack still pools after the pill. */
-  .readout .pair { display: flex; flex-direction: column; flex: 0 0 auto; }
-  .readout .pair.detail { flex: 1 1 160px; max-width: max-content; }
-  .readout .pair.detail .v { white-space: nowrap; }
-  .readout .pair.rate { flex: 1 1 140px; max-width: max-content; }
-  /* Two line boxes are reserved whether or not the text needs them, so a wrap
-     costs no height and the idle state matches the hovered one by construction
-     rather than by a min-height that has to be guessed right. (px first for
-     engines without `lh`.) */
-  .readout .pair .v2 { min-height: 33px; min-height: 2lh; }
-  /* so a wrapped detail line breaks at the · separators, never mid-phrase
-     ("no / long runs", "564 / km/yr") */
-  .readout .seg { white-space: nowrap; }
-  .readout .badge { flex: 0 0 auto; }
+  .readout .date { font-size: 15px; font-weight: 600; }
+  .readout .pair { display: flex; flex-direction: column; }
   .readout .pair .k { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
   .readout .pair .v { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
   .readout .pair .sub-v { font-size: 12px; font-weight: 400; color: var(--text-secondary); }
   .readout .pair .v2 { font-size: 11px; font-weight: 400; color: var(--muted);
-    font-variant-numeric: tabular-nums; margin-top: 1px; }
+    font-variant-numeric: tabular-nums; margin-top: 1px; min-height: 33px; min-height: 2lh; }
+  /* so a wrapped detail line breaks at the · separators, never mid-phrase
+     ("no / long runs", "564 / km/yr") */
+  .readout .seg { white-space: nowrap; }
+  .readout .badge { align-self: flex-start; }
   .badge {
     display: inline-flex; align-items: center; gap: 6px;
     font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px;
@@ -219,7 +213,6 @@
     color: var(--muted); border: 1px solid currentColor; border-radius: 999px;
     padding: 0 5px; margin-top: 3px; white-space: nowrap; }
   .readout.idle .date { color: var(--text-secondary); font-weight: 400; }
-  .readout .spacer-pair { width: 0; overflow: hidden; }
 
   .chartcard {
     background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px;
@@ -308,6 +301,7 @@
 </style>
 </head>
 <body>
+<div class="page">
 <div class="wrap">
   <h1>Running history — <span id="h1win">70</span>-day rolling average</h1>
   <p class="sub">
@@ -324,11 +318,6 @@
   </div>
 
   <div class="tiles" id="tiles"></div>
-
-  <div class="readout idle" id="readout">
-    <span class="date">Hover a bar to see that day&rsquo;s numbers</span>
-    <span class="pair spacer-pair" aria-hidden="true"><span class="k">&nbsp;</span><span class="v">&nbsp;</span><span class="v2">&nbsp;</span></span>
-  </div>
 
   <div class="chartcard">
     <div class="bar-controls">
@@ -393,6 +382,13 @@
       </table>
     </div>
   </details>
+</div>
+
+<aside class="sidebar" id="readoutSidebar">
+  <div class="readout idle" id="readout">
+    <span class="date">Hover a bar to see that day&rsquo;s numbers</span>
+  </div>
+</aside>
 </div>
 
   <div class="gate" id="gate" hidden>
@@ -1644,12 +1640,11 @@ const draw = drawAll;
 const ro = document.getElementById('readout');
 function setReadout(i, pinned) {
   if (i === null) {
-    // The idle state carries an invisible label/value pair so the panel is exactly
-    // as tall as the hovered state — otherwise the box twitches by a few pixels
-    // every time the pointer enters or leaves the chart.
+    // The sidebar is out of the main flow now, so its own height changing
+    // between idle and hovered doesn't reflow the chart next to it — no need for
+    // the invisible spacer row that used to hold this at a fixed height.
     ro.className = 'readout idle';
-    ro.innerHTML = '<span class="date">Hover a bar to see that day&rsquo;s numbers</span>' +
-      '<span class="pair spacer-pair" aria-hidden="true"><span class="k">&nbsp;</span><span class="v">&nbsp;</span><span class="v2">&nbsp;</span></span>';
+    ro.innerHTML = '<span class="date">Hover a bar to see that day&rsquo;s numbers</span>';
     return;
   }
   const c = classify(i);
