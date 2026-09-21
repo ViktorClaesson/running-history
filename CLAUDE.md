@@ -20,7 +20,7 @@ to refresh). After that the page opens straight into the chart.
 
 ## What the chart shows
 
-Three stacked panels sharing one x-axis, one bar/point per calendar day:
+Four stacked panels sharing one x-axis, one bar/point per calendar day:
 
 1. **Bars** — height is the rolling average km/day over the trailing *volume*
    window (default 4 weeks). Colour is a *verdict on that day's run* (see below).
@@ -30,11 +30,14 @@ Three stacked panels sharing one x-axis, one bar/point per calendar day:
 3. **Line** — average runs per week over the same frequency window: every run
    counts, so a double-run day shows as 2. Axis is not fixed at 0–7 like the panel
    above it, since it can run higher.
+4. **Line** — highest VDOT achieved by any workout in the trailing *VDOT* window
+   (default 130 weeks, set independently — see "VDOT and pace zones" below).
+   Undefined (a gap, not a zero) before the first-ever logged run.
 
 Hovering a day fills a fixed-height readout: exact distance, the rolling average
 (also as km/wk, km/mo, km/yr), runs per week — as two lines, run days/week on top
-and every-run-counted below it — the day's target, and the verdict.
-**Clicking a day pins it** there — see below.
+and every-run-counted below it — the day's peak VDOT, the day's target, and the
+verdict. **Clicking a day pins it** there — see below.
 
 The **Today's target** tile is a what-if calculator: both inputs (km/wk and runs/wk)
 are editable, so a change in volume or frequency can be tried out, and it shows the
@@ -129,21 +132,80 @@ All of it is derived in-browser from one array of daily distances.
   the rate was computed against a 7-day floor, which was both inconsistent and not
   what the chart is for.
 
+## VDOT and pace zones
+
+**VDOT** is Jack Daniels' fitness score, derived here rather than taken from
+Runalyze's own `vo2max` column — that field is only on ~half of activities,
+undocumented in method, and wouldn't necessarily agree with the pace-zone formula
+below. Two published Daniels & Gilbert (1979) curves do the work: `vo2FromVelocity`
+(the VO2 cost of running at a given pace) and `pctVo2max` (the fraction of VO2max a
+runner can hold for a given duration). Dividing a lap's actual VO2 cost by what
+percentage-of-max its duration implies gives that lap's *implied* VDOT — the same
+arithmetic a race calculator uses for a race, generalised to any lap: an easy lap
+implies a low VDOT (low cost, and %max is close to 1 anyway over a long duration),
+a genuinely hard lap implies close to the runner's real ceiling. Verified against
+vdoto2.com's own worked example — VDOT 51.8 round-trips to its quoted easy/marathon/
+threshold/interval/repetition paces (5:14/4:23/4:08/3:48/3:33 min/km) within rounding.
+
+A day's own VDOT is the **max implied VDOT over its laps** — every lap, warmup and
+rest included, no tag filtering, since a slow lap simply never wins that search on
+its own. The **VDOT panel** is the rolling max of that across the trailing *VDOT*
+window (`WINDOW_VDOT`, default 130 weeks — the only one of the three windows that
+wants years, not weeks, because "what's my fitness ceiling" and "how often am I
+running" are different-timescale questions). It's a plain sliding-window max
+(monotonic deque, O(N)), not a target, so — unlike the volume/frequency target math
+— there's no circularity to avoid in including the day itself.
+
+**Laps** come from Runalyze's `splits` column: `<tag><km>|<time>` pieces joined by
+`-`, e.g. `I1.012|3:54`. The tag (`W`arm-up, `I`nterval, `R`est/`P`ause, `C`ooldown,
+`U`ntagged autolap) is read from real exports but not used for anything — see above.
+A day with no parsed splits (older activities, or ones Runalyze didn't lap) falls
+back to treating the whole day as a single lap.
+
+**Pace zones** (easy/marathon/threshold/interval/repetition) are five %VDOT bands,
+anchored at 65.7/81.8/88.0/97.6/106.2% (back-solved from the vdoto2.com example
+above) with the boundary between two neighbours at their midpoint, so the bands
+tile the %VDOT axis with no gap or overlap. The two open ends (below easy, above
+repetition) are closed off at 40% and 120% purely so the outer zones have something
+finite to split into 10 sub-bands each — not physiological limits, just where the
+binning stops mattering. `zoneBandFor()` maps a %VDOT to one of the 50 bins
+(`zone*10 + subBand`, continuous easy0..easy9, marathon0..marathon9, ...).
+
+**The pace-zone histogram** (below the four main panels) is pinned-day-only,
+deliberately keyed on `selected` rather than `shownDay()` — it's the one place on
+the page that does not follow hover, because a lap walk plus a 50-bin canvas
+redraw on every mouse-move would be the wrong trade. It judges the pinned day's
+laps against **that day's own rolling VDOT** (the fitness level at the time), not
+today's — a hard rep from years ago is read against years-ago fitness. Empty when
+the day has no run, or predates the very first logged run (VDOT isn't a
+meaningful zero, so there's nothing to bin against).
+
+**Colour**: five hues (blue/green/gold/orange/red) validated with the `dataviz`
+skill's palette checker using **adjacent** pairs, not all-pairs — this is an
+ordered bar histogram where neighbours are what matters, the same basis the
+checker itself uses for stacks/bars/lines. Light mode's worst adjacent CVD ΔE is
+22.0, dark mode's is 12.5, both comfortably above the 8.0 target. "Threshold"
+reads as gold/mustard rather than a bright lemon yellow: true yellow's natural
+lightness sits outside the band usable once chroma and CVD separation both have
+to hold, so gold is the closest a five-hue ordered set gets while still passing.
+
 ## Remembered settings
 
 `runviz.prefs.v1` holds everything the controls row and the what-if box can be set
-to, so the page opens the way it was left: `windowVol`, `windowFreq`, `stableBand`,
-`longNeedsSingleRun`, `colourNormal`, `colourLong`, and `plan` (`null` = the
-what-if box follows real history, `{km, days}` = edited). Three rules:
+to, so the page opens the way it was left: `windowVol`, `windowFreq`, `windowVdot`,
+`stableBand`, `longNeedsSingleRun`, `colourNormal`, `colourLong`, and `plan`
+(`null` = the what-if box follows real history, `{km, days}` = edited). Three rules:
 
 - **Read at the very top of the `if (DATA)` block**, above `let WINDOW_VOL` /
-  `let WINDOW_FREQ`, because `recompute()` runs at load and reads both — the
-  declaration-order gotcha below.
+  `let WINDOW_FREQ` / `let WINDOW_VDOT`, because `recompute()` runs at load and
+  reads the first two — the declaration-order gotcha below. (`WINDOW_VDOT` isn't
+  read by `recompute()`, but is declared alongside the other two for the same reason.)
 - **Validated field by field on load** (`loadPrefs`), against the same limits as the
   inputs, so a stale or hand-edited entry can only produce a state the UI can reach.
-  `windowVol`/`windowFreq` are additionally rounded to the nearest whole week, since
-  that's the only unit the controls can produce. Anything that fails falls back to
-  `PREF_DEFAULTS` for that field alone.
+  All three windows are additionally rounded to the nearest whole week, since
+  that's the only unit the controls can produce — `windowVdot`'s range is 1–260
+  weeks, wider than the other two's 1–52, since it wants years rather than weeks.
+  Anything that fails falls back to `PREF_DEFAULTS` for that field alone.
 - **Written only when something is off-default** (`savePrefs`), and the entry is
   *removed* the moment everything is back to default. A page whose settings have
   never been touched leaves nothing behind.
@@ -153,9 +215,9 @@ the defaults, and a remembered setting has to overwrite them at boot.
 
 **There are two resets, and each owns only what sits next to it.**
 
-- **Reset** in the chart's controls row: both windows, stable band, the long-run
-  rule and both colour toggles back to their defaults, plus the view zoomed back
-  out. It does *not* touch the what-if.
+- **Reset** in the chart's controls row: all three windows, stable band, the
+  long-run rule and both colour toggles back to their defaults, plus the view
+  zoomed back out. It does *not* touch the what-if.
 - **reset** in the Today's target tile: clears the what-if back to following real
   history, and nothing else.
 
@@ -193,6 +255,9 @@ similarity by adding more hues; it has been measured and it does not work.
 Ramps are interpolated in OKLab (`hexToOklab` / `oklabToCss`) so mid-ramp steps stay
 clean, precomputed once per frame into 24 steps.
 
+The pace-zone histogram is a separate five-hue scheme (`--z-*`), validated the same
+way but on a different basis — see "VDOT and pace zones" above.
+
 ## Data pipeline
 
 - CSV is parsed in-browser (`parseCsv` handles quoted fields, embedded commas,
@@ -210,20 +275,22 @@ clean, precomputed once per frame into 24 steps.
   disagrees on three. If this ever looks wrong again, the discriminator is an
   activity starting between 22:00 and midnight — nothing else moves.
 - Each activity is filed under that day, then aggregated per day into `values`
-  (total km), `maxRun` (longest single run) and `nRuns` (count). 63 of my days have
-  more than one run.
+  (total km), `maxRun` (longest single run), `nRuns` (count), `sec` (total elapsed
+  seconds, for VDOT) and `laps` (parsed `splits`, also for VDOT — see "VDOT and
+  pace zones" above). 63 of my days have more than one run.
 - **Sport IDs are per-account**, so there is no way to detect "running" generically.
   `summariseSports` shows every sport with count / total km / median speed and
   pre-ticks a guess: the busiest sport with median speed 7.5–17 km/h, plus anything
   comparable in volume. Speed alone over-selects — cross-country skiing at 8.2 km/h
   sits squarely in running range.
-- Parsed data is cached in `localStorage` under `runviz.data.v2` (`SCHEMA = 3`).
+- Parsed data is cached in `localStorage` under `runviz.data.v2` (`SCHEMA = 4`).
   `SCHEMA` guards what the cached numbers *mean*, not only their shape — the day
   attribution fix bumped it to 3 with the shape unchanged, because the cached values
-  were wrong and can only be rebuilt from the CSV. Bump the key alongside it only if
-  the shape changes. A stale schema opens the gate with `staleCache` set, which says
-  why it is asking for the file again instead of doing it silently. Selected sports
-  in `runviz.sports.v2`.
+  were wrong and can only be rebuilt from the CSV. It was bumped again to 4 when
+  `sec`/`laps` were added for VDOT, this time because the shape itself changed: an
+  older cached copy simply doesn't have those arrays. A stale schema opens the gate
+  with `staleCache` set, which says why it is asking for the file again instead of
+  doing it silently. Selected sports in `runviz.sports.v2`.
   Settings in `runviz.prefs.v1` (see below).
 - Where supported, the picked file is also kept as a `FileSystemFileHandle` in
   IndexedDB (`runviz` / `handles`), which powers "Refresh from file" and a silent

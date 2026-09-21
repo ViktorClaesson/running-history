@@ -35,6 +35,26 @@
     --rest:           #e7e5dd;   /* no run at all */
     --freq:           #52514e;
     --freq2:          #2f8f7a;
+    --vdot:           #7444b4;
+    /* Pace-zone histogram: easy/marathon/threshold/interval/repetition, ordered
+       fast→slow around the visible spectrum. Adjacent-pair CVD ΔE validated (not
+       all-pairs — this is an ordered bar histogram where neighbours are what
+       matters, same basis the skill's validator uses for stacks/bars/lines):
+       light worst-adjacent ΔE 22.0, dark 12.5, both well above the 8.0 target.
+       "Threshold" reads as gold/mustard rather than a bright lemon yellow —
+       true yellow's natural lightness sits outside the usable band once chroma
+       and CVD separation are both satisfied, so gold is the closest a five-hue
+       ordered set gets while still passing. */
+    --z-easy-weak:        #869fe3;
+    --z-easy:             #3554da;
+    --z-marathon-weak:    #80e1bc;
+    --z-marathon:         #00c17f;
+    --z-threshold-weak:   #b48b2e;
+    --z-threshold:        #923c00;
+    --z-interval-weak:    #f5be8c;
+    --z-interval:         #e97f00;
+    --z-repetition-weak:  #cf8d95;
+    --z-repetition:       #ae304e;
     --ghost:          rgba(11,11,11,0.05);
   }
   @media (prefers-color-scheme: dark) {
@@ -62,6 +82,17 @@
       --rest:           #333230;
       --freq:           #c3c2b7;
       --freq2:          #5fc9ae;
+      --vdot:           #a97cf0;
+      --z-easy-weak:        #20507b;
+      --z-easy:             #008ae9;
+      --z-marathon-weak:    #005b3c;
+      --z-marathon:         #00a764;
+      --z-threshold-weak:   #3d2d00;
+      --z-threshold:        #855e00;
+      --z-interval-weak:    #724e30;
+      --z-interval:         #ca7c30;
+      --z-repetition-weak:  #5e1b21;
+      --z-repetition:       #c3223c;
     }
   }
   :root[data-theme="dark"] {
@@ -88,6 +119,17 @@
     --rest:           #333230;
     --freq:           #c3c2b7;
     --freq2:          #5fc9ae;
+    --vdot:           #a97cf0;
+    --z-easy-weak:        #20507b;
+    --z-easy:             #008ae9;
+    --z-marathon-weak:    #005b3c;
+    --z-marathon:         #00a764;
+    --z-threshold-weak:   #3d2d00;
+    --z-threshold:        #855e00;
+    --z-interval-weak:    #724e30;
+    --z-interval:         #ca7c30;
+    --z-repetition-weak:  #5e1b21;
+    --z-repetition:       #c3223c;
   }
 
   * { box-sizing: border-box; }
@@ -218,9 +260,15 @@
   #chart  { display: block; width: 100%; height: 300px; touch-action: none; cursor: crosshair; }
   #chart2 { display: block; width: 100%; height: 156px; touch-action: none; cursor: crosshair; }
   #chart3 { display: block; width: 100%; height: 156px; touch-action: none; cursor: crosshair; }
+  #chart4 { display: block; width: 100%; height: 156px; touch-action: none; cursor: crosshair; }
   .panel-title { font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
     color: var(--muted); padding: 4px 0 2px 54px; }
   .hint { padding: 6px 4px 0; font-size: 11px; color: var(--muted); }
+
+  #chartZone { display: block; width: 100%; height: 220px; }
+  .zone-legend { display: flex; gap: 14px; flex-wrap: wrap; padding: 0 4px 8px; font-size: 12px; color: var(--text-secondary); }
+  .zone-legend .item { display: inline-flex; align-items: center; gap: 6px; }
+  .zone-empty { padding: 18px 4px; color: var(--muted); font-size: 13px; }
 
   .datarow { display: flex; align-items: center; gap: 10px; font-size: 12px;
     color: var(--text-secondary); margin: -16px 0 20px; flex-wrap: wrap; }
@@ -308,13 +356,16 @@
       <label class="chk">Frequency window
         <input type="number" id="windowFreqWeeks" min="1" max="52" step="1" value="16"> weeks
       </label>
+      <label class="chk">VDOT window
+        <input type="number" id="windowVdotWeeks" min="1" max="260" step="1" value="130"> weeks
+      </label>
       <label class="chk" title="Whether a day has to contain one long run on its own, rather than reaching the distance across several runs.">
         <input type="checkbox" id="longSingle" checked> Long run needs a single run
       </label>
       <label class="chk" title="How close to the target still counts as holding steady.">Stable band &plusmn;
         <input type="number" id="stableBand" min="0" max="5" step="0.5" value="1">%
       </label>
-      <button id="reset" title="Put the window, stable band, colour toggles and long-run rule back to their defaults, and zoom back out. Leaves the what-if target alone — that has its own reset.">Reset</button>
+      <button id="reset" title="Put the windows, stable band, colour toggles and long-run rule back to their defaults, and zoom back out. Leaves the what-if target alone — that has its own reset.">Reset</button>
       </div>
     </div>
     <canvas id="chart"></canvas>
@@ -322,8 +373,15 @@
     <canvas id="chart2"></canvas>
     <div class="panel-title">Average runs per week, over the trailing <span class="winFreqN">70</span> days</div>
     <canvas id="chart3"></canvas>
+    <div class="panel-title">Highest VDOT in the trailing <span class="winVdotN">910</span> days</div>
+    <canvas id="chart4"></canvas>
     <div class="hint">Scroll or pinch to zoom — the day under the cursor stays put while both sides scale around it. Drag to pan. Double-click to reset.
       Click a day to pin its numbers in the readout above; click it again, or press Esc, to release.</div>
+  </div>
+
+  <div class="chartcard" id="zonecard" hidden>
+    <div class="panel-title" id="zone-title" style="padding-left:4px">Pace zones for the pinned day</div>
+    <div id="zone-body"></div>
   </div>
 
   <details class="table">
@@ -366,7 +424,7 @@
 // itself and is as close to "remember the path" as the platform allows.
 // ---------------------------------------------------------------------------
 const LS_DATA = 'runviz.data.v2', LS_SPORTS = 'runviz.sports.v2';
-const SCHEMA = 3;   // 3: activities are filed by `time` read as UTC, not time + offset
+const SCHEMA = 4;   // 4: added per-day elapsed seconds and parsed lap splits, for VDOT
 
 const lsGet = k => { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); return true; }
@@ -427,6 +485,29 @@ function summariseSports({ header, rows }) {
   return out;
 }
 
+// --- Runalyze lap splits, e.g. "W2.363|13:06-I1.850|8:00-R0.255|1:30-C2.565|12:58".
+// Each dash-separated piece is <tag><km>|<mm:ss or h:mm:ss>, optionally followed by
+// a third `|`-field that has been observed as always "0" and is ignored. The tag
+// (W=warmup, I=interval/work, R/P=rest or pause, C=cooldown, U=plain autolap) is
+// not read: every lap is fed into the VDOT search uniformly, since a slow warmup
+// or rest lap simply never wins the day's peak-effort search — no need to filter it.
+function parseTimeToSec(s) {
+  let sec = 0;
+  for (const part of s.split(':')) sec = sec * 60 + Number(part);
+  return Number.isFinite(sec) ? sec : 0;
+}
+function parseSplits(str) {
+  if (!str) return [];
+  const out = [];
+  for (const piece of str.split('-')) {
+    const m = /^[A-Za-z]([0-9.]+)\|([0-9:]+)/.exec(piece);
+    if (!m) continue;
+    const km = parseFloat(m[1]), sec = parseTimeToSec(m[2]);
+    if (km > 0 && sec > 0) out.push({ km, sec });
+  }
+  return out;
+}
+
 // --- aggregate the chosen sports into one row per calendar day ----------------
 function buildData({ header, rows }, sportIds, fileName) {
   const per = new Map();
@@ -445,8 +526,10 @@ function buildData({ header, rows }, sportIds, fileName) {
     // activity by activity, and disagrees with the shifted version on three.
     const key = new Date(t * 1000).toISOString().slice(0, 10);
     const dist = parseFloat(r[header.distance]) || 0;
-    const g = per.get(key) || { sum: 0, max: 0, n: 0 };
-    g.sum += dist; g.max = Math.max(g.max, dist); g.n++;
+    const secs = header.s != null ? (parseFloat(r[header.s]) || 0) : 0;
+    const g = per.get(key) || { sum: 0, max: 0, n: 0, sec: 0, laps: [] };
+    g.sum += dist; g.max = Math.max(g.max, dist); g.n++; g.sec += secs;
+    if (header.splits != null && r[header.splits]) g.laps.push(...parseSplits(r[header.splits]));
     per.set(key, g);
     runCount++;
   }
@@ -455,13 +538,14 @@ function buildData({ header, rows }, sportIds, fileName) {
   const start = keys[0], end = keys[keys.length - 1];
   const day = 86400000, t0 = Date.parse(start + 'T00:00:00Z');
   const days = Math.round((Date.parse(end + 'T00:00:00Z') - t0) / day) + 1;
-  const values = [], maxRun = [], nRuns = [];
+  const values = [], maxRun = [], nRuns = [], sec = [], laps = [];
   const r3 = v => Math.round(v * 1000) / 1000;
   for (let i = 0; i < days; i++) {
     const g = per.get(new Date(t0 + i * day).toISOString().slice(0, 10));
     values.push(g ? r3(g.sum) : 0); maxRun.push(g ? r3(g.max) : 0); nRuns.push(g ? g.n : 0);
+    sec.push(g ? g.sec : 0); laps.push(g ? g.laps : []);
   }
-  return { schema: SCHEMA, start, values, maxRun, nRuns, runCount, fileName,
+  return { schema: SCHEMA, start, values, maxRun, nRuns, sec, laps, runCount, fileName,
            sports: [...sportIds], loadedAt: new Date().toISOString().slice(0, 10) };
 }
 
@@ -525,9 +609,9 @@ function openGate(changing, staleCache) {
   // A SCHEMA bump means the cached copy is not just old but wrong, and it can only
   // be rebuilt from the CSV — so say why rather than silently asking again.
   gateMsg.textContent = staleCache
-    ? 'The remembered copy was built with a bug that filed runs starting after '
-      + '22:00 under the next day, so it has been discarded. Pick the CSV again to '
-      + 'rebuild it — your settings are kept.'
+    ? 'The remembered copy was built before lap splits were read for the VDOT '
+      + 'chart, so it has been discarded. Pick the CSV again to rebuild it — your '
+      + 'settings are kept.'
     : '';
   gateMsg.className = 'gate-msg';
   sportBox.hidden = true;
@@ -644,6 +728,7 @@ const LS_PREFS = 'runviz.prefs.v1';
 const PREF_DEFAULTS = {
   windowVol: 28,
   windowFreq: 112,
+  windowVdot: 910,   // 130 weeks — ~2.5 years, the middle of "a couple of years"
   stableBand: 0.01,
   longNeedsSingleRun: true,
   colourNormal: true,
@@ -658,9 +743,10 @@ function loadPrefs() {
   // stale or hand-edited entry can only ever produce a state the UI can reach.
   // Both windows are set in whole weeks, so a stray value is rounded to one.
   const num = (v, lo, hi) => Number.isFinite(v) && v >= lo && v <= hi;
-  const week = v => Math.min(364, Math.max(7, Math.round(v / 7) * 7));
-  if (num(raw.windowVol, 7, 364)) p.windowVol = week(raw.windowVol);
-  if (num(raw.windowFreq, 7, 364)) p.windowFreq = week(raw.windowFreq);
+  const week = (v, maxDays) => Math.min(maxDays, Math.max(7, Math.round(v / 7) * 7));
+  if (num(raw.windowVol, 7, 364)) p.windowVol = week(raw.windowVol, 364);
+  if (num(raw.windowFreq, 7, 364)) p.windowFreq = week(raw.windowFreq, 364);
+  if (num(raw.windowVdot, 7, 1820)) p.windowVdot = week(raw.windowVdot, 1820);
   if (num(raw.stableBand, 0, 0.05)) p.stableBand = raw.stableBand;
   for (const k of ['longNeedsSingleRun', 'colourNormal', 'colourLong']) {
     if (typeof raw[k] === 'boolean') p[k] = raw[k];
@@ -678,6 +764,7 @@ function savePrefs() {
   const cur = {
     windowVol: WINDOW_VOL,
     windowFreq: WINDOW_FREQ,
+    windowVdot: WINDOW_VDOT,
     stableBand,
     longNeedsSingleRun,
     colourNormal: colourScheme.normal,
@@ -696,11 +783,17 @@ function savePrefs() {
 // questions with naturally different useful windows.
 let WINDOW_VOL = prefs.windowVol;
 let WINDOW_FREQ = prefs.windowFreq;
+// A third, independent window: how far back to look for the fittest workout.
+// Kept separate from WINDOW_FREQ because "what's my current fitness ceiling"
+// wants years, not the weeks that make sense for "how often am I running".
+let WINDOW_VDOT = prefs.windowVdot;
 
 // ---- derive series -------------------------------------------------------
 const daily = DATA.values;
 const maxRun = DATA.maxRun;   // longest single run that day
 const nRuns  = DATA.nRuns;    // how many separate runs that day
+const daySec = DATA.sec || [];    // total elapsed seconds that day, across all its runs
+const dayLaps = DATA.laps || [];  // that day's parsed lap splits ({km, sec}[]), oldest export missing this
 const N = daily.length;
 const start = new Date(DATA.start + "T00:00:00");
 const dateAt = i => new Date(start.getTime() + i * 86400000);
@@ -745,6 +838,61 @@ function recompute() {
 }
 recompute();
 
+// ---- VDOT: Jack Daniels' race-equivalent formula, generalised to any lap ------
+// VO2 cost of running at velocity v (m/min), and the fraction of VO2max a runner
+// can hold for t minutes — the two published Daniels & Gilbert (1979) curves that
+// every VDOT calculator is built from. Feeding a lap's own pace and duration
+// through both and dividing gives the VDOT that lap implies, exactly like a race
+// calculator does for a race, generalised to any hard effort: an easy lap implies
+// a low VDOT (low VO2 cost, and %max is close to 1 over a long duration anyway),
+// while a genuinely hard lap — a tempo, a rep, a race — implies close to the
+// runner's real ceiling. Verified against vdoto2.com's own worked example: VDOT
+// 51.8 round-trips through velocityFromVo2() to the easy/marathon/threshold/
+// interval/repetition paces quoted there, within rounding.
+function vo2FromVelocity(v) { return -4.60 + 0.182258 * v + 0.000104 * v * v; }
+function velocityFromVo2(vo2) {
+  const a = 0.000104, b = 0.182258, c = -4.60 - vo2;
+  return (-b + Math.sqrt(b * b - 4 * a * c)) / (2 * a);
+}
+function pctVo2max(tMin) {
+  return 0.8 + 0.1894393 * Math.exp(-0.012778 * tMin) + 0.2989558 * Math.exp(-0.1932605 * tMin);
+}
+function impliedVdot(km, sec) {
+  if (!(km > 0) || !(sec > 0)) return 0;
+  const v = km * 1000 / (sec / 60);   // m/min
+  return vo2FromVelocity(v) / pctVo2max(sec / 60);
+}
+
+// The day's own best effort: the max implied VDOT over its laps (every lap, no
+// tag filtering — a slow warmup or rest lap never wins this search on its own).
+// Falls back to the whole day as a single lap when there is no parsed split for
+// it (older exports, or an activity Runalyze didn't record laps for).
+const dayVdot = new Array(N);
+for (let i = 0; i < N; i++) {
+  const laps = (dayLaps[i] && dayLaps[i].length) ? dayLaps[i]
+    : (daily[i] > 0 && daySec[i] > 0 ? [{ km: daily[i], sec: daySec[i] }] : []);
+  let best = 0;
+  for (const lap of laps) best = Math.max(best, impliedVdot(lap.km, lap.sec));
+  dayVdot[i] = best;
+}
+
+// Rolling max over the trailing WINDOW_VDOT days, inclusive of today — unlike the
+// volume/frequency targets this isn't compared against itself, it's just read off
+// directly, so there's no circularity to avoid. A monotonic deque keeps this O(N)
+// rather than O(N x window). `null` (not 0) before any run has ever happened in the
+// window: VDOT has no meaningful zero, it just doesn't exist yet.
+const vdot = new Array(N);
+function recomputeVdot() {
+  const dq = [];   // indices into dayVdot, decreasing value, front = current window max
+  for (let i = 0; i < N; i++) {
+    while (dq.length && dq[0] <= i - WINDOW_VDOT) dq.shift();
+    while (dq.length && dayVdot[dq[dq.length - 1]] <= dayVdot[i]) dq.pop();
+    dq.push(i);
+    vdot[i] = dayVdot[dq[0]] > 0 ? dayVdot[dq[0]] : null;
+  }
+}
+recomputeVdot();
+
 // --- perceptual colour mixing (OKLab) so mid-ramp steps don't go muddy -------
 function srgbToLinear(c) { c /= 255; return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); }
 function linearToSrgb(c) { const v = c <= 0.0031308 ? c * 12.92 : 1.055 * Math.pow(c, 1/2.4) - 0.055;
@@ -772,6 +920,7 @@ function oklabToCss([L, A, B]) {
 // rather than once per bar.
 const RAMP_STEPS = 24;
 let ramps = null;
+let zoneRamps = null;   // set in buildRamps(); indexed [zone][subBand 0-9] -> css colour
 function buildRamps() {
   const make = (weak, strong) => {
     const a = hexToOklab(weak), b = hexToOklab(strong), out = [];
@@ -785,6 +934,12 @@ function buildRamps() {
     normal: { un: make(C('--n-un-weak'), C('--n-un')), pr: make(C('--n-pr-weak'), C('--n-pr')) },
     long:   { un: make(C('--l-un-weak'), C('--l-un')), pr: make(C('--l-pr-weak'), C('--l-pr')) },
   };
+  // One 10-step ramp per zone, for the pace histogram's sub-bands: same OKLab
+  // interpolation, just sampled at 10 points off the 24-step ramp instead of 25.
+  zoneRamps = ZONES.map(z => {
+    const full = make(C(z.weak), C(z.strong));
+    return Array.from({ length: 10 }, (_, k) => full[Math.round(k / 9 * RAMP_STEPS)]);
+  });
 }
 function barColour(c) {
   if (!ramps) buildRamps();
@@ -901,6 +1056,62 @@ function classify(i) {
   return { scheme, dir: d > 0 ? 'pr' : 'un', t: G > 0 ? Math.min(1, (Math.abs(d) - S) / G) : 1, ratio };
 }
 
+// ---- pace zones, from a VDOT value --------------------------------------
+// Five Daniels training intensities, each a %VDOT anchor back-solved from
+// vdoto2.com's own worked example (VDOT 51.8 -> 5:14/4:23/4:08/3:48/3:33 min/km):
+//   easy 65.7%, marathon 81.8%, threshold 88.0%, interval 97.6%, repetition 106.2%
+// The boundary between two neighbouring zones is the midpoint of their anchors,
+// so the five zones tile the %VDOT axis contiguously with no gap or overlap.
+// The two open ends need a finite bound to split into 10 sub-bands each: 40%
+// (a jog easy enough that going slower stops being informative) and 120% (faster
+// than anyone sustains even a single stride's worth of "repetition" pace) are
+// practical outer bounds for that binning, not physiological limits — anything
+// beyond either just clamps into that zone's bottom or top sub-band.
+const ZONES = [
+  { key: 'easy',       label: 'Easy',       weak: '--z-easy-weak',       strong: '--z-easy' },
+  { key: 'marathon',   label: 'Marathon',   weak: '--z-marathon-weak',   strong: '--z-marathon' },
+  { key: 'threshold',  label: 'Threshold',  weak: '--z-threshold-weak',  strong: '--z-threshold' },
+  { key: 'interval',   label: 'Interval',   weak: '--z-interval-weak',   strong: '--z-interval' },
+  { key: 'repetition', label: 'Repetition', weak: '--z-repetition-weak', strong: '--z-repetition' },
+];
+const ZONE_ANCHOR_PCT = [0.657, 0.818, 0.880, 0.976, 1.062];
+const ZONE_BOUND_PCT = [0.40,
+  (ZONE_ANCHOR_PCT[0] + ZONE_ANCHOR_PCT[1]) / 2,
+  (ZONE_ANCHOR_PCT[1] + ZONE_ANCHOR_PCT[2]) / 2,
+  (ZONE_ANCHOR_PCT[2] + ZONE_ANCHOR_PCT[3]) / 2,
+  (ZONE_ANCHOR_PCT[3] + ZONE_ANCHOR_PCT[4]) / 2,
+  1.20];
+// Bin 0-49: zone*10 + sub-band, continuous easy0..easy9, marathon0..marathon9, ...
+function zoneBandFor(pctOfVdot) {
+  const p = Math.min(ZONE_BOUND_PCT[5], Math.max(ZONE_BOUND_PCT[0], pctOfVdot));
+  for (let z = 0; z < 5; z++) {
+    const lo = ZONE_BOUND_PCT[z], hi = ZONE_BOUND_PCT[z + 1];
+    if (p <= hi || z === 4) {
+      const sub = Math.min(9, Math.max(0, Math.floor((p - lo) / (hi - lo) * 10)));
+      return z * 10 + sub;
+    }
+  }
+}
+// Minutes spent in each of the 50 bins on day i, judged against that day's own
+// rolling VDOT (the fitness level AT THE TIME, not today's) — so a hard rep from
+// years ago is read against years-ago fitness, not retroactively against today's.
+// Only meaningful for a day that both has a run and has a defined VDOT yet
+// (there wasn't one before the first-ever logged run), hence the two early-outs.
+function paceHistogramFor(i) {
+  const v = vdot[i];
+  if (!(v > 0)) return null;
+  const laps = (dayLaps[i] && dayLaps[i].length) ? dayLaps[i]
+    : (daily[i] > 0 && daySec[i] > 0 ? [{ km: daily[i], sec: daySec[i] }] : []);
+  if (!laps.length) return null;
+  const bins = new Array(50).fill(0);
+  for (const lap of laps) {
+    const vel = lap.km * 1000 / (lap.sec / 60);
+    const pct = vo2FromVelocity(vel) / v;
+    bins[zoneBandFor(pct)] += lap.sec / 60;   // minutes
+  }
+  return bins;
+}
+
 const fmtDate = new Intl.DateTimeFormat(undefined, { weekday:'short', year:'numeric', month:'short', day:'numeric' });
 const fmtShort = new Intl.DateTimeFormat(undefined, { year:'numeric', month:'short', day:'numeric' });
 const fmtMon = new Intl.DateTimeFormat(undefined, { month:'short' });
@@ -1013,6 +1224,8 @@ const cv2  = document.getElementById('chart2');
 const ctx2 = cv2.getContext('2d');
 const cv3  = document.getElementById('chart3');
 const ctx3 = cv3.getContext('2d');
+const cv4  = document.getElementById('chart4');
+const ctx4 = cv4.getContext('2d');
 
 let span = N;             // days visible
 let center = N / 2;       // index at the horizontal centre
@@ -1047,8 +1260,9 @@ const kick = () => { clampTarget(); if (!raf) raf = requestAnimationFrame(animat
 // at the same screen x in each.
 const PAD  = { l: 54, r: 14 };
 const BARS = { t: 14, b: 12 };    // top panel insets
-const FREQ  = { t: 10, b: 12 };  // middle panel insets
-const FREQ2 = { t: 10, b: 26 };  // bottom panel insets (carries the x labels)
+const FREQ  = { t: 10, b: 12 };  // run days/week panel insets
+const FREQ2 = { t: 10, b: 12 };  // runs/week panel insets
+const VDOTI = { t: 10, b: 26 };  // bottom panel insets (carries the x labels)
 let W = 0;
 const plotW = () => W - PAD.l - PAD.r;
 const barW  = () => plotW() / span;
@@ -1299,11 +1513,15 @@ function drawRuns() {
     c.strokeStyle = C('--surface-1'); c.lineWidth = 2; c.stroke();
   }
   c.restore();
+}
 
-  // x axis labels live on the bottom panel only; all three panels share the x mapping
+// x-axis labels live on the bottom panel only; every panel shares the x mapping,
+// so whichever one is drawn last just calls this with its own insets.
+function drawXAxisLabels(c, w, insetTop, plotH, i0, i1) {
   c.textAlign = 'center'; c.textBaseline = 'top';
   c.fillStyle = C('--muted');
-  const ty = FREQ2.t + plotH + 7;
+  const ty = insetTop + plotH + 7;
+  const px = i => xOf(i) + barW() / 2;
   const labelEvery = (() => {
     if (span <= 21) return { kind: 'day', n: Math.ceil(span / 10) };
     if (span <= 120) return { kind: 'week' };
@@ -1334,10 +1552,89 @@ function drawRuns() {
   }
 }
 
+// ---- panel 4: highest VDOT achieved in the trailing window ---------------
+// Same shape as drawFreq/drawRuns, but the value is undefined (null) for any day
+// before the very first logged run, so the line simply starts partway through —
+// there is nothing to fake a "0" fitness reading from.
+function drawVdot() {
+  const { w, h } = fitCanvas(cv4, ctx4);
+  const plotH = h - VDOTI.t - VDOTI.b;
+  const [i0, i1] = visibleRange();
+  let yMax = 0, yMin = Infinity, any = false;
+  for (let i = i0; i <= i1; i++) if (vdot[i] != null) { any = true; if (vdot[i] > yMax) yMax = vdot[i]; if (vdot[i] < yMin) yMin = vdot[i]; }
+  if (!any) { yMin = 0; yMax = 1; }
+  const ticks = niceTicks(Math.max(yMax * 1.06, 1));
+  yMax = ticks[ticks.length - 1];
+  const yFloor = Math.max(0, Math.floor((yMin * 0.94) / (ticks.step || 1)) * (ticks.step || 1));
+  const yOf = v => VDOTI.t + plotH * (1 - (v - yFloor) / (yMax - yFloor || 1));
+  const c = ctx4;
+
+  const pxAt = i => xOf(i) + barW() / 2;
+  c.save();
+  c.beginPath(); c.rect(PAD.l, VDOTI.t - 4, plotW(), plotH + 8); c.clip();
+  let filling = false;
+  for (let i = i0; i <= i1; i++) {
+    if (vdot[i] == null) { if (filling) { c.lineTo(pxAt(i - 1), VDOTI.t + plotH); c.closePath(); c.fillStyle = C('--vdot'); c.globalAlpha = 0.10; c.fill(); c.globalAlpha = 1; filling = false; } continue; }
+    if (!filling) { c.beginPath(); c.moveTo(pxAt(i), VDOTI.t + plotH); filling = true; }
+    c.lineTo(pxAt(i), yOf(vdot[i]));
+  }
+  if (filling) { c.lineTo(pxAt(i1), VDOTI.t + plotH); c.closePath(); c.fillStyle = C('--vdot'); c.globalAlpha = 0.10; c.fill(); c.globalAlpha = 1; }
+  c.restore();
+
+  c.font = '11px system-ui, -apple-system, sans-serif';
+  c.textAlign = 'right'; c.textBaseline = 'middle';
+  for (const t of ticks) {
+    if (t < yFloor) continue;
+    const y = Math.round(yOf(t)) + 0.5;
+    c.strokeStyle = C('--grid');
+    c.lineWidth = 1;
+    c.beginPath(); c.moveTo(PAD.l, y); c.lineTo(w - PAD.r, y); c.stroke();
+    c.fillStyle = C('--muted');
+    c.fillText(t.toFixed(0), PAD.l - 8, y);
+  }
+  c.save();
+  c.translate(13, VDOTI.t + plotH/2); c.rotate(-Math.PI/2);
+  c.textAlign = 'center'; c.fillStyle = C('--muted');
+  c.fillText('VDOT', 0, 0);
+  c.restore();
+
+  c.save();
+  c.beginPath(); c.rect(PAD.l, VDOTI.t - 4, plotW(), plotH + 8); c.clip();
+  const px = i => xOf(i) + barW() / 2;
+  c.beginPath();
+  let drawing = false;
+  for (let i = i0; i <= i1; i++) {
+    if (vdot[i] == null) { drawing = false; continue; }
+    const x = px(i), y = yOf(vdot[i]);
+    if (!drawing) { c.moveTo(x, y); drawing = true; } else c.lineTo(x, y);
+  }
+  c.strokeStyle = C('--vdot'); c.lineWidth = 2;
+  c.lineJoin = 'round'; c.lineCap = 'round';
+  c.stroke();
+
+  const dot = (i, hollow) => {
+    if (vdot[i] == null) return;
+    const x = Math.round(px(i)) + 0.5, y = yOf(vdot[i]);
+    c.strokeStyle = C('--text-primary'); c.lineWidth = 1; c.globalAlpha = hollow ? 0.16 : 0.25;
+    c.beginPath(); c.moveTo(x, VDOTI.t); c.lineTo(x, VDOTI.t + plotH); c.stroke();
+    c.globalAlpha = 1;
+    c.beginPath(); c.arc(x, y, 4.5, 0, Math.PI * 2);
+    c.fillStyle = hollow ? C('--surface-1') : C('--vdot'); c.fill();
+    c.strokeStyle = hollow ? C('--vdot') : C('--surface-1'); c.lineWidth = 2; c.stroke();
+  };
+  const seen = i => i !== null && i >= i0 && i <= i1;
+  if (seen(selected) && selected !== hover) dot(selected, true);
+  if (seen(hover)) dot(hover, false);
+  c.restore();
+
+  drawXAxisLabels(c, w, VDOTI.t, plotH, i0, i1);
+}
+
 function drawAll() {
   drawBars();
   drawFreq();
   drawRuns();
+  drawVdot();
   const [i0, i1] = visibleRange();
   renderTable(i0, i1);
 }
@@ -1368,6 +1665,9 @@ function setReadout(i, pinned) {
         : 'no target yet'}</span></span>
     <span class="pair rate"><span class="k">${WINDOW_VOL}-day average${i < WINDOW_VOL - 1 ? ' (partial)' : ''}</span><span class="v">${km(avg[i])} km/day</span><span class="v2">${rateSummary(avg[i])}</span></span>
     <span class="pair"><span class="k">Runs per week</span><span class="v">${perWeekAt(i).toFixed(1)} - ${runs[i]} of ${WINDOW_FREQ} days</span><span class="v2">${perWeekRunsAt(i).toFixed(1)} - ${totalRuns[i]} runs in ${WINDOW_FREQ} days</span></span>
+    <span class="pair"><span class="k">VDOT (peak, trailing ${Math.round(WINDOW_VDOT/7)}w)</span><span class="v">${vdot[i] != null ? vdot[i].toFixed(1) : '—'}</span><span class="v2">${
+      dayVdot[i] > 0 ? `today&rsquo;s best lap ${dayVdot[i].toFixed(1)}` : daily[i] > 0 ? 'no split data' : 'no run'
+    }</span></span>
     <span class="badge" style="color:${c ? fullColour(c) : 'var(--text-secondary)'}">${
       !c ? '— rest day'
          : `${DIR_ARROW[c.dir]} ${c.scheme === 'long' ? 'long run · ' : ''}${DIR_LABEL[c.dir]}${
@@ -1381,6 +1681,72 @@ function setReadout(i, pinned) {
 // the point: they stay readable and selectable.
 const shownDay = () => hover !== null ? hover : selected;
 const refreshReadout = () => setReadout(shownDay(), hover === null && selected !== null);
+
+// ---- pace-zone histogram, pinned day only ---------------------------------
+// Deliberately keyed on `selected`, not `shownDay()` — this is the one place in
+// the page that does NOT follow hover, because it's expensive enough (a lap walk
+// plus a 50-bin canvas redraw) that doing it on every mouse-move would be the
+// wrong trade. It only ever recomputes when the pin itself, the VDOT window, the
+// zoom/resize, or the colour theme actually changes.
+const zonecard = document.getElementById('zonecard');
+const zoneTitle = document.getElementById('zone-title');
+const zoneBody = document.getElementById('zone-body');
+function renderZonePanel() {
+  if (selected === null) { zonecard.hidden = true; return; }
+  zonecard.hidden = false;
+  zoneTitle.textContent = `Pace zones for ${fmtDate.format(dateAt(selected))}`;
+  const bins = paceHistogramFor(selected);
+  if (!bins) {
+    zoneBody.innerHTML = `<div class="zone-empty">${
+      daily[selected] > 0 ? 'No VDOT yet this far back in history — nothing to judge the pace against.' : 'No run that day.'
+    }</div>`;
+    return;
+  }
+  buildRamps();   // ensures zoneRamps is built before it's read below
+  const legend = ZONES.map(z => `<span class="item"><span class="swatch" style="background:${C(z.strong)}"></span>${z.label}</span>`).join('');
+  zoneBody.innerHTML = `<div class="zone-legend">${legend}</div><canvas id="chartZone"></canvas>`;
+  const cvZ = document.getElementById('chartZone');
+  const ctxZ = cvZ.getContext('2d');
+  const { w, h } = fitCanvas(cvZ, ctxZ);
+  const pad = { l: 40, r: 10, t: 10, b: 22 };
+  const pw = w - pad.l - pad.r, ph = h - pad.t - pad.b;
+  const maxMin = Math.max(1, ...bins);
+  const ticks = niceTicks(maxMin * 1.12);
+  const yMax = ticks[ticks.length - 1];
+  const yOf = v => pad.t + ph * (1 - v / yMax);
+  const bw = pw / 50;
+
+  ctxZ.font = '11px system-ui, -apple-system, sans-serif';
+  ctxZ.textAlign = 'right'; ctxZ.textBaseline = 'middle';
+  for (const t of ticks) {
+    const y = Math.round(yOf(t)) + 0.5;
+    ctxZ.strokeStyle = t === 0 ? C('--baseline') : C('--grid');
+    ctxZ.lineWidth = 1;
+    ctxZ.beginPath(); ctxZ.moveTo(pad.l, y); ctxZ.lineTo(w - pad.r, y); ctxZ.stroke();
+    ctxZ.fillStyle = C('--muted');
+    ctxZ.fillText(t.toFixed(0), pad.l - 8, y);
+  }
+  ctxZ.save();
+  ctxZ.translate(13, pad.t + ph / 2); ctxZ.rotate(-Math.PI / 2);
+  ctxZ.textAlign = 'center'; ctxZ.fillStyle = C('--muted');
+  ctxZ.fillText('minutes', 0, 0);
+  ctxZ.restore();
+
+  for (let b = 0; b < 50; b++) {
+    const zone = Math.floor(b / 10), sub = b % 10;
+    const x0 = Math.round(pad.l + b * bw), x1 = Math.round(pad.l + (b + 1) * bw);
+    const y = yOf(bins[b]);
+    ctxZ.fillStyle = zoneRamps[zone][sub];
+    ctxZ.fillRect(x0, y, Math.max(1, x1 - x0 - 1), pad.t + ph - y);
+  }
+  // a divider between zones, and the zone name centred under its own 10 bars
+  ctxZ.textAlign = 'center'; ctxZ.textBaseline = 'top';
+  for (let z = 0; z <= 5; z++) {
+    const x = Math.round(pad.l + z * 10 * bw) + 0.5;
+    if (z > 0 && z < 5) { ctxZ.strokeStyle = C('--grid'); ctxZ.lineWidth = 1; ctxZ.beginPath(); ctxZ.moveTo(x, pad.t); ctxZ.lineTo(x, pad.t + ph); ctxZ.stroke(); }
+    if (z < 5) { ctxZ.fillStyle = C('--muted'); ctxZ.fillText(ZONES[z].label, pad.l + (z + 0.5) * 10 * bw, pad.t + ph + 6); }
+  }
+}
 
 // ---- table ---------------------------------------------------------------
 const tbody = document.getElementById('tbody');
@@ -1458,7 +1824,7 @@ function onTouchMove(e) {
   }
 }
 
-for (const el of [cv, cv2, cv3]) {
+for (const el of [cv, cv2, cv3, cv4]) {
   el.addEventListener('mousemove', onMove);
   el.addEventListener('mouseleave', () => { hover = null; refreshReadout(); drawAll(); });
   el.addEventListener('wheel', onWheel, { passive: false });
@@ -1476,6 +1842,7 @@ for (const el of [cv, cv2, cv3]) {
     if (!(i >= 0 && i < N && mx >= PAD.l && mx <= W - PAD.r)) return;
     selected = selected === i ? null : i;   // clicking the pinned day releases it
     refreshReadout();
+    renderZonePanel();
     drawAll();
   });
   el.addEventListener('dblclick', () => { tSpan = N; tCenter = N / 2; kick(); });
@@ -1485,11 +1852,11 @@ for (const el of [cv, cv2, cv3]) {
 }
 window.addEventListener('mouseup', () => {
   draggedNotClicked = !!(drag && drag.moved);
-  drag = null; cv.style.cursor = 'crosshair'; cv2.style.cursor = 'crosshair'; cv3.style.cursor = 'crosshair';
+  drag = null; cv.style.cursor = 'crosshair'; cv2.style.cursor = 'crosshair'; cv3.style.cursor = 'crosshair'; cv4.style.cursor = 'crosshair';
 });
 window.addEventListener('keydown', e => {
   if (e.key !== 'Escape' || selected === null) return;
-  selected = null; refreshReadout(); drawAll();
+  selected = null; refreshReadout(); renderZonePanel(); drawAll();
 });
 
 // Reset, scoped to the chart: the settings in this controls row back to their
@@ -1503,13 +1870,16 @@ window.addEventListener('keydown', e => {
 document.getElementById('reset').onclick = () => {
   WINDOW_VOL = PREF_DEFAULTS.windowVol;
   WINDOW_FREQ = PREF_DEFAULTS.windowFreq;
+  WINDOW_VDOT = PREF_DEFAULTS.windowVdot;
   stableBand = PREF_DEFAULTS.stableBand;
   longNeedsSingleRun = PREF_DEFAULTS.longNeedsSingleRun;
   colourScheme.normal = PREF_DEFAULTS.colourNormal;
   colourScheme.long = PREF_DEFAULTS.colourLong;
   savePrefs();
   syncControls();
+  recomputeVdot();
   applyWindow();         // recompute + relabels + rebuilds the tiles + redraws
+  renderZonePanel();
   tSpan = N; tCenter = N / 2; kick();
 };
 function syncLabels() {
@@ -1519,6 +1889,7 @@ function syncLabels() {
   for (const el of document.querySelectorAll('.gradN')) el.textContent = +(50 - pct).toFixed(1);
   for (const el of document.querySelectorAll('.winN')) el.textContent = WINDOW_VOL;
   for (const el of document.querySelectorAll('.winFreqN')) el.textContent = WINDOW_FREQ;
+  for (const el of document.querySelectorAll('.winVdotN')) el.textContent = WINDOW_VDOT;
   document.title = `Running history — ${WINDOW_VOL}-day rolling average`;
   renderTiles();
 }
@@ -1528,6 +1899,7 @@ function syncLabels() {
 function syncControls() {
   winVolInput.value = WINDOW_VOL / 7;
   winFreqInput.value = WINDOW_FREQ / 7;
+  winVdotInput.value = WINDOW_VDOT / 7;
   bandInput.value = +(stableBand * 100).toFixed(1);
   longSingleBox.checked = longNeedsSingleRun;
   for (const [scheme, id] of [['normal', 'colourNormal'], ['long', 'colourLong']]) {
@@ -1588,12 +1960,25 @@ winFreqInput.onchange = winFreqInput.oninput = () => {
   savePrefs();
   applyWindow();
 };
+const winVdotInput = document.getElementById('windowVdotWeeks');
+winVdotInput.onchange = winVdotInput.oninput = () => {
+  const v = Math.round(Number(winVdotInput.value));
+  if (!Number.isFinite(v) || v < 1 || v > 260) return;   // ignore half-typed values
+  WINDOW_VDOT = v * 7;
+  savePrefs();
+  recomputeVdot();
+  syncLabels();
+  refreshReadout();
+  renderZonePanel();
+  drawAll();
+};
 syncControls();
 syncLabels();
 
-window.addEventListener('resize', drawAll);
-matchMedia('(prefers-color-scheme: dark)').addEventListener('change', drawAll);
+window.addEventListener('resize', () => { drawAll(); renderZonePanel(); });
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { drawAll(); renderZonePanel(); });
 drawAll();
+renderZonePanel();
 }
 </script>
 </body>
