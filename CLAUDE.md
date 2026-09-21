@@ -20,7 +20,7 @@ to refresh). After that the page opens straight into the chart.
 
 ## What the chart shows
 
-Three stacked panels sharing one x-axis, one bar/point per calendar day:
+Four stacked panels sharing one x-axis, one bar/point per calendar day:
 
 1. **Bars** — height is the rolling average km/day over the trailing *volume*
    window (default 4 weeks). Colour is a *verdict on that day's run* (see below).
@@ -30,11 +30,16 @@ Three stacked panels sharing one x-axis, one bar/point per calendar day:
 3. **Line** — average runs per week over the same frequency window: every run
    counts, so a double-run day shows as 2. Axis is not fixed at 0–7 like the panel
    above it, since it can run higher.
+4. **Line** — highest VDOT achieved by any workout in the trailing *VDOT* window
+   (default 130 weeks, set independently — see "VDOT and pace zones" below).
+   Undefined (a gap, not a zero) before the first-ever logged run.
 
-Hovering a day fills a fixed-height readout: exact distance, the rolling average
+Hovering a day fills the readout sidebar: exact distance, the rolling average
 (also as km/wk, km/mo, km/yr), runs per week — as two lines, run days/week on top
-and every-run-counted below it — the day's target, and the verdict.
-**Clicking a day pins it** there — see below.
+and every-run-counted below it — the day's peak VDOT (plus what that day's own
+reading is actually based on: full activity or best lap, with its distance, time
+and pace — see `vdotBasisText()`), the day's target, and the verdict. **Clicking
+a day pins it** there — see below.
 
 The **Today's target** tile is a what-if calculator: both inputs (km/wk and runs/wk)
 are editable, so a change in volume or frequency can be tried out, and it shows the
@@ -44,7 +49,7 @@ seeded from the exact quantities behind today's real target (`weeklyPrev[N-1]`,
 it never changes the bars — those keep their own per-day targets from actual history —
 and once touched it shows the real figure alongside and offers a reset.
 
-## The readout: pinning, and why it is a fixed height
+## The readout: pinning, and why it lives in a sticky sidebar
 
 **Pinning.** Clicking a day sets `selected`; clicking it again, or Esc, releases it.
 `shownDay()` is `hover ?? selected` — hover always wins, and the pinned day is only
@@ -61,25 +66,25 @@ A pan ends in a mouseup on the canvas, which the browser then reports as a click
 `draggedNotClicked` (set from `drag.moved`, threshold 3px) is what stops a pan from
 pinning whatever it happened to finish over.
 
-**Fixed height.** The verdict pill used to get shoved onto a second row by a long
-detail line, growing the box. Three things hold it to one height now:
+**Sidebar, not inline.** The readout used to sit directly above the chart, so
+scrolling down past a tall chart lost sight of it — no good once there were four
+stacked panels plus the pace-zone histogram to scroll through. It now lives in
+`<aside class="sidebar" id="readoutSidebar">`, a flex sibling of `.wrap` with
+`position: sticky; top: 20px`, so it stays in view while the page scrolls.
+`.page` wraps both as `display: flex; flex-wrap: wrap`; below **1300px** viewport
+width the sidebar drops `position: sticky` (there's no longer room for two columns
+side by side, so it just falls back to sitting in the normal flow).
 
-- The detail line and the rate line are the only shrinkable items, and their
-  `flex-basis` is the small **floor**, not `auto`. This matters: a wrapping flex
-  container packs lines using each item's *hypothetical* size, so an `auto`-basis
-  item forces a line break before it will ever shrink. `max-width: max-content` caps
-  the grow, so with room to spare nothing moves from where it sat before.
-- `.readout .pair .v2` reserves **two line boxes** (`min-height: 2lh`, px fallback
-  first) whether or not the text needs them. A wrap therefore costs no height, and
-  idle matches hovered by construction rather than by a guessed `min-height`.
-- `.readout .seg` keeps each `·`-separated piece unbreakable, so a wrap lands on a
-  separator and never mid-phrase ("no / long runs", "564 / km/yr").
-
-The floors sum to ~861px, so the row holds together down to roughly a **943px**
-viewport (it was ~1120px before). Below that it wraps to two rows and the box grows
-— that is a genuinely narrow window, where the tiles above already wrap. Don't
-shrink the floors to chase it: at much under 160px the detail line needs a *third*
-line and the two-line reserve stops holding.
+Being pulled out of the main flow changes what "fixed height" needs to mean: the
+sidebar's *own* height changing between idle and hovered no longer reflows the
+chart next to it, so the old horizontal layout's flex-basis/max-width engineering
+(needed only to stop a wrapping detail line from shoving the verdict pill onto a
+second row) is gone — `.readout` is just a vertical list of full-width `.pair`
+rows now. The one thing still worth keeping: `.readout .pair .v2` still reserves
+**two line boxes** (`min-height: 2lh`) so a detail line wrapping to two lines
+doesn't visibly nudge the sidebar's height on every hover, and `.readout .seg`
+still keeps each `·`-separated piece unbreakable so a wrap lands on a separator
+and never mid-phrase ("no / long runs", "564 / km/yr").
 
 ## The model (this is the part worth understanding)
 
@@ -129,21 +134,103 @@ All of it is derived in-browser from one array of daily distances.
   the rate was computed against a 7-day floor, which was both inconsistent and not
   what the chart is for.
 
+## VDOT and pace zones
+
+**VDOT** is Jack Daniels' fitness score, derived here rather than taken from
+Runalyze's own `vo2max` column — that field is only on ~half of activities,
+undocumented in method, and wouldn't necessarily agree with the pace-zone formula
+below. Two published Daniels & Gilbert (1979) curves do the work: `vo2FromVelocity`
+(the VO2 cost of running at a given pace) and `pctVo2max` (the fraction of VO2max a
+runner can hold for a given duration). Dividing a lap's actual VO2 cost by what
+percentage-of-max its duration implies gives that lap's *implied* VDOT — the same
+arithmetic a race calculator uses for a race, generalised to any lap: an easy lap
+implies a low VDOT (low cost, and %max is close to 1 anyway over a long duration),
+a genuinely hard lap implies close to the runner's real ceiling. Verified against
+vdoto2.com's own worked example — VDOT 51.8 round-trips to its quoted easy/marathon/
+threshold/interval/repetition paces (5:14/4:23/4:08/3:48/3:33 min/km) within rounding.
+
+A day's own VDOT is the higher of **the whole day treated as one effort**, and the
+**max implied VDOT over its laps that are at least `MIN_LAP_M` long** (default
+1500m, adjustable 100–5000m). The length floor exists because `pctVo2max()` is
+calibrated against race durations — roughly 3.5 minutes and up — and a very short,
+very fast lap (a sprint, the last few strides of a rep) computes a VO2 cost far
+beyond what's actually reached in that time, wildly overstating VDOT: a real
+export surfaced a day reading VDOT 70+ against a true ceiling around 52, traced to
+a short fast lap. No *tag* filtering beyond the length floor — a slow warmup or
+rest lap that happens to clear it still never wins the search on its own. Checking
+the whole day too (not just as a fallback for days with no lap data) is what makes
+an evenly-paced tempo run or race its own best evidence when it beats every
+individual lap. The **VDOT panel** is the rolling max of that across the trailing *VDOT*
+window (`WINDOW_VDOT`, default 130 weeks — the only one of the three windows that
+wants years, not weeks, because "what's my fitness ceiling" and "how often am I
+running" are different-timescale questions). It's a plain sliding-window max
+(monotonic deque, O(N)), not a target, so — unlike the volume/frequency target math
+— there's no circularity to avoid in including the day itself.
+
+**Laps** come from Runalyze's `splits` column: `<tag><km>|<time>` pieces joined by
+`-`, e.g. `I1.012|3:54`. The tag (`W`arm-up, `I`nterval, `R`est/`P`ause, `C`ooldown,
+`U`ntagged autolap) is read from real exports but not used for anything — see above.
+A day with no parsed splits (older activities, or ones Runalyze didn't lap) falls
+back to treating the whole day as a single lap.
+
+**Pace zones** (easy/marathon/threshold/interval/repetition) are five %VDOT bands,
+anchored at 65.7/81.8/88.0/97.6/106.2% (back-solved from the vdoto2.com example
+above) with the boundary between two neighbours at their midpoint, so the bands
+tile the %VDOT axis with no gap or overlap. The two open ends (below easy, above
+repetition) are closed off at 40% and 120% purely so the outer zones have something
+finite to split into 10 sub-bands each — not physiological limits, just where the
+binning stops mattering. `zoneBandFor()` maps a %VDOT to one of the 50 bins
+(`zone*10 + subBand`, continuous easy0..easy9, marathon0..marathon9, ...).
+
+**The pace-zone histogram** (below the four main panels) is pinned-day-only,
+deliberately keyed on `selected` rather than `shownDay()` — it's the one place on
+the page that does not follow hover, because a lap walk plus a 50-bin canvas
+redraw on every mouse-move would be the wrong trade. It judges the pinned day's
+laps against **that day's own rolling VDOT** (the fitness level at the time), not
+today's — a hard rep from years ago is read against years-ago fitness. Empty when
+the day has no run, or predates the very first logged run (VDOT isn't a
+meaningful zero, so there's nothing to bin against).
+
+Hovering a bin (this redraws the whole 50-bar canvas — cheap, unlike the lap walk
+above it, which only runs once per pin) shows its pace range in `#zoneHoverInfo`:
+the two %VDOT bounds either side of the bin, converted back to pace via
+`velocityFromVo2()`. Higher %VDOT is faster (lower min/km), so the bin's *slow*
+edge comes from its *lower* bound and vice versa. The two outer bins — easy's
+slowest, repetition's fastest — read off `ZONE_BOUND_PCT`'s practical 40%/120%
+floor and ceiling (see the comment on that constant) rather than a real boundary,
+so they're reported as open-ended ("slower than", "faster than") instead of a
+two-sided range.
+
+**Colour**: five hues (blue/green/gold/orange/red) validated with the `dataviz`
+skill's palette checker using **adjacent** pairs, not all-pairs — this is an
+ordered bar histogram where neighbours are what matters, the same basis the
+checker itself uses for stacks/bars/lines. Light mode's worst adjacent CVD ΔE is
+22.0, dark mode's is 12.5, both comfortably above the 8.0 target. "Threshold"
+reads as gold/mustard rather than a bright lemon yellow: true yellow's natural
+lightness sits outside the band usable once chroma and CVD separation both have
+to hold, so gold is the closest a five-hue ordered set gets while still passing.
+
 ## Remembered settings
 
-`runviz.prefs.v1` holds everything the controls row and the what-if box can be set
-to, so the page opens the way it was left: `windowVol`, `windowFreq`, `stableBand`,
-`longNeedsSingleRun`, `colourNormal`, `colourLong`, and `plan` (`null` = the
-what-if box follows real history, `{km, days}` = edited). Three rules:
+`runviz.prefs.v1` holds everything the settings sidebar and the what-if box can be
+set to, so the page opens the way it was left: `windowVol`, `windowFreq`,
+`windowVdot`, `minLapM`, `stableBand`, `longNeedsSingleRun`, `colourNormal`,
+`colourLong`, and `plan` (`null` = the what-if box follows real history,
+`{km, days}` = edited). Three rules:
 
 - **Read at the very top of the `if (DATA)` block**, above `let WINDOW_VOL` /
-  `let WINDOW_FREQ`, because `recompute()` runs at load and reads both — the
-  declaration-order gotcha below.
+  `let WINDOW_FREQ` / `let WINDOW_VDOT`, because `recompute()` runs at load and
+  reads the first two — the declaration-order gotcha below. (`WINDOW_VDOT` isn't
+  read by `recompute()`, but is declared alongside the other two for the same
+  reason. `MIN_LAP_M` is declared further down, right next to `recomputeDayVdot()`
+  — nothing earlier touches it, so it doesn't need to move.)
 - **Validated field by field on load** (`loadPrefs`), against the same limits as the
   inputs, so a stale or hand-edited entry can only produce a state the UI can reach.
-  `windowVol`/`windowFreq` are additionally rounded to the nearest whole week, since
-  that's the only unit the controls can produce. Anything that fails falls back to
-  `PREF_DEFAULTS` for that field alone.
+  All three windows are additionally rounded to the nearest whole week, since
+  that's the only unit the controls can produce — `windowVdot`'s range is 1–260
+  weeks, wider than the other two's 1–52, since it wants years rather than weeks.
+  `minLapM` is rounded to the nearest 100m, range 100–5000. Anything that fails
+  falls back to `PREF_DEFAULTS` for that field alone.
 - **Written only when something is off-default** (`savePrefs`), and the entry is
   *removed* the moment everything is back to default. A page whose settings have
   never been touched leaves nothing behind.
@@ -153,9 +240,9 @@ the defaults, and a remembered setting has to overwrite them at boot.
 
 **There are two resets, and each owns only what sits next to it.**
 
-- **Reset** in the chart's controls row: both windows, stable band, the long-run
-  rule and both colour toggles back to their defaults, plus the view zoomed back
-  out. It does *not* touch the what-if.
+- **Reset** in the settings sidebar: all three windows, the min-lap distance,
+  stable band, the long-run rule and both colour toggles back to their defaults,
+  plus the view zoomed back out. It does *not* touch the what-if.
 - **reset** in the Today's target tile: clears the what-if back to following real
   history, and nothing else.
 
@@ -167,6 +254,15 @@ with an edited what-if leaves an entry holding only the plan, and vice versa.
 Double-clicking a panel still resets only the zoom, which is view state and
 deliberately *not* remembered — persisting it would fight the Reset button and open
 the page mid-history.
+
+**The settings sidebar** (legend + all the controls above, formerly a header row
+across the top of the chartcard) is the third sidebar-shaped thing on the page,
+on the opposite side from the readout — `<aside id="settingsSidebar">`, always
+visible rather than following `selected`/`hover` like the other two (a gear-button
+toggle for it was tried and dropped — always-on won). Being a vertical list rather
+than a horizontal bar-controls row meant `.ctrls` lost its `margin-left: auto`
+(nothing to push right against in a column) and gained
+`flex-direction: column; align-items: stretch` instead.
 
 ## Colour system
 
@@ -193,6 +289,9 @@ similarity by adding more hues; it has been measured and it does not work.
 Ramps are interpolated in OKLab (`hexToOklab` / `oklabToCss`) so mid-ramp steps stay
 clean, precomputed once per frame into 24 steps.
 
+The pace-zone histogram is a separate five-hue scheme (`--z-*`), validated the same
+way but on a different basis — see "VDOT and pace zones" above.
+
 ## Data pipeline
 
 - CSV is parsed in-browser (`parseCsv` handles quoted fields, embedded commas,
@@ -210,20 +309,22 @@ clean, precomputed once per frame into 24 steps.
   disagrees on three. If this ever looks wrong again, the discriminator is an
   activity starting between 22:00 and midnight — nothing else moves.
 - Each activity is filed under that day, then aggregated per day into `values`
-  (total km), `maxRun` (longest single run) and `nRuns` (count). 63 of my days have
-  more than one run.
+  (total km), `maxRun` (longest single run), `nRuns` (count), `sec` (total elapsed
+  seconds, for VDOT) and `laps` (parsed `splits`, also for VDOT — see "VDOT and
+  pace zones" above). 63 of my days have more than one run.
 - **Sport IDs are per-account**, so there is no way to detect "running" generically.
   `summariseSports` shows every sport with count / total km / median speed and
   pre-ticks a guess: the busiest sport with median speed 7.5–17 km/h, plus anything
   comparable in volume. Speed alone over-selects — cross-country skiing at 8.2 km/h
   sits squarely in running range.
-- Parsed data is cached in `localStorage` under `runviz.data.v2` (`SCHEMA = 3`).
+- Parsed data is cached in `localStorage` under `runviz.data.v2` (`SCHEMA = 4`).
   `SCHEMA` guards what the cached numbers *mean*, not only their shape — the day
   attribution fix bumped it to 3 with the shape unchanged, because the cached values
-  were wrong and can only be rebuilt from the CSV. Bump the key alongside it only if
-  the shape changes. A stale schema opens the gate with `staleCache` set, which says
-  why it is asking for the file again instead of doing it silently. Selected sports
-  in `runviz.sports.v2`.
+  were wrong and can only be rebuilt from the CSV. It was bumped again to 4 when
+  `sec`/`laps` were added for VDOT, this time because the shape itself changed: an
+  older cached copy simply doesn't have those arrays. A stale schema opens the gate
+  with `staleCache` set, which says why it is asking for the file again instead of
+  doing it silently. Selected sports in `runviz.sports.v2`.
   Settings in `runviz.prefs.v1` (see below).
 - Where supported, the picked file is also kept as a `FileSystemFileHandle` in
   IndexedDB (`runviz` / `handles`), which powers "Refresh from file" and a silent
