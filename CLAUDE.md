@@ -185,17 +185,39 @@ a %VDOT to one of the `5 * ZONE_BARS` bins (`zone*ZONE_BARS + subBand`, continuo
 easy0.. , marathon0.., ...).
 
 Easy's slow end used to be closed off the same way, at a practical 40% floor —
-which meant a genuinely slow recovery jog and standing still at a red light landed
-in the same bin. It no longer is: `STANDING_MAX_VEL` (slower than 20:00/km, fixed
-in absolute pace rather than %VDOT, because "am I moving at all" doesn't scale
-with fitness the way effort zones do) is checked before a lap is ever binned into
-a zone. Anything slower goes to a dedicated **Standing** bar instead — drawn as
-its own single grey (`--nocolour`) bar, separated from the five zones by a bar
-width of empty space rather than a divider line, with its own legend swatch.
-Because standing time is siphoned off first, easy's own floor (`easyFloorPct()`)
-is now a real, per-day %VDOT boundary — whatever 20:00/km works out to for that
-day's VDOT — not an open "slower than" reading; only repetition's fast edge is
-still reported open-ended.
+which meant a genuinely slow recovery jog, actual walking, and standing still at
+a red light all landed in the same bin. They no longer do. Three fixed or
+per-day thresholds sort a lap out **before** it ever reaches `zoneBandFor()`:
+
+- **Standing** — slower than `STANDING_MAX_VEL` (20:00/km), fixed in absolute
+  pace rather than %VDOT, because "am I moving at all" doesn't scale with
+  fitness the way effort zones do.
+- **Walking** — between `STANDING_MAX_VEL` and `WALKING_MAX_VEL` (10:00/km),
+  also fixed in absolute pace for the same reason: walking speed doesn't scale
+  with running fitness.
+- **Recovery** — between `WALKING_MAX_VEL` and easy's real floor (below): a
+  genuine jog, just too slow relative to *this* runner's fitness to call
+  properly "easy".
+
+Easy's own floor, `EASY_FLOOR_PCT` (45% VDOT, picked so a mid-50s VDOT lands it
+around 7:00/km rather than back-solved from anything), is what separates
+Recovery from real Easy training. `easyFloorPct()` also clamps that floor to
+never sit below what `WALKING_MAX_VEL` works out to in %VDOT terms for that
+runner's VDOT — otherwise Recovery would have to cover paces faster than
+walking, which makes no sense — nor above the marathon boundary. For a low
+enough VDOT this collapses Recovery to nothing: if walking pace is already real
+aerobic effort for that runner, there's no slower-than-easy jog left to call
+recovery. Only repetition's fast edge is still reported open-ended; every other
+edge, including easy's floor, is now a real two-sided range.
+
+Standing, Walking and Recovery are each a single, undivided bar — `ZONE_BARS`
+only ever splits the five real Daniels zones — drawn leftmost (slowest first),
+in that order, separated from the five zones by a bar width of empty space
+rather than a divider line. They're flat neutral greys rather than a zone hue
+(`--nocolour` for Standing, then two steps of an OKLab fade from `--nocolour`
+towards easy's own weak blue for Walking and Recovery — see `leadRamps` in
+`buildRamps()`), so the transition visually previews "getting closer to real
+training" without implying they're graded pace zones themselves.
 
 **The pace-zone histogram** (below the four main panels) is pinned-day-only,
 deliberately keyed on `selected` rather than `shownDay()` — it's the one place on
@@ -213,9 +235,9 @@ the two %VDOT bounds either side of the bin, converted back to pace via
 edge comes from its *lower* bound and vice versa. Repetition's fastest bin reads
 its open ceiling off `ZONE_BOUND_PCT`'s practical 120% bound (see the comment on
 that constant) rather than a real boundary, so it's reported as open-ended
-("faster than") instead of a two-sided range. The Standing bar has no pace range
-at all — it isn't a pace — so its hover text just reports time spent below
-`STANDING_MAX_VEL`.
+("faster than") instead of a two-sided range. Standing, Walking and Recovery
+aren't %VDOT bins at all, so their hover text reports their own fixed or per-day
+pace bounds directly rather than going through `paceRangeFor()`.
 
 **Colour**: five hues (blue/green/gold/orange/red) validated with the `dataviz`
 skill's palette checker using **adjacent** pairs, not all-pairs — this is an
