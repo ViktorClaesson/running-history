@@ -176,13 +176,26 @@ back to treating the whole day as a single lap.
 **Pace zones** (easy/marathon/threshold/interval/repetition) are five %VDOT bands,
 anchored at 65.7/81.8/88.0/97.6/106.2% (back-solved from the vdoto2.com example
 above) with the boundary between two neighbours at their midpoint, so the bands
-tile the %VDOT axis with no gap or overlap. The two open ends (below easy, above
-repetition) are closed off at 40% and 120% purely so the outer zones have something
-finite to split into sub-bands each — not physiological limits, just where the
-binning stops mattering. The sub-band count per zone is `ZONE_BARS`, a setting
-(default 5, adjustable 1–20 — "Pace-zone bars" in the settings sidebar).
-`zoneBandFor()` maps a %VDOT to one of the `5 * ZONE_BARS` bins
-(`zone*ZONE_BARS + subBand`, continuous easy0.. , marathon0.., ...).
+tile the %VDOT axis with no gap or overlap. The fast end (above repetition) is
+still closed off at a practical 120% ceiling purely so the top zone has something
+finite to split into sub-bands — not a physiological limit, just where the binning
+stops mattering. The sub-band count per zone is `ZONE_BARS`, a setting (default 5,
+adjustable 1–20 — "Pace-zone bars" in the settings sidebar). `zoneBandFor()` maps
+a %VDOT to one of the `5 * ZONE_BARS` bins (`zone*ZONE_BARS + subBand`, continuous
+easy0.. , marathon0.., ...).
+
+Easy's slow end used to be closed off the same way, at a practical 40% floor —
+which meant a genuinely slow recovery jog and standing still at a red light landed
+in the same bin. It no longer is: `STANDING_MAX_VEL` (slower than 20:00/km, fixed
+in absolute pace rather than %VDOT, because "am I moving at all" doesn't scale
+with fitness the way effort zones do) is checked before a lap is ever binned into
+a zone. Anything slower goes to a dedicated **Standing** bar instead — drawn as
+its own single grey (`--nocolour`) bar, separated from the five zones by a bar
+width of empty space rather than a divider line, with its own legend swatch.
+Because standing time is siphoned off first, easy's own floor (`easyFloorPct()`)
+is now a real, per-day %VDOT boundary — whatever 20:00/km works out to for that
+day's VDOT — not an open "slower than" reading; only repetition's fast edge is
+still reported open-ended.
 
 **The pace-zone histogram** (below the four main panels) is pinned-day-only,
 deliberately keyed on `selected` rather than `shownDay()` — it's the one place on
@@ -197,11 +210,12 @@ Hovering a bin (this redraws the whole bar canvas — cheap, unlike the lap walk
 above it, which only runs once per pin) shows its pace range in `#zoneHoverInfo`:
 the two %VDOT bounds either side of the bin, converted back to pace via
 `velocityFromVo2()`. Higher %VDOT is faster (lower min/km), so the bin's *slow*
-edge comes from its *lower* bound and vice versa. The two outer bins — easy's
-slowest, repetition's fastest — read off `ZONE_BOUND_PCT`'s practical 40%/120%
-floor and ceiling (see the comment on that constant) rather than a real boundary,
-so they're reported as open-ended ("slower than", "faster than") instead of a
-two-sided range.
+edge comes from its *lower* bound and vice versa. Repetition's fastest bin reads
+its open ceiling off `ZONE_BOUND_PCT`'s practical 120% bound (see the comment on
+that constant) rather than a real boundary, so it's reported as open-ended
+("faster than") instead of a two-sided range. The Standing bar has no pace range
+at all — it isn't a pace — so its hover text just reports time spent below
+`STANDING_MAX_VEL`.
 
 **Colour**: five hues (blue/green/gold/orange/red) validated with the `dataviz`
 skill's palette checker using **adjacent** pairs, not all-pairs — this is an
