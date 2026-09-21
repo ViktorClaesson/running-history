@@ -215,8 +215,8 @@ to hold, so gold is the closest a five-hue ordered set gets while still passing.
 `runviz.prefs.v1` holds everything the settings sidebar and the what-if box can be
 set to, so the page opens the way it was left: `windowVol`, `windowFreq`,
 `windowVdot`, `minLapM`, `stableBand`, `longNeedsSingleRun`, `colourNormal`,
-`colourLong`, `settingsOpen`, and `plan` (`null` = the what-if box follows real
-history, `{km, days}` = edited). Three rules:
+`colourLong`, and `plan` (`null` = the what-if box follows real history,
+`{km, days}` = edited). Three rules:
 
 - **Read at the very top of the `if (DATA)` block**, above `let WINDOW_VOL` /
   `let WINDOW_FREQ` / `let WINDOW_VDOT`, because `recompute()` runs at load and
@@ -257,15 +257,12 @@ the page mid-history.
 
 **The settings sidebar** (legend + all the controls above, formerly a header row
 across the top of the chartcard) is the third sidebar-shaped thing on the page,
-on the opposite side from the readout — `<aside id="settingsSidebar">`, toggled by
-the gear button in the datarow rather than following `selected`/`hover` like the
-other two. Hidden by default so the page opens uncluttered; `settingsOpen` is
-persisted like any other pref, but deliberately left **out of** the Reset button's
-list above — Reset owns the chart settings that live inside the sidebar, not the
-sidebar's own visibility, the same separation of concerns as the what-if box
-having its own reset. Being a vertical list rather than a horizontal bar-controls
-row meant `.ctrls` lost its `margin-left: auto` (nothing to push right against in
-a column) and gained `flex-direction: column; align-items: stretch` instead.
+on the opposite side from the readout — `<aside id="settingsSidebar">`, always
+visible rather than following `selected`/`hover` like the other two (a gear-button
+toggle for it was tried and dropped — always-on won). Being a vertical list rather
+than a horizontal bar-controls row meant `.ctrls` lost its `margin-left: auto`
+(nothing to push right against in a column) and gained
+`flex-direction: column; align-items: stretch` instead.
 
 ## Colour system
 
