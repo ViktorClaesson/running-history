@@ -243,10 +243,23 @@ pace bounds directly rather than going through `paceRangeFor()`.
 skill's palette checker using **adjacent** pairs, not all-pairs — this is an
 ordered bar histogram where neighbours are what matters, the same basis the
 checker itself uses for stacks/bars/lines. Light mode's worst adjacent CVD ΔE is
-22.0, dark mode's is 12.5, both comfortably above the 8.0 target. "Threshold"
+20.0, dark mode's is 12.5, both comfortably above the 8.0 target. "Threshold"
 reads as gold/mustard rather than a bright lemon yellow: true yellow's natural
 lightness sits outside the band usable once chroma and CVD separation both have
 to hold, so gold is the closest a five-hue ordered set gets while still passing.
+
+Threshold's light-mode `--z-threshold` (the "strong" end of its weak→strong
+pair) is picked to sit at nearly the same OKLab *hue* as `--z-threshold-weak`
+(~84°), not just any hex that independently passes the CVD/lightness/chroma
+checks. The zone histogram interpolates weak→strong per sub-band (`zoneRamps` in
+`buildRamps()`), so a colour that passes validation on its own but drifts hue
+partway to a different colour still breaks visually: the original strong
+(`#923c00`) drifted ~38° toward red, so a zone meant to read as "gold
+throughout, just deeper" visibly turned red-brown at its fastest sub-bands —
+which is what "Threshold 4 looks like dark red" was. Dark mode's pair only
+drifts ~7° and didn't need the same fix. When picking a zone's "strong" colour,
+check both: passes validation standalone, AND stays close in hue to its own
+"weak" partner.
 
 ## Remembered settings
 

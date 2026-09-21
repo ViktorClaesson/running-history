@@ -40,17 +40,24 @@
        fast→slow around the visible spectrum. Adjacent-pair CVD ΔE validated (not
        all-pairs — this is an ordered bar histogram where neighbours are what
        matters, same basis the skill's validator uses for stacks/bars/lines):
-       light worst-adjacent ΔE 22.0, dark 12.5, both well above the 8.0 target.
+       light worst-adjacent ΔE 20.0, dark 12.5, both well above the 8.0 target.
        "Threshold" reads as gold/mustard rather than a bright lemon yellow —
        true yellow's natural lightness sits outside the usable band once chroma
        and CVD separation are both satisfied, so gold is the closest a five-hue
-       ordered set gets while still passing. */
+       ordered set gets while still passing. Its light-mode --z-threshold is
+       picked to sit at nearly the SAME OKLab hue as --z-threshold-weak (~84°)
+       rather than just any colour that passes CVD/lightness/chroma on its own —
+       the zone histogram interpolates weak→strong per sub-band (see zoneRamps in
+       buildRamps()), and the original strong (#923c00) drifted ~38° towards red,
+       so a zone meant to read as "gold throughout" visibly turned red-brown at
+       its fastest sub-bands. Dark mode's pair drifts only ~7° and didn't need
+       the same fix. */
     --z-easy-weak:        #869fe3;
     --z-easy:             #3554da;
     --z-marathon-weak:    #80e1bc;
     --z-marathon:         #00c17f;
     --z-threshold-weak:   #b48b2e;
-    --z-threshold:        #923c00;
+    --z-threshold:        #7c5000;
     --z-interval-weak:    #f5be8c;
     --z-interval:         #e97f00;
     --z-repetition-weak:  #cf8d95;
@@ -266,6 +273,7 @@
   .zone-legend { display: flex; gap: 14px; flex-wrap: wrap; padding: 0 4px 8px; font-size: 12px; color: var(--text-secondary); }
   .zone-legend .item { display: inline-flex; align-items: center; gap: 6px; }
   .zone-empty { padding: 18px 4px; color: var(--muted); font-size: 13px; }
+  .zone-note { padding: 0 4px 8px; color: var(--muted); font-size: 12px; }
   .zone-hover { padding: 0 4px 8px; font-size: 12px; color: var(--text-secondary);
     font-variant-numeric: tabular-nums; }
 
@@ -1821,7 +1829,17 @@ function renderZonePanel() {
     `<span class="item"><span class="swatch" style="background:${leadRamps.walking}"></span>Walking</span>` +
     `<span class="item"><span class="swatch" style="background:${leadRamps.recovery}"></span>Recovery</span>` +
     ZONES.map(z => `<span class="item"><span class="swatch" style="background:${C(z.strong)}"></span>${z.label}</span>`).join('');
-  zoneBody.innerHTML = `<div class="zone-legend">${legend}</div>` +
+  // The histogram is only ever as granular as the recorded laps — if Runalyze
+  // didn't save any splits for this day (an older activity, a device that
+  // doesn't autolap, a manual entry), paceHistogramFor() falls back to treating
+  // the whole day as one lap at its average pace, and every minute lands in a
+  // single bin no matter how many ZONE_BARS are configured. Said so up front,
+  // since "the whole run is in one bar" otherwise reads as a binning bug.
+  const noSplits = !(dayLaps[selected] && dayLaps[selected].length);
+  const note = noSplits
+    ? `<div class="zone-note">No lap splits recorded for this day — Runalyze has only the day's total distance and time, so it's judged as one uniform pace rather than broken down further.</div>`
+    : '';
+  zoneBody.innerHTML = `<div class="zone-legend">${legend}</div>` + note +
     `<div class="zone-hover" id="zoneHoverInfo">Hover a bar to see its pace range</div>` +
     `<canvas id="chartZone"></canvas>`;
   const cvZ = document.getElementById('chartZone');
