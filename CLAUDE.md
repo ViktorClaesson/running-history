@@ -31,7 +31,7 @@ Four stacked panels sharing one x-axis, one bar/point per calendar day:
    counts, so a double-run day shows as 2. Axis is not fixed at 0–7 like the panel
    above it, since it can run higher.
 4. **Line** — highest VDOT achieved by any workout in the trailing *VDOT* window
-   (default 130 weeks, set independently — see "VDOT and pace zones" below).
+   (default 50 weeks, set independently — see "VDOT and pace zones" below).
    Undefined (a gap, not a zero) before the first-ever logged run.
 
 Hovering a day fills the readout sidebar: exact distance, the rolling average
@@ -161,7 +161,7 @@ rest lap that happens to clear it still never wins the search on its own. Checki
 the whole day too (not just as a fallback for days with no lap data) is what makes
 an evenly-paced tempo run or race its own best evidence when it beats every
 individual lap. The **VDOT panel** is the rolling max of that across the trailing *VDOT*
-window (`WINDOW_VDOT`, default 130 weeks — the only one of the three windows that
+window (`WINDOW_VDOT`, default 50 weeks — the only one of the three windows that
 wants years, not weeks, because "what's my fitness ceiling" and "how often am I
 running" are different-timescale questions). It's a plain sliding-window max
 (monotonic deque, O(N)), not a target, so — unlike the volume/frequency target math
@@ -178,20 +178,22 @@ anchored at 65.7/81.8/88.0/97.6/106.2% (back-solved from the vdoto2.com example
 above) with the boundary between two neighbours at their midpoint, so the bands
 tile the %VDOT axis with no gap or overlap. The two open ends (below easy, above
 repetition) are closed off at 40% and 120% purely so the outer zones have something
-finite to split into 10 sub-bands each — not physiological limits, just where the
-binning stops mattering. `zoneBandFor()` maps a %VDOT to one of the 50 bins
-(`zone*10 + subBand`, continuous easy0..easy9, marathon0..marathon9, ...).
+finite to split into sub-bands each — not physiological limits, just where the
+binning stops mattering. The sub-band count per zone is `ZONE_BARS`, a setting
+(default 5, adjustable 1–20 — "Pace-zone bars" in the settings sidebar).
+`zoneBandFor()` maps a %VDOT to one of the `5 * ZONE_BARS` bins
+(`zone*ZONE_BARS + subBand`, continuous easy0.. , marathon0.., ...).
 
 **The pace-zone histogram** (below the four main panels) is pinned-day-only,
 deliberately keyed on `selected` rather than `shownDay()` — it's the one place on
-the page that does not follow hover, because a lap walk plus a 50-bin canvas
+the page that does not follow hover, because a lap walk plus a full-canvas
 redraw on every mouse-move would be the wrong trade. It judges the pinned day's
 laps against **that day's own rolling VDOT** (the fitness level at the time), not
 today's — a hard rep from years ago is read against years-ago fitness. Empty when
 the day has no run, or predates the very first logged run (VDOT isn't a
 meaningful zero, so there's nothing to bin against).
 
-Hovering a bin (this redraws the whole 50-bar canvas — cheap, unlike the lap walk
+Hovering a bin (this redraws the whole bar canvas — cheap, unlike the lap walk
 above it, which only runs once per pin) shows its pace range in `#zoneHoverInfo`:
 the two %VDOT bounds either side of the bin, converted back to pace via
 `velocityFromVo2()`. Higher %VDOT is faster (lower min/km), so the bin's *slow*
@@ -215,7 +217,7 @@ to hold, so gold is the closest a five-hue ordered set gets while still passing.
 `runviz.prefs.v1` holds everything the settings sidebar and the what-if box can be
 set to, so the page opens the way it was left: `windowVol`, `windowFreq`,
 `windowVdot`, `minLapM`, `stableBand`, `longNeedsSingleRun`, `colourNormal`,
-`colourLong`, and `plan` (`null` = the what-if box follows real history,
+`colourLong`, `zoneBars`, and `plan` (`null` = the what-if box follows real history,
 `{km, days}` = edited). Three rules:
 
 - **Read at the very top of the `if (DATA)` block**, above `let WINDOW_VOL` /
@@ -223,14 +225,16 @@ set to, so the page opens the way it was left: `windowVol`, `windowFreq`,
   reads the first two — the declaration-order gotcha below. (`WINDOW_VDOT` isn't
   read by `recompute()`, but is declared alongside the other two for the same
   reason. `MIN_LAP_M` is declared further down, right next to `recomputeDayVdot()`
-  — nothing earlier touches it, so it doesn't need to move.)
+  — nothing earlier touches it, so it doesn't need to move. `ZONE_BARS` is declared
+  right next to the `ZONES` constant, for the same reason.)
 - **Validated field by field on load** (`loadPrefs`), against the same limits as the
   inputs, so a stale or hand-edited entry can only produce a state the UI can reach.
   All three windows are additionally rounded to the nearest whole week, since
   that's the only unit the controls can produce — `windowVdot`'s range is 1–260
   weeks, wider than the other two's 1–52, since it wants years rather than weeks.
-  `minLapM` is rounded to the nearest 100m, range 100–5000. Anything that fails
-  falls back to `PREF_DEFAULTS` for that field alone.
+  `minLapM` is rounded to the nearest 100m, range 100–5000. `zoneBars` is rounded
+  to the nearest whole number, range 1–20. Anything that fails falls back to
+  `PREF_DEFAULTS` for that field alone.
 - **Written only when something is off-default** (`savePrefs`), and the entry is
   *removed* the moment everything is back to default. A page whose settings have
   never been touched leaves nothing behind.
@@ -241,8 +245,9 @@ the defaults, and a remembered setting has to overwrite them at boot.
 **There are two resets, and each owns only what sits next to it.**
 
 - **Reset** in the settings sidebar: all three windows, the min-lap distance,
-  stable band, the long-run rule and both colour toggles back to their defaults,
-  plus the view zoomed back out. It does *not* touch the what-if.
+  stable band, the pace-zone bar count, the long-run rule and both colour toggles
+  back to their defaults, plus the view zoomed back out. It does *not* touch the
+  what-if.
 - **reset** in the Today's target tile: clears the what-if back to following real
   history, and nothing else.
 
