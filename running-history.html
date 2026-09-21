@@ -218,10 +218,16 @@
     background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px;
     padding: 12px 12px 8px;
   }
-  .bar-controls {
-    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
-    padding: 0 4px 10px; font-size: 12px; color: var(--text-secondary);
+  /* The settings sidebar is a vertical list — column layout throughout, unlike
+     the old horizontal bar-controls row this replaced (a wide chartcard header
+     had room to lay the legend and the controls side by side; a 280px sidebar
+     doesn't, so .ctrls stacks too rather than being pushed right by margin-left:auto). */
+  #settingsSidebar {
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 16px; display: flex; flex-direction: column; gap: 16px;
+    font-size: 12px; color: var(--text-secondary);
   }
+  #settingsSidebar[hidden] { display: none; }
   .legend { display: flex; flex-direction: column; gap: 3px; align-items: flex-start; }
   .legend-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
   .legend-tag { color: var(--text-secondary); font-weight: 600; min-width: 82px;
@@ -231,13 +237,13 @@
   .swatch { position: relative; overflow: hidden; }
   .swatch.hatched::after { content: ''; position: absolute; inset: 0;
     background: repeating-linear-gradient(45deg, var(--hatch) 0 1.5px, transparent 1.5px 4px); }
-  .ctrls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
-    margin-left: auto; justify-content: flex-end; }
+  .ctrls { display: flex; flex-direction: column; align-items: stretch; gap: 10px; }
   .legend .item { display: inline-flex; align-items: center; gap: 6px; }
   .swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
   .swatch.ramp { width: 26px; }
   .spacer { flex: 1 1 auto; }
   .legend-note { color: var(--muted); font-size: 11px; }
+  .gear-btn { font-size: 12px; }
   button, label.chk {
     font: inherit; font-size: 12px; color: var(--text-secondary);
     background: transparent; border: 1px solid var(--border); border-radius: 6px;
@@ -304,6 +310,45 @@
 </head>
 <body>
 <div class="page">
+<aside class="sidebar settings-sidebar" id="settingsSidebar" hidden>
+  <div class="legend">
+    <div class="legend-row" id="row-normal"><label class="legend-tag"><input type="checkbox" id="colourNormal" checked> Normal run</label>
+      <span class="item"><span class="swatch ramp" style="background:linear-gradient(90deg,var(--n-un-weak),var(--n-un))"></span>▼ unproductive</span>
+      <span class="item"><span class="swatch" style="background:var(--n-pr-weak)"></span>= stable</span>
+      <span class="item"><span class="swatch ramp" style="background:linear-gradient(90deg,var(--n-pr-weak),var(--n-pr))"></span>▲ productive</span>
+    </div>
+    <div class="legend-row" id="row-long"><label class="legend-tag"><input type="checkbox" id="colourLong" checked> Long run <span class="legend-dim">(&gt;1.5&times; target, hatched; needs &ge;3 runs/wk)</span></label>
+      <span class="item"><span class="swatch ramp hatched" style="background:linear-gradient(90deg,var(--l-un-weak),var(--l-un))"></span>▼ unproductive</span>
+      <span class="item"><span class="swatch hatched" style="background:var(--l-pr-weak)"></span>= stable</span>
+      <span class="item"><span class="swatch ramp hatched" style="background:linear-gradient(90deg,var(--l-pr-weak),var(--l-pr))"></span>▲ productive</span>
+    </div>
+    <div class="legend-row"><span class="legend-tag">No run</span>
+      <span class="item"><span class="swatch" style="background:var(--rest)"></span>rest day</span>
+      <span class="legend-dim">stable = within &plusmn;<span class="bandN">1</span>% of target; colour ramps to full over the remaining <span class="gradN">49</span>%</span>
+    </div>
+  </div>
+  <div class="ctrls">
+  <label class="chk">Volume window
+    <input type="number" id="windowVolWeeks" min="1" max="52" step="1" value="4"> weeks
+  </label>
+  <label class="chk">Frequency window
+    <input type="number" id="windowFreqWeeks" min="1" max="52" step="1" value="16"> weeks
+  </label>
+  <label class="chk">VDOT window
+    <input type="number" id="windowVdotWeeks" min="1" max="260" step="1" value="130"> weeks
+  </label>
+  <label class="chk" title="A lap shorter than this can't be trusted on its own for VDOT — too short and fast a rep overstates it wildly. The whole workout is always checked too, and the higher of the two wins.">Min lap for VDOT
+    <input type="number" id="minLapM" min="100" max="5000" step="100" value="1500"> m
+  </label>
+  <label class="chk" title="Whether a day has to contain one long run on its own, rather than reaching the distance across several runs.">
+    <input type="checkbox" id="longSingle" checked> Long run needs a single run
+  </label>
+  <label class="chk" title="How close to the target still counts as holding steady.">Stable band &plusmn;
+    <input type="number" id="stableBand" min="0" max="5" step="0.5" value="1">%
+  </label>
+  <button id="reset" title="Put the windows, min lap distance, stable band, colour toggles and long-run rule back to their defaults, and zoom back out. Leaves the what-if target alone — that has its own reset.">Reset</button>
+  </div>
+</aside>
 <div class="wrap">
   <h1>Running history — <span id="h1win">70</span>-day rolling average</h1>
   <p class="sub">
@@ -317,51 +362,13 @@
     <span id="data-info"></span>
     <button id="data-refresh" hidden>Refresh from file</button>
     <button id="data-change">Change file&hellip;</button>
+    <span class="spacer"></span>
+    <button id="settingsToggle" class="gear-btn" title="Show settings">&#9881;&#xFE0E; Settings</button>
   </div>
 
   <div class="tiles" id="tiles"></div>
 
   <div class="chartcard">
-    <div class="bar-controls">
-      <div class="legend">
-        <div class="legend-row" id="row-normal"><label class="legend-tag"><input type="checkbox" id="colourNormal" checked> Normal run</label>
-          <span class="item"><span class="swatch ramp" style="background:linear-gradient(90deg,var(--n-un-weak),var(--n-un))"></span>▼ unproductive</span>
-          <span class="item"><span class="swatch" style="background:var(--n-pr-weak)"></span>= stable</span>
-          <span class="item"><span class="swatch ramp" style="background:linear-gradient(90deg,var(--n-pr-weak),var(--n-pr))"></span>▲ productive</span>
-        </div>
-        <div class="legend-row" id="row-long"><label class="legend-tag"><input type="checkbox" id="colourLong" checked> Long run <span class="legend-dim">(&gt;1.5&times; target, hatched; needs &ge;3 runs/wk)</span></label>
-          <span class="item"><span class="swatch ramp hatched" style="background:linear-gradient(90deg,var(--l-un-weak),var(--l-un))"></span>▼ unproductive</span>
-          <span class="item"><span class="swatch hatched" style="background:var(--l-pr-weak)"></span>= stable</span>
-          <span class="item"><span class="swatch ramp hatched" style="background:linear-gradient(90deg,var(--l-pr-weak),var(--l-pr))"></span>▲ productive</span>
-        </div>
-        <div class="legend-row"><span class="legend-tag">No run</span>
-          <span class="item"><span class="swatch" style="background:var(--rest)"></span>rest day</span>
-          <span class="legend-dim">stable = within &plusmn;<span class="bandN">1</span>% of target; colour ramps to full over the remaining <span class="gradN">49</span>%</span>
-        </div>
-      </div>
-      <span class="spacer"></span>
-      <div class="ctrls">
-      <label class="chk">Volume window
-        <input type="number" id="windowVolWeeks" min="1" max="52" step="1" value="4"> weeks
-      </label>
-      <label class="chk">Frequency window
-        <input type="number" id="windowFreqWeeks" min="1" max="52" step="1" value="16"> weeks
-      </label>
-      <label class="chk">VDOT window
-        <input type="number" id="windowVdotWeeks" min="1" max="260" step="1" value="130"> weeks
-      </label>
-      <label class="chk" title="A lap shorter than this can't be trusted on its own for VDOT — too short and fast a rep overstates it wildly. The whole workout is always checked too, and the higher of the two wins.">Min lap for VDOT
-        <input type="number" id="minLapM" min="100" max="5000" step="100" value="1500"> m
-      </label>
-      <label class="chk" title="Whether a day has to contain one long run on its own, rather than reaching the distance across several runs.">
-        <input type="checkbox" id="longSingle" checked> Long run needs a single run
-      </label>
-      <label class="chk" title="How close to the target still counts as holding steady.">Stable band &plusmn;
-        <input type="number" id="stableBand" min="0" max="5" step="0.5" value="1">%
-      </label>
-      <button id="reset" title="Put the windows, min lap distance, stable band, colour toggles and long-run rule back to their defaults, and zoom back out. Leaves the what-if target alone — that has its own reset.">Reset</button>
-      </div>
-    </div>
     <canvas id="chart"></canvas>
     <div class="panel-title">Average run days per week, over the trailing <span class="winFreqN">70</span> days</div>
     <canvas id="chart2"></canvas>
@@ -735,6 +742,7 @@ const PREF_DEFAULTS = {
   longNeedsSingleRun: true,
   colourNormal: true,
   colourLong: true,
+  settingsOpen: false,   // not part of Reset — that's chart settings, this is just panel visibility
   plan: null,        // null = the what-if box follows real history; {km, days} = edited
 };
 function loadPrefs() {
@@ -751,7 +759,7 @@ function loadPrefs() {
   if (num(raw.windowVdot, 7, 1820)) p.windowVdot = week(raw.windowVdot, 1820);
   if (num(raw.minLapM, 100, 5000)) p.minLapM = Math.round(raw.minLapM / 100) * 100;
   if (num(raw.stableBand, 0, 0.05)) p.stableBand = raw.stableBand;
-  for (const k of ['longNeedsSingleRun', 'colourNormal', 'colourLong']) {
+  for (const k of ['longNeedsSingleRun', 'colourNormal', 'colourLong', 'settingsOpen']) {
     if (typeof raw[k] === 'boolean') p[k] = raw[k];
   }
   if (raw.plan && num(raw.plan.km, 0, 700) && num(raw.plan.days, 0, 7)) {
@@ -773,6 +781,7 @@ function savePrefs() {
     longNeedsSingleRun,
     colourNormal: colourScheme.normal,
     colourLong: colourScheme.long,
+    settingsOpen,
     plan: planEdited ? { km: plan.km, days: plan.days } : null,
   };
   const changed = Object.keys(PREF_DEFAULTS)
@@ -2082,6 +2091,20 @@ minLapInput.onchange = minLapInput.oninput = () => {
 };
 syncControls();
 syncLabels();
+
+// The settings sidebar's own visibility — not a chart setting, so the Reset
+// button doesn't touch it, only the gear button does. Sits on the opposite side
+// of the page from the readout sidebar, hidden by default so the page opens
+// uncluttered; a returning visitor who opened it stays opened.
+const settingsSidebar = document.getElementById('settingsSidebar');
+const settingsToggle = document.getElementById('settingsToggle');
+let settingsOpen = prefs.settingsOpen;
+function syncSettingsVisibility() {
+  settingsSidebar.hidden = !settingsOpen;
+  settingsToggle.title = settingsOpen ? 'Hide settings' : 'Show settings';
+}
+settingsToggle.onclick = () => { settingsOpen = !settingsOpen; savePrefs(); syncSettingsVisibility(); };
+syncSettingsVisibility();
 
 window.addEventListener('resize', () => { drawAll(); renderZonePanel(); });
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { drawAll(); renderZonePanel(); });

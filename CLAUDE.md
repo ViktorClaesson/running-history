@@ -212,11 +212,11 @@ to hold, so gold is the closest a five-hue ordered set gets while still passing.
 
 ## Remembered settings
 
-`runviz.prefs.v1` holds everything the controls row and the what-if box can be set
-to, so the page opens the way it was left: `windowVol`, `windowFreq`, `windowVdot`,
-`minLapM`, `stableBand`, `longNeedsSingleRun`, `colourNormal`, `colourLong`, and
-`plan` (`null` = the what-if box follows real history, `{km, days}` = edited).
-Three rules:
+`runviz.prefs.v1` holds everything the settings sidebar and the what-if box can be
+set to, so the page opens the way it was left: `windowVol`, `windowFreq`,
+`windowVdot`, `minLapM`, `stableBand`, `longNeedsSingleRun`, `colourNormal`,
+`colourLong`, `settingsOpen`, and `plan` (`null` = the what-if box follows real
+history, `{km, days}` = edited). Three rules:
 
 - **Read at the very top of the `if (DATA)` block**, above `let WINDOW_VOL` /
   `let WINDOW_FREQ` / `let WINDOW_VDOT`, because `recompute()` runs at load and
@@ -240,7 +240,7 @@ the defaults, and a remembered setting has to overwrite them at boot.
 
 **There are two resets, and each owns only what sits next to it.**
 
-- **Reset** in the chart's controls row: all three windows, the min-lap distance,
+- **Reset** in the settings sidebar: all three windows, the min-lap distance,
   stable band, the long-run rule and both colour toggles back to their defaults,
   plus the view zoomed back out. It does *not* touch the what-if.
 - **reset** in the Today's target tile: clears the what-if back to following real
@@ -254,6 +254,18 @@ with an edited what-if leaves an entry holding only the plan, and vice versa.
 Double-clicking a panel still resets only the zoom, which is view state and
 deliberately *not* remembered — persisting it would fight the Reset button and open
 the page mid-history.
+
+**The settings sidebar** (legend + all the controls above, formerly a header row
+across the top of the chartcard) is the third sidebar-shaped thing on the page,
+on the opposite side from the readout — `<aside id="settingsSidebar">`, toggled by
+the gear button in the datarow rather than following `selected`/`hover` like the
+other two. Hidden by default so the page opens uncluttered; `settingsOpen` is
+persisted like any other pref, but deliberately left **out of** the Reset button's
+list above — Reset owns the chart settings that live inside the sidebar, not the
+sidebar's own visibility, the same separation of concerns as the what-if box
+having its own reset. Being a vertical list rather than a horizontal bar-controls
+row meant `.ctrls` lost its `margin-left: auto` (nothing to push right against in
+a column) and gained `flex-direction: column; align-items: stretch` instead.
 
 ## Colour system
 
