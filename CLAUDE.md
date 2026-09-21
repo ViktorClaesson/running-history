@@ -34,10 +34,12 @@ Four stacked panels sharing one x-axis, one bar/point per calendar day:
    (default 130 weeks, set independently — see "VDOT and pace zones" below).
    Undefined (a gap, not a zero) before the first-ever logged run.
 
-Hovering a day fills a fixed-height readout: exact distance, the rolling average
+Hovering a day fills the readout sidebar: exact distance, the rolling average
 (also as km/wk, km/mo, km/yr), runs per week — as two lines, run days/week on top
-and every-run-counted below it — the day's peak VDOT, the day's target, and the
-verdict. **Clicking a day pins it** there — see below.
+and every-run-counted below it — the day's peak VDOT (plus what that day's own
+reading is actually based on: full activity or best lap, with its distance, time
+and pace — see `vdotBasisText()`), the day's target, and the verdict. **Clicking
+a day pins it** there — see below.
 
 The **Today's target** tile is a what-if calculator: both inputs (km/wk and runs/wk)
 are editable, so a change in volume or frequency can be tried out, and it shows the
