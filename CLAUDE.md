@@ -23,7 +23,8 @@ to refresh). After that the page opens straight into the chart.
 Five stacked panels sharing one x-axis, one bar/point per calendar day:
 
 1. **Bars** — height is **that day's own distance**, on a **logarithmic** axis.
-   Colour is a *verdict on that day's run* (see below). Log, not linear, so equal
+   Colour is a *verdict on where training stands that day* — not on that one run;
+   see "Verdict" below. Log, not linear, so equal
    *ratios* are equal heights: 5→10 km is the same step as 10→20. One 30 km day
    therefore can't squash every ordinary run onto the baseline, and the gap
    between a 4 and a 6 km day stays readable. See "The bar panel's log axis"
@@ -90,7 +91,7 @@ reading is actually based on: full activity or best lap, with its distance, time
 and pace — see `vdotBasisText()`), the day's target, and the verdict. **Clicking
 a day pins it** there — see below.
 
-The **Today's target** tile is a what-if calculator: both inputs (km/wk and runs/wk)
+The **Today's target** tile is a what-if calculator: both inputs (km/wk and days/wk)
 are editable, so a change in volume or frequency can be tried out, and it shows the
 resulting per-run target plus the 1.5× long-run floor and 2× long-run target. It is
 seeded from the exact quantities behind today's real target (`weeklyPrev[N-1]`,
@@ -262,42 +263,73 @@ All of it is derived in-browser from one array of daily distances.
   (except the fixed 0–7 run-days axis), the hover/pin marker moves to MAX, or to
   the shortest window still drawn when MAX is off, and a window's start mark
   goes with its line (see "Window-start marks" above).
-- **The two windows the maths still needs** — a run can only be judged against a
-  single number, so the target keeps exactly one volume window and one frequency
-  window: `IV`/`IF`, **slots 1 and 2**, i.e. `WINDOW_VOL` and `WINDOW_FREQ`,
-  which at the defaults are the 4 and 16 weeks that used to be settings of their
-  own. Slots rather than free numbers, so the target is always read against a
-  line that is actually on screen — which does mean **`windowBase`/`windowMult`
-  move the targets, and with them the bar colours and verdicts**, not only what
-  the line panels draw. Deliberate, but worth knowing before wondering why a
-  whole history changed colour. `avg`,
-  `perWeekAt()` and `perWeekRunsAt()` are the single-window views the tiles, the
-  table and the target maths read.
-- **Target** — what a run that day had to be to hold the average steady:
+- **The two windows the target maths needs** — a *target* can only be a single
+  number, so it keeps exactly one volume window and one frequency window:
+  `IV`/`IF`, **slots 1 and 2**, i.e. `WINDOW_VOL` and `WINDOW_FREQ`, which at
+  the defaults are the 4 and 16 weeks that used to be settings of their own.
+  Slots rather than free numbers, so the target is always read against a line
+  that is actually on screen. `avg`, `perWeekAt()` and `perWeekRunsAt()` are the
+  single-window views the tiles, the table and the target maths read.
+  **`windowBase`/`windowMult` therefore move the targets — and, for a separate
+  reason, the bar colours too**, since the verdict compares neighbouring windows
+  directly. Deliberate, but worth knowing before wondering why a whole history
+  changed colour.
+- **Verdict** (`classify`) — the **bar colours**, and the only thing the four
+  verdict hues mean. It is read off the **distance-per-week windows on that day**
+  — the same `volSeries` the second panel draws — comparing each window against
+  the next longer one, shortest first, and stopping at the first rung that holds:
+
+  | | | |
+  |---|---|---|
+  | `w0 ≥ w1` | **highly productive** | this week is at least holding the block up |
+  | else `w1 ≥ w2` | **productive** | the block is at least holding the quarter up |
+  | else `w2 ≥ w3` | **steady** | the quarter is at least holding the year up |
+  | else | **unproductive** | every span sits below the one above it |
+
+  Flat colours, no ramp: a rung either holds or it doesn't, so there is nothing
+  left to ramp along. `c.at` is the index of the window that won, or `null` for
+  unproductive, purely so `verdictWhy()` can name the comparison ("4w ≥ 16w", or
+  the whole chain "1w < 4w < 16w < 64w") next to the word in the readout and the
+  table. A **rest day still has no verdict** (`classify` returns `null`) and keeps
+  its pale `--rest` stub, so every colour on the chart belongs to a run.
+
+  **Why not judge the run.** The old verdict was the day's distance over a target
+  for that day, ramped by how far past it landed. It never really worked: a
+  deliberately easy day, a long run and an interval session are all the "wrong"
+  length on purpose, so the colour said more about which *kind* of day it was
+  than about whether training was going anywhere. Comparing the windows instead
+  asks the question the chart is actually for. What went with it: the long-run
+  scheme (its 1.5×/2× centres, `LONG_MIN_RUNS_PER_WEEK` gate and
+  `longNeedsSingleRun` setting), the `stableBand` setting, and the OKLab ramps —
+  see "Colour system" for the hatch that went with the long-run scheme.
+
+  **A skew worth knowing about.** On a day you ran, the 1-week window *contains*
+  that run, so `w0 ≥ w1` is the easy rung to clear: on a real 1339-day export
+  that is 423 of 603 run days highly productive, 137 productive, 42 steady and
+  **1** unproductive. That is the rule behaving as specified, not a bug — but it
+  does mean "highly productive" is the common reading rather than a rare one.
+  (Reading the windows as of *yesterday* instead would give 368/166/62/6, and
+  scoring every day rather than only run days 727/375/207/30. Neither is what is
+  implemented.)
+- **Target** — still computed and still shown (the readout's distance line and the
+  data table's Target column), it just no longer colours anything. What a run that
+  day had to be to hold the average steady:
   **weekly volume ÷ (run days per week + 1)** when long runs are active, otherwise
   ÷ run days per week (which is just mean km per *running* day). Weekly volume comes
   from `WINDOW_VOL`; run days per week comes from `WINDOW_FREQ` — the target blends
   both windows on purpose, one for "how much" and one for "how often". The `+1` is
-  because one run per week is expected to be the long one, so a 3-runs/week week is
+  because one run per week is expected to be the long one, so a 3-days/week week is
   1+1+2 = 4 target-sized efforts.
   Computed **only from the window ending yesterday**, never including the day being
   judged (comparing a run to an average it is part of is circular; and the raw
   average also moves when an old run drops out of the window).
   A median-run mode existed briefly and was removed — once the long run is counted
   as an extra day the mean is no longer skewed the way that was meant to fix.
-- **Long runs** — a second scheme read against **2×** target instead of 1×, for days
-  past the 1.5× midpoint. Gated two ways: only at **≥3.0 run days/week** over
-  `WINDOW_FREQ` (`LONG_MIN_RUNS_PER_WEEK`), and by default only when a **single**
-  run clears 1.5× on its own (`longNeedsSingleRun`) rather than a day reaching it
-  across two runs.
-- **Verdict** — ratio of the day's distance to its target, then:
-  `|ratio − centre| ≤ stableBand` → **stable**; otherwise **productive** (above) or
-  **unproductive** (below), with colour ramping to full strength over the remaining
-  distance to the halfway mark (`gradient window = 50% − stableBand`). Band default
-  ±1%, adjustable 0–5%.
-  With a ±5% band the whole range tiles as: `<50 full un | 50–95 ramp | 95–105
-  stable | 105–150 ramp pr` (normal, centre 1×) then `150–195 ramp un | 195–205
-  stable | 205–250 ramp pr | >250 full pr` (long, centre 2×).
+  **This is the one place the long-run idea survives**, because it is the maths the
+  Today's target what-if box is built on and that box was kept as it was;
+  `LONG_MIN_RUNS_PER_WEEK` and `longOn` live on for it alone. Keeping the per-day
+  target and the what-if box on the same formula is what stops today's tile
+  disagreeing with today's readout.
 - **Everything is divided by its full window, always** — every one of the four
   windows' series, and the target's two. Each window's own first stretch of days
   therefore ramps in from zero rather than being extrapolated: one run on day one
@@ -566,8 +598,7 @@ for a yellow that passes, because none does.
 `runviz.prefs.v1` holds everything the settings sidebar and the what-if box can be
 set to, so the page opens the way it was left: `windowBase`, `windowMult`,
 `windowVdot`, `minLapM`, `useGap`,
-`stableBand`, `longNeedsSingleRun`, `colourNormal`,
-`colourLong`, `zoneBars`, `maxBehind`, `fadeWindows`, `panels` (`{vol, freq, runs, vdot, zone}`, each independently
+`colourVerdicts`, `zoneBars`, `maxBehind`, `fadeWindows`, `panels` (`{vol, freq, runs, vdot, zone}`, each independently
 show/hide — see below), `lines` (`{max, s0, s1, s2, s3}` — slot keys, which of
 the five lines the three window panels draw), and `plan` (`null` = the what-if box follows real
 history, `{km, days}` = edited). Three rules:
@@ -607,12 +638,11 @@ the defaults, and a remembered setting has to overwrite them at boot.
 **There are two resets, and each owns only what sits next to it.**
 
 - **Reset** in the settings sidebar: the window base and multiple, the VDOT
-  window, the min-lap distance,
-  stable band, the grade-adjusted-pace toggle, the pace-zone bar count, the
-  long-run rule, the MAX draw order,
-  the window-line fade, both colour toggles, the five panel show/hide toggles and the five line
-  show/hide toggles back to their defaults (all shown), plus the view back to
-  its default span. It does *not* touch the what-if.
+  window, the min-lap distance, the grade-adjusted-pace toggle, the pace-zone bar
+  count, the MAX draw order, the window-line fade, the verdict colour toggle, the
+  five panel show/hide toggles and the five line show/hide toggles back to their
+  defaults (all shown), plus the view back to its default span. It does *not*
+  touch the what-if.
 - **reset** in the Today's target tile: clears the what-if back to following real
   history, and nothing else.
 
@@ -652,30 +682,55 @@ much height:
 | Volume & frequency panels | the five line show/hide swatches, the three panel show/hide boxes, `windowBase`/`windowMult`, `fadeWindows`, `maxBehind` |
 | VDOT panel | its show/hide, `windowVdot`, `minLapM`, `useGap` |
 | Pace zones | its show/hide, `zoneBars` |
-| Targets & verdicts | the normal/long/rest colour legend, `longNeedsSingleRun`, `stableBand` |
+| Verdicts | the four-verdict/rest colour legend and `colourVerdicts` |
 
 Two placements are worth naming. **The legend is split across two groups**, not
 kept as one block: the window-line swatches are the show/hide control for those
-lines, so they belong beside the panels they colour, while the verdict ramps
-belong beside the target settings that produce them. And **`minLapM` and `useGap` sit under
+lines, so they belong beside the panels they colour, while the verdict swatches
+belong beside the toggle that switches them off. And **`minLapM` and `useGap` sit under
 VDOT** even though both also move the pace-zone histogram — they are VDOT
 inputs, and the histogram is read against the day's VDOT, so that is where they
 come from. Reset sits outside all four, since it owns the lot.
 
 ## Colour system
 
-Two schemes, three meanings each, plus rest days. Hexes live in the CSS custom
+Four verdicts, one flat colour each, plus rest days. Hexes live in the CSS custom
 properties at the top of the file (light and dark, each declared under three scopes
 — see the comment there).
 
-| | productive | unproductive | stable |
+| verdict | colour | light | dark |
 |---|---|---|---|
-| Normal run | blue `--n-pr` | orange `--n-un` | weakest step of `--n-pr` |
-| Long run | violet `--l-pr` | olive `--l-un` | weakest step of `--l-pr` |
+| highly productive | purple `--v-hp` | `#6b3fa0` | `#7f41b7` |
+| productive | green `--v-pr` | `#2c8a52` | `#007440` |
+| steady | blue `--v-st` | `#5fa4e6` | `#3e96ea` |
+| unproductive | orange `--v-un` | `#e08a1e` | `#d97900` |
 
 Rest days are a pale neutral `--rest` (this is also what the bar panel's rest-day
-stubs are drawn in); a run whose scheme has colouring switched off is a mid neutral
-`--nocolour`.
+stubs are drawn in); with `colourVerdicts` switched off every run falls back to a
+mid neutral `--nocolour`.
+
+Validated on the **all-pairs** basis, not the adjacent one: the verdicts are an
+ordered scale, but any two of them can end up as neighbouring bars, so every pair
+has to separate. Light clears it at worst ΔE **11.2** (protan) / 24.1
+normal-vision, dark at **10.9** / 21.5. Two contrast WARNs accepted, the same
+trade `--w4` already makes: light's blue and orange sit at ~2.6:1 against the
+near-white surface, dark's purple at 2.7:1 — the legend, the hover readout badge
+and the table all name every verdict in words, which is the relief that warning
+asks for.
+
+**The lightness pattern is load-bearing, not an accident.** Purple↔blue and
+green↔orange are both hard pairs under red-green CVD (a naive purple/green/blue/
+orange set lands at ΔE 2–6), and hue alone cannot fix either. So each mode splits
+the four across two lightness rows — purple and green dark, blue and orange light
+— which leaves each *within-row* pair (purple↔green, blue↔orange) separated by
+hue, where those pairs are CVD-safe anyway, and each *cross-row* pair separated
+by lightness as well. Pulling any one of the four back towards the others'
+brightness collapses the pair it was split from. Measured, not guessed: a gamut
+search over OKLCH lightness/chroma/hue with the `dataviz` validator as the scorer.
+
+The 45° hatch that used to mark long runs, and the `--hatch` variable behind it,
+are gone with the long-run scheme — four hues on one channel is within what
+colour can carry, so there is nothing left for a second channel to encode.
 
 The three volume/frequency panels share **one** four-colour scheme, one colour
 per rolling window, so a colour means the same window everywhere: `--w1` blue,
@@ -698,16 +753,19 @@ The earlier per-panel hues (`--vol` rose, `--freq` grey, `--freq2` teal) are
 gone; they encoded which *panel* you were in, which the panel title already says,
 and there is no longer one line per panel to colour.
 
-**The important constraint:** six mutually distinguishable hues do not exist. Within
-a scheme the pair carries the meaning and is validated strongly (normal CVD ΔE 20.9 /
-normal-vision 25.8; long 24.0 / 26.3). *Across* schemes colour cannot separate —
-violet's complement lands in the yellow-green that collides with orange under
-red-green colourblindness (ΔE ~2). So **long runs are marked by a 45° hatch**, which
-stays on even when their colouring is toggled off. Do not "fix" the cross-scheme
-similarity by adding more hues; it has been measured and it does not work.
+**The important constraint:** these are already nine hues across the page (four
+windows, four verdicts, VDOT) and the count cannot keep growing — six mutually
+distinguishable ones do not exist within one chart, which is why the verdict set
+had to buy its separation with lightness rather than a fifth and sixth hue. The
+earlier two-scheme design (normal blue↔orange, long violet↔olive, marked apart by
+a hatch because *across* schemes colour could not separate at all — violet's
+complement lands in the yellow-green that collides with orange, ΔE ~2) is the
+measured record of that limit. Do not try to add hues; it has been measured and
+it does not work.
 
 Ramps are interpolated in OKLab (`hexToOklab` / `oklabToCss`) so mid-ramp steps stay
-clean, precomputed once per frame into 24 steps.
+clean, precomputed once per frame. Only the pace-zone histogram needs them now —
+the verdict colours are flat.
 
 The pace-zone histogram is a separate five-hue scheme (`--z-*`), validated the same
 way but on a different basis — see "VDOT and pace zones" above.
@@ -762,7 +820,7 @@ One file, in this order: CSS custom properties → styles → markup → load-ga
 entire body is wrapped in `if (DATA) { … }` so nothing runs until data exists.
 
 Roughly: `recompute` (the four windows' series + their max + `computeTargets`) →
-`classify` (verdict per day) → `buildRamps`/`barColour` → `drawBars` /
+`classify` (verdict per day, off the windows) → `buildRamps`/`barColour` → `drawBars` /
 `drawWindowPanel` (shared by `drawVol`/`drawFreq`/`drawRuns`) / `drawVdot` /
 `drawAll` → `setReadout`/`winGrid`/`renderTable`/`renderTiles`/`syncLabels`.
 
@@ -774,7 +832,7 @@ Roughly: `recompute` (the four windows' series + their max + `computeTargets`) �
   *above* that call or the whole script dies on a `const`/`let` TDZ error, which
   surfaces confusingly as "Cannot access 'C' before initialization". `loadPrefs()`
   therefore sits above `WINDOWS`; `savePrefs()` may
-  *reference* things declared later (`stableBand`, `plan`) because it is only ever
+  *reference* things declared later (`colourVerdicts`, `plan`) because it is only ever
   *called* later.
 - **`[hidden]` vs `display`.** An author `display:` rule beats the UA stylesheet
   behind the `hidden` attribute. `.gate[hidden] { display: none }` exists for that
