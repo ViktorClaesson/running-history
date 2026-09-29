@@ -100,7 +100,8 @@ and once touched it shows the real figure alongside and offers a reset.
 
 ## The readout: pinning, and why it lives in a sticky sidebar
 
-**Pinning.** Clicking a day sets `selected`; clicking it again, or Esc, releases it.
+**Pinning.** Clicking a day sets `selected`; clicking it again, or `t` or Esc,
+releases it.
 `shownDay()` is hover, else the pinned day, else `lastRunIdx` — the most recent
 day with a run — so the readout (and the pace-zone histogram below, which also
 reads off `shownDay()`) always has something to show rather than sitting idle
@@ -128,12 +129,18 @@ pinning whatever it happened to finish over.
 **Window-start marks.** Every line on every panel is an average over a window
 *ending* on the marked day, and where that window starts used to be a number in
 the legend and nothing on the chart. `markWindowStarts()` marks the first day
-inside each window — a dot at the top of the panel in that window's own colour,
-plus a faint dashed line down through the plot — so each line's reach is
-something you can see against the bars it covers. Every panel gets them: the
-bars and the three window panels mark the four windows (`winMarks()`), and the
-VDOT panel marks its own `WINDOW_VDOT` in `--vdot`, since that window is its own
-thing.
+inside each window — a dot in that window's own colour, plus a faint dashed line
+down through the plot — so each line's reach is something you can see against the
+bars it covers. Every panel gets them: the bars and the three window panels mark
+the four windows (`winMarks()`), and the VDOT panel marks its own `WINDOW_VDOT`
+in `--vdot`, since that window is its own thing.
+
+The dot sits **on its own line**, at that line's value on the start day — each
+caller passes its own y mapping in as `yAt`, so the dot reads as a point of that
+line rather than a tick floating above it, and which colour means which line
+needs no working out. Panels with no line for it to sit on fall back to a row
+just under the top inset (`MARK_Y`): the bars, where a window isn't a series at
+all, and any day the VDOT line is undefined for.
 
 **Both** marked days get a set, the same way both already get a bar outline and
 a line dot: hover's dots are filled and its dashed lines the stronger of the
@@ -151,9 +158,9 @@ there, so it gets a **chevron** at that edge instead, in its own colour: the
 window is still in play, its beginning is just out of view — or, for the long
 windows early in the history, before the first day there is (which is the honest
 reading, since everything is divided by its full window either way). The
-chevrons stack rightwards in window order, one slot per window, so several
-off-screen windows stay countable; a window whose start *is* on screen leaves its
-slot empty rather than shifting the others. When both days have the same window
+chevrons stack rightwards, one slot per window — `m.slot` is the window's own
+index, so a window that is hidden or whose start is on screen leaves a gap rather
+than shifting the rest — which keeps several off-screen windows countable. When both days have the same window
 off-screen the hover chevron takes the slot, since "off to the left" is the whole
 message and both would be saying it; the pin's own chevron is drawn thinner and
 at half alpha, matching its dots.
@@ -170,8 +177,8 @@ bars are a few pixels each and the short windows are a solid band of noise. One
 long window is the widest span where the panels still say something, and it is
 also exactly the span every line on screen is computed over. Scrolling out to
 the full history still works — the clamp is unchanged. `resetView()` is that
-same view, shared by the double-click and the settings Reset so "reset the zoom"
-means one thing in both places. Changing `windowBase`/`windowMult` moves what
+same view, shared by the double-click, the `r` key and the settings Reset so
+"reset the zoom" means one thing everywhere. Changing `windowBase`/`windowMult` moves what
 `defaultSpan()` returns but deliberately does not re-fit the current view.
 
 **Sidebar, not inline.** The readout used to sit directly above the chart, so
@@ -613,6 +620,13 @@ Neither has to know what the other owns, because both just mutate their own stat
 and call `savePrefs()` — which rewrites the whole entry from current state, keeping
 it if anything is still off-default and dropping it if nothing is. So a chart reset
 with an edited what-if leaves an entry holding only the plan, and vice versa.
+
+**Two keys**, for the two things worth doing without aiming at anything: `r`
+resets the view, `t` releases the pin (Esc still does too — `t` is next door to
+`r`, which is what makes the pair usable one-handed with the other hand on the
+mouse). Both ignore modified presses, so ⌘R still reloads, and both ignore
+anything typed into a settings input, where a plain `r` is a keystroke and not a
+shortcut.
 
 Double-clicking a panel still resets only the view (`resetView()` — the default
 span, see "Window-start marks" above), which is view state and deliberately

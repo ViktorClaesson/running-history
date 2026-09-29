@@ -328,6 +328,9 @@
   .panel-title { font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
     color: var(--muted); padding: 4px 0 2px 54px; }
   .hint { padding: 6px 4px 0; font-size: 11px; color: var(--muted); }
+  /* a key to press, not code: same face as the text it sits in, just boxed */
+  .hint kbd { font: inherit; border: 1px solid var(--border); border-radius: 3px;
+    padding: 0 3px; color: var(--text-secondary); }
 
   #chartZone { display: block; width: 100%; height: 220px; }
   .zone-legend { display: flex; gap: 14px; flex-wrap: wrap; padding: 0 4px 8px; font-size: 12px; color: var(--text-secondary); }
@@ -514,8 +517,8 @@
       <div class="panel-title">Highest VDOT in the trailing <span class="winVdotN">910</span> days</div>
       <canvas id="chart4"></canvas>
     </div>
-    <div class="hint">Scroll or pinch to zoom — the day under the cursor stays put while both sides scale around it. Drag to pan. Double-click to go back to the default view, the longest window ending on the most recent day.
-      Click a day to pin its numbers in the readout above; click it again, or press Esc, to release.
+    <div class="hint">Scroll or pinch to zoom — the day under the cursor stays put while both sides scale around it. Drag to pan. Double-click, or press <kbd>r</kbd>, to go back to the default view, the longest window ending on the most recent day.
+      Click a day to pin its numbers in the readout above; click it again, or press <kbd>t</kbd> or Esc, to release.
       The coloured dots along the top of each panel mark where each window reaches back to — filled from the day under the pointer, hollow from the pinned one, and a chevron at the left edge for a window that reaches back past what's drawn.</div>
   </div>
 
@@ -1766,13 +1769,20 @@ const visibleRange = () => [
 // Every line on every panel is an average over a window *ending* on the marked
 // day. Where that window starts was a number in the legend and nothing on the
 // chart, so "the 16-week line here" meant trusting the label. Marking the first
-// day inside each window — a dot at the top of the panel in that window's own
-// colour, plus a faint dashed line down through the plot — turns each line's
-// reach into something you can see against the bars it covers.
+// day inside each window — a dot in that window's own colour, plus a faint
+// dashed line down through the plot — turns each line's reach into something
+// you can see against the bars it covers.
 //
-// Both marked days get a set, the same way both get a bar outline and a line
-// dot: hover's dots are filled and its dashed lines the stronger of the two,
-// the pin's are a hollow ring and fainter. For one window the two sets can
+// The dot sits **on its own line**, at that line's value on the start day
+// (`m.yAt`), so it reads as a point of that line rather than as a tick floating
+// above it — and the pairing of colour to line needs no working out. Panels
+// with no line of their own to sit on fall back to a row just under the top
+// inset (`MARK_Y`): the bars, where a window is not a series at all, and any
+// day the VDOT line is undefined for.
+//
+// Both marked days get a set, the same way both already get a bar outline and a
+// line dot: hover's dots are filled and its dashed lines the stronger of the
+// two, the pin's are a hollow ring and fainter. For one window the two sets can
 // never collide — a window start is one fixed distance back from its day, so
 // two different days have two different starts — which is what makes drawing
 // both readable rather than eight lines in a heap.
@@ -1780,15 +1790,20 @@ const visibleRange = () => [
 // A window reaching back past the left edge of the plot has no start to mark
 // there, so it gets a chevron at that edge instead — the window is still in
 // play, its beginning is just out of view (or, for the long windows early in
-// the history, before the first day there is). The chevrons stack rightwards in
-// window order so several off-screen windows stay countable, one slot per
-// window: when both days have that window off-screen the hover chevron wins the
-// slot, since "off to the left" is the whole message and both would be saying
-// it.
+// the history, before the first day there is). Chevrons keep one slot each
+// (`m.slot`, the window's own index, so a hidden or on-screen window leaves a
+// gap rather than shifting the rest) and stack rightwards, so several
+// off-screen windows stay countable. When both days have that window
+// off-screen the hover chevron wins the slot, since "off to the left" is the
+// whole message and both would be saying it.
+//
 // Follows the per-line show/hide toggles: those exist to declutter these exact
 // lines, and a mark for a line that isn't drawn is clutter of the same kind.
-const winMarks = () => WINDOWS.filter(w => visLines[w.key]);
-const MARK_Y = 4;          // px below the panel's top inset: the dot/chevron row
+// `yAt` is per panel, so each caller hands over its own y mapping.
+const winMarks = yAt => WINDOWS
+  .map((w, k) => ({ days: w.days, css: w.css, slot: k, yAt: yAt && yAt(k) }))
+  .filter(m => visLines[WINDOWS[m.slot].key]);
+const MARK_Y = 4;          // px below the panel's top inset: the fallback dot row
 function markWindowStarts(c, insetTop, plotH, i0, i1, marks) {
   const onScreen = i => i !== null && i >= i0 && i <= i1;
   // Pin first, so a live hover draws over it rather than under it.
@@ -1796,28 +1811,30 @@ function markWindowStarts(c, insetTop, plotH, i0, i1, marks) {
   if (onScreen(selected) && selected !== hover) days.push([selected, true]);
   if (onScreen(hover)) days.push([hover, false]);
   if (!days.length) return;
-  marks.forEach((m, k) => {
+  for (const m of marks) {
     const col = C(m.css);
     let chevron = null;              // null, or true for the pin's / false for hover's
     for (const [day, hollow] of days) {
       const st = day - m.days + 1;
       if (st < i0) { if (chevron === null || !hollow) chevron = hollow; continue; }
       const x = Math.round(xOf(st) + barW() / 2) + 0.5;
+      const onLine = m.yAt ? m.yAt(st) : null;
+      const y = onLine == null ? insetTop + MARK_Y : onLine;
       c.strokeStyle = col; c.lineWidth = 1; c.globalAlpha = hollow ? 0.22 : 0.4;
       c.setLineDash([2, 3]);
       c.beginPath(); c.moveTo(x, insetTop); c.lineTo(x, insetTop + plotH); c.stroke();
       c.setLineDash([]); c.globalAlpha = 1;
-      c.beginPath(); c.arc(x, insetTop + MARK_Y, 3.5, 0, Math.PI * 2);
+      c.beginPath(); c.arc(x, y, 3.5, 0, Math.PI * 2);
       c.fillStyle = hollow ? C('--surface-1') : col; c.fill();
       c.strokeStyle = col; c.lineWidth = hollow ? 1.5 : 1; c.stroke();
     }
-    if (chevron === null) return;
-    const x = PAD.l + 6 + k * 10, y = insetTop + MARK_Y;
+    if (chevron === null) continue;
+    const x = PAD.l + 6 + m.slot * 10, y = insetTop + MARK_Y;
     c.strokeStyle = col; c.globalAlpha = chevron ? 0.55 : 1;
     c.lineWidth = chevron ? 1.5 : 2; c.lineCap = 'round'; c.lineJoin = 'round';
     c.beginPath(); c.moveTo(x + 2.5, y - 4); c.lineTo(x - 2.5, y); c.lineTo(x + 2.5, y + 4);
     c.stroke(); c.globalAlpha = 1;
-  });
+  }
 }
 
 // ---- panel 1: that day's own distance, on a log scale --------------------
@@ -1917,6 +1934,8 @@ function drawBars() {
   const inView = i => i !== null && i >= i0 && i <= i1;
   if (inView(selected) && selected !== hover) outline(selected, true);
   if (inView(hover)) outline(hover, false);
+  // No yAt on this panel: a window is not a series here, so its dot stays in
+  // the row under the top inset rather than pretending to sit on something.
   markWindowStarts(ctx, BARS.t, plotH, i0, i1, winMarks());
   ctx.restore();
   if (isBottom) drawXAxisLabels(ctx, w, BARS.t, plotH, i0, i1);
@@ -2035,7 +2054,8 @@ function drawWindowPanel(canvas, c, set, insets, panelKey, axisLabel, opts = {})
   const seen = i => i !== null && i >= i0 && i <= i1;
   if (seen(selected) && selected !== hover) dot(selected, true);
   if (seen(hover)) dot(hover, false);
-  markWindowStarts(c, insets.t, plotH, i0, i1, winMarks());
+  // Each window's dot rides its own line here, so `yAt` is that series' y.
+  markWindowStarts(c, insets.t, plotH, i0, i1, winMarks(k => st => yOf(set[k][st])));
   c.restore();
   if (isBottom) drawXAxisLabels(c, w, insets.t, plotH, i0, i1);
 }
@@ -2161,7 +2181,8 @@ function drawVdot() {
   if (seen(hover)) dot(hover, false);
   // This panel's window is its own, so it gets one mark, in its own colour,
   // rather than the four the volume/frequency panels share.
-  markWindowStarts(c, VDOTI.t, plotH, i0, i1, [{ days: WINDOW_VDOT, css: '--vdot' }]);
+  markWindowStarts(c, VDOTI.t, plotH, i0, i1, [{ days: WINDOW_VDOT, css: '--vdot', slot: 0,
+    yAt: st => vdot[st] == null ? null : yOf(vdot[st]) }]);
   c.restore();
 
   drawXAxisLabels(c, w, VDOTI.t, plotH, i0, i1);
@@ -2549,9 +2570,21 @@ window.addEventListener('mouseup', () => {
   drag = null;
   for (const el of [cv, cv2, cv3, cv4, cv5]) el.style.cursor = 'crosshair';
 });
+// Keys, for the two things worth doing without aiming at anything: `r` puts the
+// view back to its default span (the double-click, minus the aiming) and `t`
+// releases the pinned day (Esc does the same — `t` is just next door to `r`,
+// which is what makes the pair usable one-handed while the other hand is on the
+// mouse). Modified presses are left alone so ⌘R still reloads the page, and so
+// is anything typed into a settings input, where a plain `r` is a keystroke
+// rather than a shortcut.
+const unpin = () => { selected = null; refreshReadout(); renderZonePanel(); drawAll(); };
 window.addEventListener('keydown', e => {
-  if (e.key !== 'Escape' || selected === null) return;
-  selected = null; refreshReadout(); renderZonePanel(); drawAll();
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  const t = e.target;
+  if (t && (t.isContentEditable || /^(INPUT|SELECT|TEXTAREA)$/.test(t.tagName))) return;
+  const k = e.key.toLowerCase();
+  if (k === 'r') { resetView(); return; }
+  if ((k === 'escape' || k === 't') && selected !== null) unpin();
 });
 
 // Reset, scoped to the chart: the settings in this controls row back to their
