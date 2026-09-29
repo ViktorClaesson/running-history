@@ -125,6 +125,39 @@ A pan ends in a mouseup on the canvas, which the browser then reports as a click
 `draggedNotClicked` (set from `drag.moved`, threshold 3px) is what stops a pan from
 pinning whatever it happened to finish over.
 
+**Window-start marks.** Every line on every panel is an average over a window
+*ending* on the marked day, and where that window starts used to be a number in
+the legend and nothing on the chart. `markWindowStarts()` marks the first day
+inside each window — a filled dot at the top of the panel in that window's own
+colour, plus a faint dashed line down through the plot — so each line's reach is
+something you can see against the bars it covers. Every panel gets them: the
+bars and the three window panels mark the four windows (`winMarks()`), and the
+VDOT panel marks its own `WINDOW_VDOT` in `--vdot`, since that window is its own
+thing.
+
+Only **one** day is marked — `markedDay()` is hover, else the pin, never both:
+the marks belong to the day being read, and two sets at once would put eight
+dashed lines across every panel. (Deliberately *not* `shownDay()`, which also
+falls back to the most recent run — marks with no marked day under them would be
+on screen permanently.) Hover's dots are filled and the pin's hollow, the same
+language as the bars' solid/dashed outline and the panels' filled/ring dot. A
+window whose start is off the left edge, or before the history begins, has
+nothing to mark and simply isn't drawn. They follow `visLines`, unlike the
+readout: those toggles exist to declutter exactly these lines, and a mark for a
+line that isn't drawn is clutter of the same kind — which is also why hiding
+`1w` takes its dot off the *bars* panel too, where there is no line to hide.
+
+**The default view** is the longest window's worth of days
+(`defaultSpan()` = `WINDOWS[N_WINDOWS - 1].days`, 448 at the defaults) ending on
+the most recent day, not the whole history: zoomed all the way out, years of
+bars are a few pixels each and the short windows are a solid band of noise. One
+long window is the widest span where the panels still say something, and it is
+also exactly the span every line on screen is computed over. Scrolling out to
+the full history still works — the clamp is unchanged. `resetView()` is that
+same view, shared by the double-click and the settings Reset so "reset the zoom"
+means one thing in both places. Changing `windowBase`/`windowMult` moves what
+`defaultSpan()` returns but deliberately does not re-fit the current view.
+
 **Sidebar, not inline.** The readout used to sit directly above the chart, so
 scrolling down past a tall chart lost sight of it — no good once there were five
 stacked panels plus the pace-zone histogram to scroll through. It now lives in
@@ -200,11 +233,12 @@ All of it is derived in-browser from one array of daily distances.
   key), persisted in `runviz.prefs.v1` as `lines`. The control is the legend's
   own "Windows" row, whose swatches are checkboxes; an unticked one dims via
   `.legend .item.off`. This is a view filter and nothing more: a hidden line is
-  still in the hover readout and still counts towards MAX. Two things do follow
-  it, because both exist to make the remaining lines readable — the y-axis
-  scales to the highest line actually **drawn** rather than to MAX (except the
-  fixed 0–7 run-days axis), and the hover/pin marker moves to MAX, or to the
-  shortest window still drawn when MAX is off.
+  still in the hover readout and still counts towards MAX. Three things do
+  follow it, because all three exist to make the remaining lines readable — the
+  y-axis scales to the highest line actually **drawn** rather than to MAX
+  (except the fixed 0–7 run-days axis), the hover/pin marker moves to MAX, or to
+  the shortest window still drawn when MAX is off, and a window's start mark
+  goes with its line (see "Window-start marks" above).
 - **The two windows the maths still needs** — a run can only be judged against a
   single number, so the target keeps exactly one volume window and one frequency
   window: `IV`/`IF`, **slots 1 and 2**, i.e. `WINDOW_VOL` and `WINDOW_FREQ`,
@@ -514,8 +548,8 @@ the defaults, and a remembered setting has to overwrite them at boot.
   window, the min-lap distance,
   stable band, the pace-zone bar count, the long-run rule, the MAX draw order,
   the window-line fade, both colour toggles, the five panel show/hide toggles and the five line
-  show/hide toggles back to their defaults (all shown), plus the view zoomed
-  back out. It does *not* touch the what-if.
+  show/hide toggles back to their defaults (all shown), plus the view back to
+  its default span. It does *not* touch the what-if.
 - **reset** in the Today's target tile: clears the what-if back to following real
   history, and nothing else.
 
@@ -524,9 +558,10 @@ and call `savePrefs()` — which rewrites the whole entry from current state, ke
 it if anything is still off-default and dropping it if nothing is. So a chart reset
 with an edited what-if leaves an entry holding only the plan, and vice versa.
 
-Double-clicking a panel still resets only the zoom, which is view state and
-deliberately *not* remembered — persisting it would fight the Reset button and open
-the page mid-history.
+Double-clicking a panel still resets only the view (`resetView()` — the default
+span, see "Window-start marks" above), which is view state and deliberately
+*not* remembered — persisting it would fight the Reset button and open the page
+mid-history.
 
 **The settings sidebar** is the third sidebar-shaped thing on the page, on the
 opposite side from the readout — `<aside id="settingsSidebar">`, always visible

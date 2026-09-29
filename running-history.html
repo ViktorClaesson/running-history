@@ -388,13 +388,13 @@
   <section class="setgroup">
     <h2 class="setgroup-title">Volume &amp; frequency panels</h2>
     <div class="legend">
-      <div class="legend-row" id="row-windows" title="Hiding a line only takes it off the three panels — it stays in the hover readout and still counts towards MAX."><span class="legend-tag">Lines</span>
+      <div class="legend-row" id="row-windows" title="Hiding a line takes it off the three panels and takes its window-start dot off every panel — it stays in the hover readout and still counts towards MAX."><span class="legend-tag">Lines</span>
         <label class="item"><input type="checkbox" id="line-max" checked><span class="swatch line" style="background:var(--wmax)"></span>MAX</label>
         <label class="item"><input type="checkbox" id="line-s0" checked><span class="swatch line" style="background:var(--w1)"></span><span class="winLabel0">1w</span></label>
         <label class="item"><input type="checkbox" id="line-s1" checked><span class="swatch line" style="background:var(--w4)"></span><span class="winLabel1">4w</span></label>
         <label class="item"><input type="checkbox" id="line-s2" checked><span class="swatch line" style="background:var(--w16)"></span><span class="winLabel2">16w</span></label>
         <label class="item"><input type="checkbox" id="line-s3" checked><span class="swatch line" style="background:var(--w64)"></span><span class="winLabel3">64w</span></label>
-        <span class="legend-dim"><span class="winsN">1 / 4 / 16 / 64</span>-week rolling averages, and the highest of the four on the day. Untick one to take it off the panels; it stays in the readout and still counts towards MAX.</span>
+        <span class="legend-dim"><span class="winsN">1 / 4 / 16 / 64</span>-week rolling averages, and the highest of the four on the day. Untick one to take it, and its window-start dot, off the panels; it stays in the readout and still counts towards MAX.</span>
       </div>
     </div>
     <div class="ctrls">
@@ -467,7 +467,7 @@
     </div>
   </section>
 
-  <button id="reset" title="Put every setting in this sidebar back to its default and zoom back out. Leaves the what-if target alone — that has its own reset.">Reset</button>
+  <button id="reset" title="Put every setting in this sidebar back to its default and the view back to the default span. Leaves the what-if target alone — that has its own reset.">Reset</button>
 </aside>
 <div class="wrap">
   <h1>Running history &mdash; every run, on a log scale</h1>
@@ -508,8 +508,9 @@
       <div class="panel-title">Highest VDOT in the trailing <span class="winVdotN">910</span> days</div>
       <canvas id="chart4"></canvas>
     </div>
-    <div class="hint">Scroll or pinch to zoom — the day under the cursor stays put while both sides scale around it. Drag to pan. Double-click to reset.
-      Click a day to pin its numbers in the readout above; click it again, or press Esc, to release.</div>
+    <div class="hint">Scroll or pinch to zoom — the day under the cursor stays put while both sides scale around it. Drag to pan. Double-click to go back to the default view, the longest window ending on the most recent day.
+      Click a day to pin its numbers in the readout above; click it again, or press Esc, to release.
+      The coloured dots along the top of each panel mark where each window reaches back to from the day under the pointer.</div>
   </div>
 
   <div class="chartcard" id="zonecard" hidden>
@@ -1584,8 +1585,15 @@ const ctx4 = cv4.getContext('2d');
 const cv5  = document.getElementById('chart5');
 const ctx5 = cv5.getContext('2d');
 
-let span = N;             // days visible
-let center = N / 2;       // index at the horizontal centre
+// The default view is the longest window's worth of days, ending on the most
+// recent one, rather than the whole history: zoomed all the way out, years of
+// bars are a few pixels each and the short windows are a solid band of noise.
+// One long window is the widest span where the panels still say something, and
+// it is also exactly the span every line on screen is computed over. Scrolling
+// out to the full history is of course still there.
+const defaultSpan = () => Math.max(5, Math.min(N, WINDOWS[N_WINDOWS - 1].days));
+let span = defaultSpan();              // days visible
+let center = N - span / 2;             // index at the horizontal centre
 let tSpan = span, tCenter = center;   // animation targets
 let hover = null;
 let selected = null;    // the pinned day, if any — see refreshReadout
@@ -1611,6 +1619,10 @@ function animate() {
   raf = requestAnimationFrame(animate);
 }
 const kick = () => { clampTarget(); if (!raf) raf = requestAnimationFrame(animate); };
+// Back to the default view — the longest window ending on the most recent day,
+// the same thing the page opens at. Shared by the double-click and the Reset
+// button, so "reset the zoom" means one thing everywhere.
+const resetView = () => { tSpan = defaultSpan(); tCenter = N - tSpan / 2; kick(); };
 
 // ---- shared geometry -----------------------------------------------------
 // Both panels share the left/right padding and the same x mapping, so a day sits
@@ -1693,6 +1705,44 @@ const visibleRange = () => [
   Math.max(0, Math.floor(left()) - 1),
   Math.min(N - 1, Math.ceil(left() + span) + 1),
 ];
+
+// ---- window-start marks --------------------------------------------------
+// Every line on every panel is an average over a window *ending* on the day
+// under the marker. Where that window starts was a number in the legend and
+// nothing on the chart, so "the 16-week line here" meant trusting the label.
+// Marking the first day inside each window — a dot at the top of the panel in
+// that window's own colour, plus a faint dashed line down through the plot —
+// turns each line's reach into something you can see against the bars it
+// covers.
+//
+// Only one day is marked, `hover` if there is one and the pin otherwise: the
+// marks belong to the day being read, and doing both at once would put eight
+// dashed lines across every panel. Hover's are filled and the pin's hollow,
+// the same language as the bars' solid/dashed outline and the panels'
+// filled/ring dot. A window whose start is off the left edge (or before the
+// history begins) has nothing to mark, so it simply isn't drawn.
+const markedDay = () => hover !== null ? hover : selected;
+// Follows the per-line show/hide toggles: those exist to declutter these exact
+// lines, and a mark for a line that isn't drawn is clutter of the same kind.
+const winMarks = () => WINDOWS.filter(w => visLines[w.key]);
+function markWindowStarts(c, insetTop, plotH, i0, i1, marks) {
+  const md = markedDay();
+  if (md === null || md < i0 || md > i1) return;
+  const hollow = hover === null;   // it's the pin, not a live hover
+  for (const m of marks) {
+    const s = md - m.days + 1;
+    if (s < i0 || s > md) continue;
+    const x = Math.round(xOf(s) + barW() / 2) + 0.5;
+    const col = C(m.css);
+    c.strokeStyle = col; c.lineWidth = 1; c.globalAlpha = hollow ? 0.22 : 0.4;
+    c.setLineDash([2, 3]);
+    c.beginPath(); c.moveTo(x, insetTop); c.lineTo(x, insetTop + plotH); c.stroke();
+    c.setLineDash([]); c.globalAlpha = 1;
+    c.beginPath(); c.arc(x, insetTop + 4, 3.5, 0, Math.PI * 2);
+    c.fillStyle = hollow ? C('--surface-1') : col; c.fill();
+    c.strokeStyle = col; c.lineWidth = hollow ? 1.5 : 1; c.stroke();
+  }
+}
 
 // ---- panel 1: that day's own distance, on a log scale --------------------
 // Log rather than linear so equal ratios are equal heights: 5->10 km is the same
@@ -1791,6 +1841,7 @@ function drawBars() {
   const inView = i => i !== null && i >= i0 && i <= i1;
   if (inView(selected) && selected !== hover) outline(selected, true);
   if (inView(hover)) outline(hover, false);
+  markWindowStarts(ctx, BARS.t, plotH, i0, i1, winMarks());
   ctx.restore();
   if (isBottom) drawXAxisLabels(ctx, w, BARS.t, plotH, i0, i1);
 }
@@ -1908,6 +1959,7 @@ function drawWindowPanel(canvas, c, set, insets, panelKey, axisLabel, opts = {})
   const seen = i => i !== null && i >= i0 && i <= i1;
   if (seen(selected) && selected !== hover) dot(selected, true);
   if (seen(hover)) dot(hover, false);
+  markWindowStarts(c, insets.t, plotH, i0, i1, winMarks());
   c.restore();
   if (isBottom) drawXAxisLabels(c, w, insets.t, plotH, i0, i1);
 }
@@ -2031,6 +2083,9 @@ function drawVdot() {
   const seen = i => i !== null && i >= i0 && i <= i1;
   if (seen(selected) && selected !== hover) dot(selected, true);
   if (seen(hover)) dot(hover, false);
+  // This panel's window is its own, so it gets one mark, in its own colour,
+  // rather than the four the volume/frequency panels share.
+  markWindowStarts(c, VDOTI.t, plotH, i0, i1, [{ days: WINDOW_VDOT, css: '--vdot' }]);
   c.restore();
 
   drawXAxisLabels(c, w, VDOTI.t, plotH, i0, i1);
@@ -2404,7 +2459,7 @@ for (const el of [cv, cv2, cv3, cv4, cv5]) {
     renderZonePanel();
     drawAll();
   });
-  el.addEventListener('dblclick', () => { tSpan = N; tCenter = N / 2; kick(); });
+  el.addEventListener('dblclick', () => resetView());
   el.addEventListener('touchstart', onTouchStart, { passive: true });
   el.addEventListener('touchmove', onTouchMove, { passive: false });
   el.addEventListener('touchend', () => { pinch = null; });
@@ -2420,9 +2475,9 @@ window.addEventListener('keydown', e => {
 });
 
 // Reset, scoped to the chart: the settings in this controls row back to their
-// defaults, plus the view zoomed back out. It deliberately leaves the what-if
+// defaults, plus the view back to its default span. It deliberately leaves the what-if
 // target alone — that box has its own reset, and the two are separate concerns.
-// (Double-click on a panel still resets only the zoom, which is view state and
+// (Double-click on a panel still resets only the view, which is view state and
 // deliberately not remembered.)
 // savePrefs() then drops the stored entry if nothing is off-default any more, or
 // keeps it holding just the what-if if that is still edited — so neither reset has
@@ -2448,7 +2503,7 @@ document.getElementById('reset').onclick = () => {
   recomputeVdot();
   applyWindow();         // recompute + relabels + rebuilds the tiles + redraws
   renderZonePanel();
-  tSpan = N; tCenter = N / 2; kick();
+  resetView();
 };
 function syncLabels() {
   const pct = +(stableBand * 100).toFixed(1);
