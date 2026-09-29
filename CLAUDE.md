@@ -174,7 +174,13 @@ All of it is derived in-browser from one array of daily distances.
   `WIN_ALPHA` 0.55, and with **no area fill** — the single-line panels this grew
   out of each had one, and the VDOT panel still does, but with five lines
   crossing each other a shaded region under the max only reads as the max line
-  having a shadow. **All five are the same weight** (`LINE_WIDTH`) — the max
+  having a shadow. **`maxBehind`** flips the z-order: MAX is the upper envelope,
+  so wherever it equals a window line the two sit exactly on top of each other
+  and whichever is drawn second wins. Last by default, which is what makes it
+  the line read first; behind instead, the shortest window stays visible along
+  the stretches where it *is* the max and MAX shows only where it pulls away.
+  Purely a draw order — nothing computed changes, so the toggle only redraws.
+  **All five are the same weight** (`LINE_WIDTH`) — the max
   was briefly drawn thicker as well as darker, which read as heavy-handed and
   wasn't carrying any of the work: full-strength ink against four
   semi-transparent hues separates it at any width. Hiding a window line (below)
@@ -460,7 +466,7 @@ for a yellow that passes, because none does.
 set to, so the page opens the way it was left: `windowBase`, `windowMult`,
 `windowVdot`, `minLapM`,
 `stableBand`, `longNeedsSingleRun`, `colourNormal`,
-`colourLong`, `zoneBars`, `panels` (`{vol, freq, runs, vdot, zone}`, each independently
+`colourLong`, `zoneBars`, `maxBehind`, `panels` (`{vol, freq, runs, vdot, zone}`, each independently
 show/hide — see below), `lines` (`{max, s0, s1, s2, s3}` — slot keys, which of
 the five lines the three window panels draw), and `plan` (`null` = the what-if box follows real
 history, `{km, days}` = edited). Three rules:
@@ -498,9 +504,10 @@ the defaults, and a remembered setting has to overwrite them at boot.
 
 - **Reset** in the settings sidebar: the window base and multiple, the VDOT
   window, the min-lap distance,
-  stable band, the pace-zone bar count, the long-run rule, both colour toggles,
-  the five panel show/hide toggles and the five line show/hide toggles back to
-  their defaults (all shown), plus the view zoomed back out. It does *not* touch the what-if.
+  stable band, the pace-zone bar count, the long-run rule, the MAX draw order,
+  both colour toggles, the five panel show/hide toggles and the five line
+  show/hide toggles back to their defaults (all shown), plus the view zoomed
+  back out. It does *not* touch the what-if.
 - **reset** in the Today's target tile: clears the what-if back to following real
   history, and nothing else.
 
