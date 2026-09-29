@@ -278,6 +278,10 @@
   .legend-tag { color: var(--text-secondary); font-weight: 600; min-width: 82px;
     display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
   .legend-row.off .item { opacity: 0.35; }
+  /* a single legend item switched off — the window lines toggle one at a time,
+     unlike the two colour schemes, which toggle a whole row */
+  .legend .item.off { opacity: 0.4; }
+  .legend .item input { margin: 0; }
   .legend-dim { color: var(--muted); font-weight: 400; }
   .swatch { position: relative; overflow: hidden; }
   .swatch.hatched::after { content: ''; position: absolute; inset: 0;
@@ -381,13 +385,13 @@
       <span class="item"><span class="swatch" style="background:var(--rest)"></span>rest day</span>
       <span class="legend-dim">stable = within &plusmn;<span class="bandN">1</span>% of target; colour ramps to full over the remaining <span class="gradN">49</span>%</span>
     </div>
-    <div class="legend-row"><span class="legend-tag">Windows</span>
-      <span class="item"><span class="swatch line max" style="background:var(--wmax)"></span>MAX</span>
-      <span class="item"><span class="swatch line" style="background:var(--w1)"></span>1w</span>
-      <span class="item"><span class="swatch line" style="background:var(--w4)"></span>4w</span>
-      <span class="item"><span class="swatch line" style="background:var(--w16)"></span>16w</span>
-      <span class="item"><span class="swatch line" style="background:var(--w64)"></span>64w</span>
-      <span class="legend-dim">week-ish / month-ish / quarter-ish / year-ish rolling averages, and the highest of the four on the day</span>
+    <div class="legend-row" id="row-windows" title="Hiding a line only takes it off the three panels — it stays in the hover readout and still counts towards MAX."><span class="legend-tag">Windows</span>
+      <label class="item"><input type="checkbox" id="line-max" checked><span class="swatch line max" style="background:var(--wmax)"></span>MAX</label>
+      <label class="item"><input type="checkbox" id="line-w1" checked><span class="swatch line" style="background:var(--w1)"></span>1w</label>
+      <label class="item"><input type="checkbox" id="line-w4" checked><span class="swatch line" style="background:var(--w4)"></span>4w</label>
+      <label class="item"><input type="checkbox" id="line-w16" checked><span class="swatch line" style="background:var(--w16)"></span>16w</label>
+      <label class="item"><input type="checkbox" id="line-w64" checked><span class="swatch line" style="background:var(--w64)"></span>64w</label>
+      <span class="legend-dim">week-ish / month-ish / quarter-ish / year-ish rolling averages, and the highest of the four on the day. Untick one to take it off the panels; it stays in the readout and still counts towards MAX.</span>
     </div>
   </div>
   <div class="ctrls">
@@ -819,10 +823,15 @@ const PREF_DEFAULTS = {
   colourLong: true,
   zoneBars: 5,       // sub-bands per pace zone in the pace-zone histogram
   panels: { vol: true, freq: true, runs: true, vdot: true, zone: true },   // which optional panels are shown
+  // Which of the five lines each volume/frequency panel actually draws. Hiding
+  // one is purely a decluttering move: it still appears in the hover readout and
+  // still counts towards MAX. All shown by default.
+  lines: { max: true, w1: true, w4: true, w16: true, w64: true },
   plan: null,        // null = the what-if box follows real history; {km, days} = edited
 };
+const LINE_KEYS = ['max', 'w1', 'w4', 'w16', 'w64'];
 function loadPrefs() {
-  const p = { ...PREF_DEFAULTS, panels: { ...PREF_DEFAULTS.panels } };
+  const p = { ...PREF_DEFAULTS, panels: { ...PREF_DEFAULTS.panels }, lines: { ...PREF_DEFAULTS.lines } };
   const raw = lsGet(LS_PREFS);
   if (!raw || typeof raw !== 'object') return p;
   // Validated field by field, against the same limits as the controls, so a
@@ -840,6 +849,11 @@ function loadPrefs() {
   if (raw.panels && typeof raw.panels === 'object') {
     for (const k of ['vol', 'freq', 'runs', 'vdot', 'zone']) {
       if (typeof raw.panels[k] === 'boolean') p.panels[k] = raw.panels[k];
+    }
+  }
+  if (raw.lines && typeof raw.lines === 'object') {
+    for (const k of LINE_KEYS) {
+      if (typeof raw.lines[k] === 'boolean') p.lines[k] = raw.lines[k];
     }
   }
   if (raw.plan && num(raw.plan.km, 0, 700) && num(raw.plan.days, 0, 7)) {
@@ -861,12 +875,14 @@ function savePrefs() {
     colourLong: colourScheme.long,
     zoneBars: ZONE_BARS,
     panels: { ...visPanels },
+    lines: { ...visLines },
     plan: planEdited ? { km: plan.km, days: plan.days } : null,
   };
   const changed = Object.keys(PREF_DEFAULTS)
     .some(k => {
       if (k === 'plan') return cur.plan !== null;
       if (k === 'panels') return Object.keys(PREF_DEFAULTS.panels).some(pk => cur.panels[pk] !== PREF_DEFAULTS.panels[pk]);
+      if (k === 'lines') return LINE_KEYS.some(lk => cur.lines[lk] !== PREF_DEFAULTS.lines[lk]);
       return cur[k] !== PREF_DEFAULTS[k];
     });
   if (changed) lsSet(LS_PREFS, cur); else lsDel(LS_PREFS);
@@ -1255,6 +1271,10 @@ let ZONE_BARS = prefs.zoneBars;
 // Independent show/hide for the three optional line panels and the pace-zone
 // histogram — the distance bars (panel 1) always stay up as the anchor chart.
 let visPanels = { ...prefs.panels };
+// Which of the five lines the three window panels draw. Purely a view filter:
+// a hidden line is still in the readout and still counts towards MAX — see the
+// comment on PREF_DEFAULTS.lines.
+let visLines = { ...prefs.lines };
 const ZONE_ANCHOR_PCT = [0.657, 0.818, 0.880, 0.976, 1.062];
 const ZONE_BOUND_PCT = [null,   // easy's floor is per-day now — see easyFloorPct()
   (ZONE_ANCHOR_PCT[0] + ZONE_ANCHOR_PCT[1]) / 2,
@@ -1361,9 +1381,6 @@ const perMonthKm = v => v * 365 / 12;
 const perYearKm  = v => v * 365;
 // Joined with · but each piece unbreakable, so a wrap lands between them.
 const seg = parts => parts.filter(Boolean).map(t => `<span class="seg">${t}</span>`).join(' · ');
-const rateSummary = v => seg([`${nf1.format(perWeekKm(v))} km/wk`,
-                              `${nf0.format(perMonthKm(v))} km/mo`,
-                              `${nf0.format(perYearKm(v))} km/yr`]);
 
 // ---- stat tiles ----------------------------------------------------------
 const total = daily.reduce((a,b)=>a+b,0);
@@ -1692,10 +1709,18 @@ function drawWindowPanel(canvas, c, set, insets, panelKey, axisLabel, opts = {})
   const plotH = h - insets.t - insets.b;
   const [i0, i1] = visibleRange();
   const mx = set[MAXI];
+  // Series indices to draw, in the panel's own order. A line can be switched off
+  // for legibility; it stays in the readout and still feeds MAX either way. With
+  // everything off there is nothing to scale to, so MAX comes back as the floor.
+  const showMax = visLines.max;
+  const drawn = WINDOWS.map((w, k) => visLines[w.key] ? k : -1).filter(k => k >= 0);
+  if (showMax) drawn.push(MAXI);
+  if (!drawn.length) drawn.push(MAXI);
 
-  // The max series is the upper envelope of the four, so scaling to it scales to
-  // everything. Run days per week keeps its fixed 0–7 axis (there is no eighth
-  // day to run on) instead.
+  // Scaled to the highest line actually *drawn*, not to MAX, so hiding the
+  // spiky short windows really does open the panel up for the ones left — that
+  // is the whole point of the per-line toggles. Run days per week keeps its
+  // fixed 0–7 axis (there is no eighth day to run on) instead.
   let ticks, yMax;
   if (opts.fixed7) {
     yMax = 7;
@@ -1703,7 +1728,7 @@ function drawWindowPanel(canvas, c, set, insets, panelKey, axisLabel, opts = {})
     ticks.step = 1;
   } else {
     let peak = 0;
-    for (let i = i0; i <= i1; i++) if (mx[i] > peak) peak = mx[i];
+    for (const k of drawn) for (let i = i0; i <= i1; i++) if (set[k][i] > peak) peak = set[k][i];
     ticks = niceTicks(Math.max(peak * 1.12, 1));
     yMax = ticks[ticks.length - 1];
   }
@@ -1720,7 +1745,7 @@ function drawWindowPanel(canvas, c, set, insets, panelKey, axisLabel, opts = {})
   for (let i = i0; i <= i1; i++) c.lineTo(px(i), yOf(mx[i]));
   c.lineTo(px(i1), insets.t + plotH);
   c.closePath();
-  c.fillStyle = C('--wmax'); c.globalAlpha = 0.06; c.fill(); c.globalAlpha = 1;
+  c.fillStyle = C('--wmax'); c.globalAlpha = showMax ? 0.06 : 0; c.fill(); c.globalAlpha = 1;
   c.restore();
 
   c.font = '11px system-ui, -apple-system, sans-serif';
@@ -1745,6 +1770,7 @@ function drawWindowPanel(canvas, c, set, insets, panelKey, axisLabel, opts = {})
   // Longest window first, so the spikiest line (1 week) ends up on top of the
   // smooth ones rather than buried under them.
   for (let k = WINDOWS.length - 1; k >= 0; k--) {
+    if (!visLines[WINDOWS[k].key]) continue;
     c.beginPath();
     for (let i = i0; i <= i1; i++) {
       const x = px(i), y = yOf(set[k][i]);
@@ -1756,25 +1782,31 @@ function drawWindowPanel(canvas, c, set, insets, panelKey, axisLabel, opts = {})
     c.stroke();
   }
   c.globalAlpha = 1;
-  c.beginPath();
-  for (let i = i0; i <= i1; i++) {
-    const x = px(i), y = yOf(mx[i]);
-    if (i === i0) c.moveTo(x, y); else c.lineTo(x, y);
+  if (showMax) {
+    c.beginPath();
+    for (let i = i0; i <= i1; i++) {
+      const x = px(i), y = yOf(mx[i]);
+      if (i === i0) c.moveTo(x, y); else c.lineTo(x, y);
+    }
+    c.strokeStyle = C('--wmax'); c.lineWidth = MAX_WIDTH;
+    c.stroke();
   }
-  c.strokeStyle = C('--wmax'); c.lineWidth = MAX_WIDTH;
-  c.stroke();
 
-  // Only the max carries a marker: the crosshair already says which day, and
-  // five dots in a column would be five things to read instead of one. Same
-  // split as the bars — the pinned day is a hollow ring, the hovered one solid.
+  // Only one line carries a marker: the crosshair already says which day, and
+  // five dots in a column would be five things to read instead of one. It sits
+  // on MAX, or — if MAX is switched off — on the shortest window still drawn,
+  // which is the one running highest. Same split as the bars: the pinned day is
+  // a hollow ring, the hovered one solid.
+  const anchor = showMax ? MAXI : drawn[0];
+  const anchorCss = anchor === MAXI ? '--wmax' : WINDOWS[anchor].css;
   const dot = (i, hollow) => {
-    const x = Math.round(px(i)) + 0.5, y = yOf(mx[i]);
+    const x = Math.round(px(i)) + 0.5, y = yOf(set[anchor][i]);
     c.strokeStyle = C('--text-primary'); c.lineWidth = 1; c.globalAlpha = hollow ? 0.16 : 0.25;
     c.beginPath(); c.moveTo(x, insets.t); c.lineTo(x, insets.t + plotH); c.stroke();
     c.globalAlpha = 1;
     c.beginPath(); c.arc(x, y, 4.5, 0, Math.PI * 2);
-    c.fillStyle = hollow ? C('--surface-1') : C('--wmax'); c.fill();
-    c.strokeStyle = hollow ? C('--wmax') : C('--surface-1'); c.lineWidth = 2; c.stroke();
+    c.fillStyle = hollow ? C('--surface-1') : C(anchorCss); c.fill();
+    c.strokeStyle = hollow ? C(anchorCss) : C('--surface-1'); c.lineWidth = 2; c.stroke();
   };
   const seen = i => i !== null && i >= i0 && i <= i1;
   if (seen(selected) && selected !== hover) dot(selected, true);
@@ -1931,20 +1963,27 @@ function vdotBasisText(i) {
 // ---- readout -------------------------------------------------------------
 // One measure, all four windows plus their max, ordered max-first and then
 // shortest window to longest — the same order the eye has to use on the panel,
-// where the max is the line drawn on top. `extra` is an optional dim note per
-// window (the raw counts behind a rate), skipped for the max, which isn't a
-// window and so has no count of its own.
+// where the max is the line drawn on top. Every line is listed whether or not
+// it is currently drawn: the toggles are a decluttering move on the chart, not
+// a filter on the numbers. `extra(w, v)` is an optional dim note per row — the
+// raw counts behind a rate, or the same rate over a longer span — with `w` the
+// window index, or null on the max row, which isn't a window and so has no
+// counts of its own.
 function winGrid(set, i, dp, unit, extra) {
-  const row = (cls, css, label, v, note) =>
+  const row = (cls, css, label, v, w) =>
     `<span class="sw ${cls}" style="background:var(${css})"></span>` +
     `<span class="wl ${cls}">${label}</span>` +
     `<span class="wv ${cls}">${v.toFixed(dp)}${unit ? ' ' + unit : ''}</span>` +
-    `<span class="wx ${cls}">${note || ''}</span>`;
+    `<span class="wx ${cls}">${extra ? extra(w, v) : ''}</span>`;
   return `<span class="wingrid">` +
-    row('r-max', '--wmax', 'MAX', set[MAXI][i], '') +
-    WINDOWS.map((win, w) => row('', win.css, win.label, set[w][i], extra ? extra(w) : '')).join('') +
+    row('r-max', '--wmax', 'MAX', set[MAXI][i], null) +
+    WINDOWS.map((win, w) => row('', win.css, win.label, set[w][i], w)).join('') +
     `</span>`;
 }
+// A km/week figure restated over the two longer spans, one per row of the
+// distance table. The km/wk part is left out — that's the value it sits next to.
+const longerSpans = v => seg([`${nf0.format(perMonthKm(v / 7))} km/mo`,
+                              `${nf0.format(perYearKm(v / 7))} km/yr`]);
 
 const ro = document.getElementById('readout');
 function setReadout(i, tag) {
@@ -1967,9 +2006,9 @@ function setReadout(i, tag) {
                longOn[i] ? '' : 'no long runs',
                nRuns[i] > 1 ? 'longest ' + km(maxRun[i]) : ''])
         : 'no target yet'}</span></span>
-    <span class="pair"><span class="k">Distance per week</span>${winGrid(volSeries, i, 1, 'km', null)}<span class="v2">${rateSummary(avg[i])} over ${WINDOWS[IV].label}</span></span>
-    <span class="pair"><span class="k">Run days per week</span>${winGrid(freqSeries, i, 1, '', w => `${runDaysIn[w][i]} of ${WINDOWS[w].days} days`)}</span>
-    <span class="pair"><span class="k">Runs per week</span>${winGrid(runSeries, i, 1, '', w => `${runsIn[w][i]} runs`)}</span>
+    <span class="pair"><span class="k">Distance per week</span>${winGrid(volSeries, i, 1, 'km', (w, v) => longerSpans(v))}</span>
+    <span class="pair"><span class="k">Run days per week</span>${winGrid(freqSeries, i, 1, '', w => w === null ? '' : `${runDaysIn[w][i]} of ${WINDOWS[w].days} days`)}</span>
+    <span class="pair"><span class="k">Runs per week</span>${winGrid(runSeries, i, 1, '', w => w === null ? '' : `${runsIn[w][i]} runs in ${WINDOWS[w].days} days`)}</span>
     <span class="pair"><span class="k">VDOT (peak, trailing ${Math.round(WINDOW_VDOT/7)}w)</span><span class="v">${vdot[i] != null ? vdot[i].toFixed(1) : '—'}</span><span class="v2">${vdotBasisText(i)}</span></span>
     <span class="badge" style="color:${c ? fullColour(c) : 'var(--text-secondary)'}">${
       !c ? '— rest day'
@@ -2300,6 +2339,7 @@ document.getElementById('reset').onclick = () => {
   colourScheme.long = PREF_DEFAULTS.colourLong;
   ZONE_BARS = PREF_DEFAULTS.zoneBars;
   visPanels = { ...PREF_DEFAULTS.panels };
+  visLines = { ...PREF_DEFAULTS.lines };
   savePrefs();
   syncControls();
   recomputeDayVdot();
@@ -2333,6 +2373,26 @@ function syncPanelVisibility() {
   }
 }
 
+// Same idea as syncPanelVisibility, one level down: the legend's own checkboxes
+// are the control for which lines the panels draw, so state has to be pushed
+// back into them at boot and on Reset. The dimmed legend item is the only other
+// place this state shows.
+function syncLineVisibility() {
+  for (const k of LINE_KEYS) {
+    const box = document.getElementById('line-' + k);
+    box.checked = visLines[k];
+    box.closest('.item').classList.toggle('off', !visLines[k]);
+  }
+}
+for (const k of LINE_KEYS) {
+  document.getElementById('line-' + k).onchange = e => {
+    visLines[k] = e.target.checked;
+    savePrefs();
+    syncLineVisibility();
+    drawAll();
+  };
+}
+
 function syncControls() {
   winVdotInput.value = WINDOW_VDOT / 7;
   minLapInput.value = MIN_LAP_M;
@@ -2344,6 +2404,7 @@ function syncControls() {
     document.getElementById('row-' + scheme).classList.toggle('off', !colourScheme[scheme]);
   }
   syncPanelVisibility();
+  syncLineVisibility();
 }
 
 function applyWindow() {

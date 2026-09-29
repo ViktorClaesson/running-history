@@ -76,9 +76,12 @@ data rather than at zero:
 Hovering a day fills the readout sidebar: exact distance, then one small table
 per measure (distance/week, run days/week, runs/week) giving MAX first and then
 each window from 1w to 64w — the same order the panels are read in, since MAX is
-the line drawn on top. The window rows carry the raw counts behind the rate
-("78 of 112 days", "87 runs"); the distance table also keeps the km/mo and km/yr
-restatement of the 4-week figure. Then the day's peak VDOT (plus what that day's own
+the line drawn on top. Every line is listed whether or not it is currently
+*drawn*: the per-line toggles declutter the chart, they don't filter the numbers.
+Each row carries a dim note to the right of its value — the raw counts behind the
+rate ("78 of 112 days", "87 runs in 112 days"), or for the distance table that
+same rate restated as km/mo and km/yr. (The km/wk part is left out there, since
+that is the value it sits next to.) Then the day's peak VDOT (plus what that day's own
 reading is actually based on: full activity or best lap, with its distance, time
 and pace — see `vdotBasisText()`), the day's target, and the verdict. **Clicking
 a day pins it** there — see below.
@@ -152,13 +155,22 @@ All of it is derived in-browser from one array of daily distances.
   `runSeries` (runs/week).
 - **MAX** — an extra series appended to each set at index `MAXI`, the per-day
   **max across the four windows** — the upper envelope, not a running all-time
-  best. It answers "at whatever timescale flatters me most, where am I", and
-  because it dominates the other four it is also what each panel's y-axis is
-  scaled to. Drawn last, in plain ink (`--wmax`) at full strength, over the four
-  windows at `WIN_ALPHA` 0.55. In practice it tracks the 1-week line most of the
+  best. It answers "at whatever timescale flatters me most, where am I".
+  Drawn last, in plain ink (`--wmax`) at full strength, over the four windows at
+  `WIN_ALPHA` 0.55. Hiding a window line (below) does **not** take it out of
+  MAX — MAX is always the max of all four. In practice it tracks the 1-week line most of the
   time and pulls away from it exactly when a short window collapses (a taper, an
   injury, a holiday) while a longer one is still high — which is the case worth
   seeing.
+- **Per-line show/hide** — `visLines`, five booleans (`max` plus each window's
+  key), persisted in `runviz.prefs.v1` as `lines`. The control is the legend's
+  own "Windows" row, whose swatches are checkboxes; an unticked one dims via
+  `.legend .item.off`. This is a view filter and nothing more: a hidden line is
+  still in the hover readout and still counts towards MAX. Two things do follow
+  it, because both exist to make the remaining lines readable — the y-axis
+  scales to the highest line actually **drawn** rather than to MAX (except the
+  fixed 0–7 run-days axis), and the hover/pin marker moves to MAX, or to the
+  shortest window still drawn when MAX is off.
 - **The two windows the maths still needs** — a run can only be judged against a
   single number, so the target keeps exactly one volume window and one frequency
   window: `IV`/`IF`, indices 1 and 2 into `WINDOWS`, i.e. `WINDOW_VOL` = 4 weeks
@@ -425,7 +437,8 @@ for a yellow that passes, because none does.
 set to, so the page opens the way it was left: `windowVdot`, `minLapM`,
 `stableBand`, `longNeedsSingleRun`, `colourNormal`,
 `colourLong`, `zoneBars`, `panels` (`{vol, freq, runs, vdot, zone}`, each independently
-show/hide — see below), and `plan` (`null` = the what-if box follows real
+show/hide — see below), `lines` (`{max, w1, w4, w16, w64}`, which of the five
+lines the three window panels draw), and `plan` (`null` = the what-if box follows real
 history, `{km, days}` = edited). Three rules:
 
 - **Read at the very top of the `if (DATA)` block**, above `WINDOWS` and
@@ -448,15 +461,16 @@ history, `{km, days}` = edited). Three rules:
   *removed* the moment everything is back to default. A page whose settings have
   never been touched leaves nothing behind.
 
-`syncControls()` is the one place state is pushed *into* the DOM — the markup carries
+`syncControls()` (with `syncPanelVisibility()` and `syncLineVisibility()` under
+it) is the one place state is pushed *into* the DOM — the markup carries
 the defaults, and a remembered setting has to overwrite them at boot.
 
 **There are two resets, and each owns only what sits next to it.**
 
 - **Reset** in the settings sidebar: the VDOT window, the min-lap distance,
-  stable band, the pace-zone bar count, the long-run rule, both colour toggles and
-  the five panel show/hide toggles back to their defaults (all shown), plus the
-  view zoomed back out. It does *not* touch the what-if.
+  stable band, the pace-zone bar count, the long-run rule, both colour toggles,
+  the five panel show/hide toggles and the five line show/hide toggles back to
+  their defaults (all shown), plus the view zoomed back out. It does *not* touch the what-if.
 - **reset** in the Today's target tile: clears the what-if back to following real
   history, and nothing else.
 
