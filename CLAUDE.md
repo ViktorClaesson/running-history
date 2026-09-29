@@ -94,6 +94,28 @@ and pace, and how far that reading fell short of the peak — see
 `vdotBasisText()`) and the verdict. **Clicking
 a day pins it** there — see below.
 
+The VDOT detail line **always breaks at the arrow**: what the reading is on line
+1, what it came to on line 2 ("→ 45.4 grade-adj. · 10.2% off the peak"). A hard
+`<br>`, not a wrap — flicking from day to day used to move that number between
+line 1 and line 2 depending on how the width happened to run out. Two things had
+to be checked to make the break safe, since a third line would nudge the
+sidebar's height on every hover:
+
+- **Both halves have to fit on one line.** Measured across a real 1339-day
+  history with GAP on and off: line 1 tops out at **220px** and line 2 at
+  **205px**, against **246px** of usable sidebar. Line 2 is a single `.seg` —
+  it can't wrap, and at that width never needs to.
+- **" grade-adj." moved from line 1 to line 2**, next to the figure it
+  qualifies. On line 1 it is what pushed the line over: the widest day comes to
+  **278px** there, and no shorter wording of it clears 246px with any room to
+  spare (" adj." lands at 242px, which is 4px of margin and not worth trusting).
+  Line 1 is now the same text whether or not GAP is on, so toggling it doesn't
+  move the layout either.
+
+The result is exactly two line boxes on every one of the 603 run days and one on
+the 736 rest days ("no run"), so `.v2`'s two-line reserve holds by construction
+rather than by luck.
+
 The distance row's own sub-line used to spell out the day's target ("target 8.59
 km · weekly ÷ 6.0 · no long runs"). It is gone: the verdict stopped being read
 against that number, so it was a figure with nothing left to explain. All that
@@ -445,6 +467,15 @@ Two things the wide range forces:
   for the wide view; the floor is deliberately not capped, since clamping the
   dots would make them lie about their value.
 
+**The cut-off itself is drawn**, as a dashed line at `vdot[i] * (1 -
+vdotNearPct/100)` — the peak line scaled down by the threshold, so "within 10%"
+is a place on the panel rather than a number in the title, and every dot is
+visibly above it. Not drawn at 0%, where it would land exactly on the peak line
+and have nothing to say. Deliberately **not** folded into the y-extent the way
+the dots are: at 100% the cut-off is zero, and letting that set the floor would
+flatten the panel. It clips instead, which reads correctly — a cut-off below the
+panel is one nothing can fail.
+
 `vdotVsPeak(i)` is that ratio (1 = it is the peak; it can never exceed 1, since
 the window includes the day itself) and `isNearMax(i)` is the threshold on it.
 The readout says the same thing in words on the VDOT line — "· at the peak" or
@@ -460,9 +491,15 @@ Three things worth knowing:
   clips them. Only the floor can move — no reading is ever above the peak that
   contains it.
 - **Draw-time only.** Nothing computed depends on either setting, so both
-  handlers do `syncLabels()` + `drawAll()` and no recompute. The panel title
-  carries what the dots mean ("— dots: days within 10% of it", `.vdotNearNote`),
-  so the panel needs no legend of its own; the note goes away when they're off.
+  handlers just `drawAll()` — no recompute, and not even `syncLabels()`.
+- **The panel title carries what the dots mean** (`.vdotNearNote`: "— dots: days
+  within 10% of it, above the dashed line"), so the panel needs no legend of its
+  own, and the note goes away when the dots are off. `drawVdot()` owns that
+  string rather than `syncLabels()`, because only the draw knows whether the
+  dashed line ended up on screen — past roughly 25% it is below the panel floor,
+  and the ", above the dashed line" clause drops itself when it isn't there. At
+  0% the note reads "dots: the days that set it", since "within 0% of it" says
+  the same thing worse.
 
 **Laps** come from Runalyze's `splits` column: `<tag><km>|<time>` pieces joined by
 `-`, e.g. `I1.012|3:54`. The tag (`W`arm-up, `I`nterval, `R`est/`P`ause, `C`ooldown,
@@ -507,8 +544,9 @@ file and going back to one with GAP doesn't silently forget the setting.
 A bin's height is the adjusted minutes too, not the real ones — the time implied
 by the pace the bar is drawn at, so a day's bars still sum to one coherent
 duration (checked: they sum to exactly `gsec ÷ 60`). `vdotBasisText()` labels
-the figure "grade-adj." when the time it quotes has been adjusted, rather than
-quietly disagreeing with what Runalyze and the watch say.
+the figure "grade-adj." when the time behind it has been adjusted, rather than
+quietly disagreeing with what Runalyze and the watch say — on its second line,
+next to the VDOT figure, for the width reason in the readout section above.
 
 **Pace zones** (easy/marathon/threshold/interval/repetition) are five %VDOT bands,
 anchored at 65.7/81.8/88.0/97.6/106.2% (back-solved from the vdoto2.com example
@@ -953,7 +991,10 @@ Roughly: `recompute` (the four windows' series + their max + `computeTargets`) �
   x; it must not re-centre or pin the left edge.
 - **The readout must not change height** between idle, hovered and pinned. The idle
   state carries an invisible label/value spacer, and `.v2` reserves two line boxes,
-  so all three match by construction. See the readout section above before touching
+  so all three match by construction. The VDOT detail line now *fills* exactly
+  two by construction too (a hard `<br>` at the arrow, both halves measured to
+  fit) — so any new wording on either half has to be re-measured against the
+  246px the sidebar actually gives it, not eyeballed. See the readout section above before touching
   its flex properties.
 - Floating point: `1.05 - 1 > 0.05`, so band edges need the epsilon in `classify`.
 - **Negative zero.** A sliding-window sum adds and subtracts the same distances

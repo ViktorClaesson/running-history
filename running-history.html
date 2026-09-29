@@ -2192,6 +2192,30 @@ function drawVdot() {
   // line is the distinction, and the gap below it is the whole point of the rest.
   // Thin surface-coloured ring so a cluster of them stays countable, and so one
   // sitting on the line still reads as a dot rather than a bulge in it.
+  // Where the dots' cut-off actually runs: the peak line scaled down by
+  // vdotNearPct, so "within 10%" is a place on the panel rather than a number in
+  // the title, and every dot is visibly above it. At 0% it would land exactly on
+  // the peak line — nothing to show, so it isn't drawn. Deliberately NOT folded
+  // into the y-extent above: at 100% the threshold is zero, and letting that set
+  // the floor would flatten the whole panel. It clips instead, which reads
+  // correctly — a cut-off off the bottom of the panel is one nothing can fail.
+  let dashSeen = false;
+  if (vdotNearDots && vdotNearPct > 0) {
+    c.save();
+    c.setLineDash([3, 3]); c.lineWidth = 1;
+    c.strokeStyle = C('--vdot'); c.globalAlpha = 0.55;
+    c.beginPath();
+    let on = false;
+    for (let i = i0; i <= i1; i++) {
+      if (vdot[i] == null) { on = false; continue; }
+      const x = px(i), y = yOf(vdot[i] * (1 - vdotNearPct / 100));
+      if (y >= VDOTI.t && y <= VDOTI.t + plotH) dashSeen = true;
+      if (!on) { c.moveTo(x, y); on = true; } else c.lineTo(x, y);
+    }
+    c.stroke();
+    c.restore();
+  }
+
   if (vdotNearDots) {
     // How big a dot gets is decided by how much room the dots actually have: at
     // the 10% default a few dozen sit in the panel and want to look aimable, at
@@ -2229,6 +2253,17 @@ function drawVdot() {
     yAt: st => vdot[st] == null ? null : yOf(vdot[st]) }]);
   c.restore();
 
+  // The dots have no legend of their own — the panel title says what they are.
+  // Set here rather than in syncLabels() because only the draw knows whether the
+  // cut-off line ended up on screen: past roughly 25% it is below the panel floor
+  // (at 100% the cut-off is zero), and pointing at a dashed line that isn't there
+  // is worse than not mentioning it.
+  for (const el of document.querySelectorAll('.vdotNearNote')) {
+    el.textContent = !vdotNearDots ? ''
+      : vdotNearPct === 0 ? ' \u2014 dots: the days that set it'
+      : ` \u2014 dots: days within ${vdotNearPct}% of it${dashSeen ? ', above the dashed line' : ''}`;
+  }
+
   drawXAxisLabels(c, w, VDOTI.t, plotH, i0, i1);
 }
 
@@ -2252,7 +2287,10 @@ function vdotBasisText(i) {
   const pace = paceStr(src.sec / 60 / src.km);
   // With grade adjustment on, the time and pace quoted here are the equivalent
   // flat ones, not what the watch said — worth saying so rather than having the
-  // readout quietly disagree with Runalyze.
+  // readout quietly disagree with Runalyze. It sits on the second line, next to
+  // the figure it qualifies, because on the first it is what pushed that line
+  // into wrapping: " grade-adj." there takes the widest day to 278px in a 246px
+  // sidebar, and no shorter wording of it clears that with room to spare.
   const how = src.adj ? ' grade-adj.' : '';
   // Where that reading stands against the peak in force that day — what the
   // near-max dots mark on the panel, spelled out.
@@ -2260,7 +2298,19 @@ function vdotBasisText(i) {
   const vs = r == null ? ''
     : r >= 0.9995 ? ' &middot; at the peak'
     : ` &middot; ${((1 - r) * 100).toFixed(1)}% off the peak`;
-  return `${src.kind === 'lap' ? 'best lap' : 'full activity'} ${km(src.km)}km in ${durStr(src.sec)}${how} (${pace}/km) &rarr; ${dayVdot[i].toFixed(1)}${vs}`;
+  // Hard break before the arrow rather than wherever the width happens to run
+  // out: what the reading is (line 1) and what it came to (line 2) then sit in
+  // the same place from one day to the next, so flicking along the chart doesn't
+  // move the number being read. The second half is one `.seg`, so it stays whole.
+  // Hard break before the arrow rather than wherever the width happens to run
+  // out: what the reading is (line 1) and what it came to (line 2) then sit in
+  // the same place from one day to the next, so flicking along the chart doesn't
+  // move the number being read. Measured across a real 1339-day history, GAP on
+  // and off: line 1 tops out at 220px and line 2 at 205px against 246px of
+  // sidebar, so both always fit and `.v2`'s two-line reserve still holds exactly.
+  // Line 2 is one `.seg` — it can't wrap, and at that width never needs to.
+  return `${src.kind === 'lap' ? 'best lap' : 'full activity'} ${km(src.km)}km in ${durStr(src.sec)} (${pace}/km)`
+    + `<br><span class="seg">&rarr; ${dayVdot[i].toFixed(1)}${how}${vs}</span>`;
 }
 
 // ---- readout -------------------------------------------------------------
@@ -2664,12 +2714,6 @@ document.getElementById('reset').onclick = () => {
 };
 function syncLabels() {
   for (const el of document.querySelectorAll('.winVdotN')) el.textContent = WINDOW_VDOT;
-  // The dots have no legend of their own — the panel title says what they are.
-  for (const el of document.querySelectorAll('.vdotNearNote')) {
-    el.textContent = !vdotNearDots ? ''
-      : vdotNearPct === 0 ? ' \u2014 dots: the days that set it'
-      : ` \u2014 dots: days within ${vdotNearPct}% of it`;
-  }
   // Everything that spells out which four windows are in play: the panel
   // titles, the legend notes (including the verdict legend, which names the
   // windows it compares), each legend item's own label, and the data table's
@@ -2827,8 +2871,7 @@ const nearDotsChk = document.getElementById('vdotNearDots');
 nearDotsChk.onchange = () => {
   vdotNearDots = nearDotsChk.checked;
   savePrefs();
-  syncLabels();
-  drawAll();
+  drawAll();     // which also rewrites the panel title's note — see drawVdot
 };
 const nearPctInput = document.getElementById('vdotNearPct');
 nearPctInput.onchange = nearPctInput.oninput = () => {
@@ -2836,7 +2879,6 @@ nearPctInput.onchange = nearPctInput.oninput = () => {
   if (!Number.isFinite(v) || v < 0 || v > 100) return;   // ignore half-typed values
   vdotNearPct = v;
   savePrefs();
-  syncLabels();
   refreshReadout();
   drawAll();
 };
