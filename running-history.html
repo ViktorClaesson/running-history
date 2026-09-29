@@ -423,8 +423,8 @@
       <label class="chk" title="The VDOT line is a rolling max, so a session that came close to the ceiling without beating it leaves no mark on it — the line just carries on flat. These dots put those days back: one per run day whose own reading is within the percentage below of the peak in force that day, drawn at the day's own value, so a near miss sits just under the line and a day that set the peak sits on it.">
         <input type="checkbox" id="vdotNearDots" checked> Mark near-max days
       </label>
-      <label class="chk" title="How close to that day's peak a day's own VDOT reading has to be to get a dot.">&hellip;within
-        <input type="number" id="vdotNearPct" min="1" max="50" step="1" value="10"> % of the peak
+      <label class="chk" title="How close to that day's peak a day's own VDOT reading has to be to get a dot. Both ends are useful: 0 marks only the days that actually set the peak, and 100 marks every run day, turning the panel into a scatter of every run's own VDOT under the ceiling. Wide settings open up the y-axis to fit the slowest day in view, which squashes the line towards the top — that is the honest range of the data, not a bug.">&hellip;within
+        <input type="number" id="vdotNearPct" min="0" max="100" step="1" value="10"> % of the peak
       </label>
       <label class="chk" id="useGapLabel" title="Read every pace off Runalyze's grade-adjusted pace — each activity's equivalent flat time — instead of the time actually taken. Moves VDOT and the pace-zone histogram; distances, volume and the targets are untouched. Activities the export has no GAP for keep their raw time.">
         <input type="checkbox" id="useGap"> Grade-adjusted pace
@@ -906,6 +906,7 @@ const PREF_DEFAULTS = {
   useGap: false,     // read paces off Runalyze's grade-adjusted pace instead of the raw one
   vdotNearDots: true,  // mark the days that came close to the VDOT ceiling without beating it
   vdotNearPct: 10,     // how close "close" is, in percent of the peak in force that day
+                       // (0 = only the days that set it, 100 = every run day)
   colourVerdicts: true,   // colour the bars by verdict at all
   zoneBars: 5,       // sub-bands per pace zone in the pace-zone histogram
   panels: { vol: true, freq: true, runs: true, vdot: true, zone: true },   // which optional panels are shown
@@ -934,7 +935,7 @@ function loadPrefs() {
   if (num(raw.windowVdot, 7, 1820)) p.windowVdot = week(raw.windowVdot, 1820);
   if (num(raw.minLapM, 100, 5000)) p.minLapM = Math.round(raw.minLapM / 100) * 100;
   if (num(raw.zoneBars, 1, 20)) p.zoneBars = Math.round(raw.zoneBars);
-  if (num(raw.vdotNearPct, 1, 50)) p.vdotNearPct = Math.round(raw.vdotNearPct);
+  if (num(raw.vdotNearPct, 0, 100)) p.vdotNearPct = Math.round(raw.vdotNearPct);
   for (const k of ['colourVerdicts', 'maxBehind', 'fadeWindows', 'useGap', 'vdotNearDots']) {
     if (typeof raw[k] === 'boolean') p[k] = raw[k];
   }
@@ -2192,11 +2193,20 @@ function drawVdot() {
   // Thin surface-coloured ring so a cluster of them stays countable, and so one
   // sitting on the line still reads as a dot rather than a bulge in it.
   if (vdotNearDots) {
+    // How big a dot gets is decided by how much room the dots actually have: at
+    // the 10% default a few dozen sit in the panel and want to look aimable, at
+    // 100% every run day gets one and a fat dot would be a solid band. Sized off
+    // the mean spacing between the dots drawn, not off the bar width — the
+    // threshold is what decides the crowding, not the zoom. The ring goes once
+    // there isn't room for it inside the dot: at that size it's just a paler dot.
+    let n = 0;
+    for (let i = i0; i <= i1; i++) if (isNearMax(i)) n++;
+    const r = Math.max(1.2, Math.min(2.75, (n > 1 ? plotW() / n : Infinity) * 0.3));
     c.lineWidth = 1; c.strokeStyle = C('--surface-1'); c.fillStyle = C('--vdot');
     for (let i = i0; i <= i1; i++) {
       if (!isNearMax(i)) continue;
-      c.beginPath(); c.arc(px(i), yOf(dayVdot[i]), 2.75, 0, Math.PI * 2);
-      c.fill(); c.stroke();
+      c.beginPath(); c.arc(px(i), yOf(dayVdot[i]), r, 0, Math.PI * 2);
+      c.fill(); if (r >= 2.2) c.stroke();
     }
   }
 
@@ -2656,7 +2666,9 @@ function syncLabels() {
   for (const el of document.querySelectorAll('.winVdotN')) el.textContent = WINDOW_VDOT;
   // The dots have no legend of their own — the panel title says what they are.
   for (const el of document.querySelectorAll('.vdotNearNote')) {
-    el.textContent = vdotNearDots ? ` \u2014 dots: days within ${vdotNearPct}% of it` : '';
+    el.textContent = !vdotNearDots ? ''
+      : vdotNearPct === 0 ? ' \u2014 dots: the days that set it'
+      : ` \u2014 dots: days within ${vdotNearPct}% of it`;
   }
   // Everything that spells out which four windows are in play: the panel
   // titles, the legend notes (including the verdict legend, which names the
@@ -2821,7 +2833,7 @@ nearDotsChk.onchange = () => {
 const nearPctInput = document.getElementById('vdotNearPct');
 nearPctInput.onchange = nearPctInput.oninput = () => {
   const v = Math.round(Number(nearPctInput.value));
-  if (!Number.isFinite(v) || v < 1 || v > 50) return;   // ignore half-typed values
+  if (!Number.isFinite(v) || v < 0 || v > 100) return;   // ignore half-typed values
   vdotNearPct = v;
   savePrefs();
   syncLabels();

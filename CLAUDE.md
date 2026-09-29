@@ -422,6 +422,29 @@ within `vdotNearPct` (default 10%) of the peak in force *that day* (`vdot[i]`),
 drawn at **the day's own value**, not on the line — so a near miss sits just
 under the line and a day that set, or re-equalled, the peak sits on it.
 
+**Both ends of the range are real modes**, which is why it runs 0–100 rather than
+around the default. **0%** is exactly `dayVdot[i] === vdot[i]` — only the days
+that actually set the peak, which on a real export is 12 dots sitting on the
+line's own step-ups (no epsilon needed: the day that set the peak *is* where the
+rolling max read it from, so the ratio is exactly 1). **100%** is every run day
+with a reading, which turns the panel into a scatter of every run's own VDOT
+under the ceiling line. The counts on a real 1339-day export, over 603 run days:
+0% → 12, 10% → 63, 25% → 460, and 50% upwards is saturated at ~all of them.
+
+Two things the wide range forces:
+
+- **The dot radius follows the crowding**, not the zoom: 2.75px down to 1.2px,
+  from the mean spacing between the dots *actually drawn* (`plotW() / n * 0.3`,
+  clamped). At the 10% default a few dozen dots want to look aimable; at 100%
+  a fat dot would be a solid band. The surface-coloured ring is dropped below
+  r 2.2, where there is no room for it inside the dot and it only reads as a
+  paler dot.
+- **The y-axis opens up to fit the slowest day in view**, which squashes the
+  line towards the top — at 25% the floor drops from 40 to 20 on a real export.
+  That is the honest range of the data, not a bug, and it is the cost of asking
+  for the wide view; the floor is deliberately not capped, since clamping the
+  dots would make them lie about their value.
+
 `vdotVsPeak(i)` is that ratio (1 = it is the peak; it can never exceed 1, since
 the window includes the day itself) and `isNearMax(i)` is the threshold on it.
 The readout says the same thing in words on the VDOT line — "· at the peak" or
@@ -691,7 +714,8 @@ history, `{km, days}` = edited). Three rules:
   carrying the old fields is simply ignored and dropped on the next save, as is
   one carrying the old week-count `lines` keys.)
   `minLapM` is rounded to the nearest 100m, range 100–5000. `vdotNearPct` is
-  rounded to a whole percent, range 1–50 (off is `vdotNearDots`, not 0). `useGap` is a plain
+  rounded to a whole percent, range 0–100 — 0 is a real setting (only the days
+  that set the peak), so "off" is `vdotNearDots`, not 0. `useGap` is a plain
   boolean, and is kept even when the loaded export has no `gap` column to use it
   on — see "Grade-adjusted pace" above. `zoneBars` is rounded
   to the nearest whole number, range 1–20. Anything that fails falls back to
