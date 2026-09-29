@@ -15,21 +15,35 @@
     --grid:           #e1e0d9;
     --baseline:       #c3c2b7;
     --border:         rgba(11,11,11,0.10);
-    /* The four verdicts, one flat colour each — purple highly productive, green
-       productive, blue steady, orange unproductive. Flat, not ramped: the verdict
-       is now a comparison between two rolling windows, which either holds or it
+    /* ONE four-colour scheme, used for two things that are really the same thing:
+       the four rolling window lines (slot 0 to slot 3) and the four verdicts
+       (highly productive, productive, steady, unproductive). A verdict IS "which
+       window slot is on top from here out", so slot k's line and verdict k get
+       the same colour — a purple bar says the purple line is the highest one,
+       with no legend lookup in between. Purple, green, blue, orange.
+       Flat, not ramped: a verdict is a comparison that either holds or it
        doesn't, so there is no "how far past the target" left to ramp along.
-       ALL-PAIRS CVD validated (any two verdicts can end up as neighbouring bars,
-       so every pair has to separate, not just the ones next to each other in the
-       ordering): light worst ΔE 11.2 (protan) / 24.1 normal-vision, dark 10.9 /
-       21.5. Two contrast WARNs accepted, the same trade --w4 already makes —
-       light's blue and orange sit at ~2.6:1 against the near-white surface and
-       dark's purple at 2.7:1; the legend, the hover readout and the table all
-       name every verdict in words, which is the relief that warning asks for. */
+       ALL-PAIRS CVD validated, which both uses need for their own reason (four
+       series crossing each other in one plot; and any two verdicts can end up as
+       neighbouring bars): light worst ΔE 9.3 (protan) / 15.6 normal-vision,
+       dark 10.9 / 21.5.
+       Light's blue was originally a much paler #5fa4e6 (contrast 2.6:1). That
+       was fine as a bar and too faint as a LINE, which the same colours now also
+       have to be — so it was pulled down to L 0.57 for 4.26:1, which costs
+       nothing on CVD (9.3 either way; the binding pair is green/orange, not
+       purple/blue). Light's orange is the one WARN left at 2.6:1, and it stays:
+       every darker option in that hue is a brown. Dark's purple and green sit at
+       2.8 and 3.0:1, which measures low but reads strongly as a saturated hue on
+       near-black. The legend, the hover readout and the table all label every
+       line and name every verdict in words, which is the relief those warnings
+       ask for.
+       --wmax is the per-day max across the four — the line that's meant to be
+       read first, so it's plain ink rather than a fifth hue. */
     --v-hp:           #6b3fa0;
     --v-pr:           #2c8a52;
-    --v-st:           #5fa4e6;
+    --v-st:           #2880b0;
     --v-un:           #e08a1e;
+    --wmax:           #0b0b0b;
     /* Page chrome, not data: the primary button, the focus underline and the
        gate's error line. Kept separate from the verdict hues so those stay
        purely semantic. */
@@ -37,20 +51,6 @@
     --bad:            #d4722f;
     --nocolour:       #b5b3aa;   /* a run whose scheme has colouring switched off */
     --rest:           #e7e5dd;   /* no run at all */
-    /* The four rolling windows, one colour each, shared by the three
-       volume/frequency panels so a colour means the same window everywhere.
-       All-pairs CVD validated (these are four series in ONE plot, so every pair
-       has to separate, not just neighbours): light worst ΔE 12.8 (deutan) /
-       23.4 normal-vision, dark 10.2 / 20.2. --w4's light step warns at 2.85:1
-       contrast against the near-white surface; the legend and the hover readout
-       label every line, which is the relief that warning asks for.
-       --wmax is the per-day max across the four — the line that's meant to be
-       read first, so it's plain ink rather than a hue. */
-    --w1:             #0060a6;
-    --w4:             #00ab86;
-    --w16:            #d57700;
-    --w64:            #a3215a;
-    --wmax:           #0b0b0b;
     --vdot:           #7444b4;
     /* Pace-zone histogram: easy/marathon/threshold/interval/repetition, ordered
        fast→slow around the visible spectrum. Adjacent-pair CVD ΔE validated (not
@@ -106,15 +106,11 @@
       --v-pr:           #007440;
       --v-st:           #3e96ea;
       --v-un:           #d97900;
+      --wmax:           #ffffff;
       --accent:         #5c90cf;
       --bad:            #e8871f;
       --nocolour:       #5c5a54;
       --rest:           #333230;
-      --w1:             #0074c8;
-      --w4:             #00ac86;
-      --w16:            #d97900;
-      --w64:            #bb3a6d;
-      --wmax:           #ffffff;
       --vdot:           #a97cf0;
       --z-easy-weak:        #20507b;
       --z-easy:             #008ae9;
@@ -143,15 +139,11 @@
     --v-pr:           #007440;
     --v-st:           #3e96ea;
     --v-un:           #d97900;
+    --wmax:           #ffffff;
     --accent:         #5c90cf;
     --bad:            #e8871f;
     --nocolour:       #5c5a54;
     --rest:           #333230;
-    --w1:             #0074c8;
-    --w4:             #00ac86;
-    --w16:            #d97900;
-    --w64:            #bb3a6d;
-    --wmax:           #ffffff;
     --vdot:           #a97cf0;
     --z-easy-weak:        #20507b;
     --z-easy:             #008ae9;
@@ -392,11 +384,11 @@
     <div class="legend">
       <div class="legend-row" id="row-windows" title="Hiding a line takes it off the three panels and takes its window-start dot off every panel — it stays in the hover readout and still counts towards MAX."><span class="legend-tag">Lines</span>
         <label class="item"><input type="checkbox" id="line-max" checked><span class="swatch line" style="background:var(--wmax)"></span>MAX</label>
-        <label class="item"><input type="checkbox" id="line-s0" checked><span class="swatch line" style="background:var(--w1)"></span><span class="winLabel0">1w</span></label>
-        <label class="item"><input type="checkbox" id="line-s1" checked><span class="swatch line" style="background:var(--w4)"></span><span class="winLabel1">4w</span></label>
-        <label class="item"><input type="checkbox" id="line-s2" checked><span class="swatch line" style="background:var(--w16)"></span><span class="winLabel2">16w</span></label>
-        <label class="item"><input type="checkbox" id="line-s3" checked><span class="swatch line" style="background:var(--w64)"></span><span class="winLabel3">64w</span></label>
-        <span class="legend-dim"><span class="winsN">1 / 4 / 16 / 64</span>-week rolling averages, and the highest of the four on the day. Untick one to take it, and its window-start dot, off the panels; it stays in the readout and still counts towards MAX.</span>
+        <label class="item"><input type="checkbox" id="line-s0" checked><span class="swatch line" style="background:var(--v-hp)"></span><span class="winLabel0">1w</span></label>
+        <label class="item"><input type="checkbox" id="line-s1" checked><span class="swatch line" style="background:var(--v-pr)"></span><span class="winLabel1">4w</span></label>
+        <label class="item"><input type="checkbox" id="line-s2" checked><span class="swatch line" style="background:var(--v-st)"></span><span class="winLabel2">16w</span></label>
+        <label class="item"><input type="checkbox" id="line-s3" checked><span class="swatch line" style="background:var(--v-un)"></span><span class="winLabel3">64w</span></label>
+        <span class="legend-dim"><span class="winsN">1 / 4 / 16 / 64</span>-week rolling averages, and the highest of the four on the day. Each line's colour is also its verdict colour below — whichever line is on top is what the bars are coloured by. Untick one to take it, and its window-start dot, off the panels; it stays in the readout and still counts towards MAX.</span>
       </div>
     </div>
     <div class="ctrls">
@@ -455,11 +447,14 @@
       </div>
       <div class="legend-row"><span class="legend-tag">No run</span>
         <span class="item"><span class="swatch" style="background:var(--rest)"></span>rest day</span>
-        <span class="legend-dim">Read off the distance-per-week windows on the day, shortest first:
-          <span class="winLabel0">1w</span>&nbsp;&ge;&nbsp;<span class="winLabel1">4w</span> is highly productive,
-          else <span class="winLabel1">4w</span>&nbsp;&ge;&nbsp;<span class="winLabel2">16w</span> productive,
-          else <span class="winLabel2">16w</span>&nbsp;&ge;&nbsp;<span class="winLabel3">64w</span> steady,
-          and none of the three unproductive. A rest day has no verdict.</span>
+        <span class="legend-dim">Which distance-per-week window is on top that day, shortest first — each one has to
+          beat <em>every</em> longer window, not just the next along.
+          <span class="winLabel0">1w</span> highest is highly productive;
+          else <span class="winLabel1">4w</span> over <span class="winLabel2">16w</span> and <span class="winLabel3">64w</span> is productive;
+          else <span class="winLabel2">16w</span> over <span class="winLabel3">64w</span> is steady;
+          else <span class="winLabel3">64w</span> is the highest and that is unproductive.
+          Same four colours as the window lines above, since that is the same statement.
+          A rest day has no verdict.</span>
       </div>
     </div>
   </section>
@@ -474,9 +469,11 @@
     flatten every short one and short runs stay readable against each other. A day with
     no run gets a tiny grey stub below the axis floor rather than nothing at all, which
     also keeps it easy to hover and click. The colour is not about that one run: it
-    compares the day&rsquo;s rolling distance-per-week windows against each other, so
-    the answer is &ldquo;is my training trending up&rdquo; rather than &ldquo;was
-    this run long enough&rdquo;. Rolling weekly volume has moved to its own panel just below.
+    says <strong>which rolling distance-per-week window is on top that day</strong> &mdash;
+    the shortest one winning is the strongest reading &mdash; so the answer is
+    &ldquo;is my training trending up&rdquo; rather than &ldquo;was this run long
+    enough&rdquo;. Rolling weekly volume has moved to its own panel just below, in
+    the same four colours.
   </p>
 
   <div class="datarow">
@@ -982,7 +979,10 @@ function savePrefs() {
 // numbers, not week counts, because a slot keeps its colour and its show/hide
 // setting when the numbers behind it change.
 const N_WINDOWS = 4;
-const WIN_CSS = ['--w1', '--w4', '--w16', '--w64'];
+// Slot k's line colour is verdict k's colour, because they mean the same thing:
+// verdict k is "window slot k is the highest from k out to the longest", so a
+// purple bar says the purple line is on top. See the comment on --v-hp.
+const WIN_CSS = ['--v-hp', '--v-pr', '--v-st', '--v-un'];
 let windowBase = prefs.windowBase;   // weeks, 1-8
 let windowMult = prefs.windowMult;   // 2-8
 const WINDOWS = Array.from({ length: N_WINDOWS }, (_, k) => ({ key: 's' + k, css: WIN_CSS[k] }));
@@ -1326,9 +1326,9 @@ function computeTargets() {
 // see the note on windowBase/windowMult.
 // A rest day still has no verdict at all: it keeps its pale grey stub, so the
 // colour on the chart always belongs to a run.
-// `at` is the index of the window that won its comparison, or null when nothing
-// did, purely so the readout and table can name the comparison behind the word.
-const VERDICT_DIRS = ['hp', 'pr', 'st'];   // window k >= window k+1 -> this verdict
+// `at` is the slot that topped the rest, which is also the slot whose colour the
+// bar is painted in, and what the readout and table name behind the word.
+const VERDICT_DIRS = ['hp', 'pr', 'st', 'un'];   // indexed by that slot
 const DIR_LABEL = { hp: 'highly productive', pr: 'productive', st: 'steady', un: 'unproductive' };
 const DIR_ARROW = { hp: '▲▲', pr: '▲', st: '=', un: '▼' };
 // Switching this off drops the bars to a neutral, which stays distinct from the
@@ -1337,19 +1337,31 @@ let colourVerdicts = prefs.colourVerdicts;
 
 function classify(i) {
   if (daily[i] <= 0) return null;                 // rest day
+  // Each rung compares its window against EVERY longer one, not just the next
+  // one along: "1w ≥ 4w" alone would call a week highly productive while it sat
+  // below the quarter and the year, which is not a claim worth making.
   for (let k = 0; k < N_WINDOWS - 1; k++) {
-    if (volSeries[k][i] >= volSeries[k + 1][i]) return { dir: VERDICT_DIRS[k], at: k };
+    let tops = true;
+    for (let j = k + 1; j < N_WINDOWS; j++) {
+      if (volSeries[j][i] > volSeries[k][i]) { tops = false; break; }
+    }
+    if (tops) return { dir: VERDICT_DIRS[k], at: k };
   }
-  return { dir: 'un', at: null };
+  // Nothing shorter topped its tail, which leaves the longest window — whose own
+  // rung has nothing longer to beat and so always holds. (It really is the
+  // highest of the four whenever it gets here, not just the last one standing:
+  // failing every earlier rung forces each window below it.)
+  return { dir: VERDICT_DIRS[N_WINDOWS - 1], at: N_WINDOWS - 1 };
 }
-// Names the comparison that produced the verdict, so the word is never the only
-// thing on offer: "4w ≥ 16w" for a rung that held, or the whole chain for a day
-// where none of them did.
+// Names the comparison behind the verdict, so the word is never the only thing
+// on offer: "4w ≥ 16w, 64w", or "64w highest" for the longest window, which has
+// nothing longer to be compared against.
 function verdictWhy(c) {
   if (!c) return '';
-  return c.at === null
-    ? WINDOWS.map(w => w.label).join(' &lt; ')
-    : `${WINDOWS[c.at].label} ≥ ${WINDOWS[c.at + 1].label}`;
+  const longer = WINDOWS.slice(c.at + 1).map(w => w.label);
+  return longer.length
+    ? `${WINDOWS[c.at].label} ≥ ${longer.join(', ')}`
+    : `${WINDOWS[c.at].label} highest`;
 }
 
 // ---- pace zones, from a VDOT value --------------------------------------
@@ -2210,12 +2222,7 @@ function setReadout(i, tag) {
   ro.innerHTML = `
     <span class="date">${fmtDate.format(dateAt(i))}${tag ? `<span class="pin">${tag}</span>` : ''}</span>
     <span class="pair detail"><span class="k">Distance that day</span><span class="v">${daily[i] > 0 ? km(daily[i]) + ' km' : 'no run'}${nRuns[i] > 1 ? `<span class="sub-v"> in ${nRuns[i]} runs</span>` : ''}</span><span class="v2">${
-      target[i] > 0
-        ? seg(['target ' + km(target[i]) + ' km',
-               'weekly ÷ ' + (rpwPrev[i] + (longOn[i] ? 1 : 0)).toFixed(1),
-               longOn[i] ? '' : 'no long runs',
-               nRuns[i] > 1 ? 'longest ' + km(maxRun[i]) : ''])
-        : 'no target yet'}</span></span>
+      nRuns[i] > 1 ? `<span class="seg">longest ${km(maxRun[i])} km</span>` : ''}</span></span>
     <span class="pair"><span class="k">Distance per week</span>${winGrid(volSeries, i, 1, 'km', (w, v) => longerSpans(v))}</span>
     <span class="pair"><span class="k">Run days per week</span>${winGrid(freqSeries, i, 1, '', w => w === null ? '' : `${runDaysIn[w][i]} of ${WINDOWS[w].days} days`)}</span>
     <span class="pair"><span class="k">Runs per week</span>${winGrid(runSeries, i, 1, '', w => w === null ? '' : `${runsIn[w][i]} runs in ${WINDOWS[w].days} days`)}</span>

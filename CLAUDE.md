@@ -23,8 +23,9 @@ to refresh). After that the page opens straight into the chart.
 Five stacked panels sharing one x-axis, one bar/point per calendar day:
 
 1. **Bars** — height is **that day's own distance**, on a **logarithmic** axis.
-   Colour is a *verdict on where training stands that day* — not on that one run;
-   see "Verdict" below. Log, not linear, so equal
+   Colour is a *verdict on where training stands that day* — not on that one run.
+   It is literally **the colour of whichever window line in panel 2 is on top**,
+   because that is what the verdict says; see "Verdict" below. Log, not linear, so equal
    *ratios* are equal heights: 5→10 km is the same step as 10→20. One 30 km day
    therefore can't squash every ordinary run onto the baseline, and the gap
    between a 4 and a 6 km day stays readable. See "The bar panel's log axis"
@@ -88,8 +89,15 @@ rest of the row** — it is the widest thing in the sidebar once a week goes ove
 history at 11px; at 10px nothing wraps across all 1339. Sized against a 280px
 sidebar, which is the width this is actually used at. Then the day's peak VDOT (plus what that day's own
 reading is actually based on: full activity or best lap, with its distance, time
-and pace — see `vdotBasisText()`), the day's target, and the verdict. **Clicking
+and pace — see `vdotBasisText()`) and the verdict. **Clicking
 a day pins it** there — see below.
+
+The distance row's own sub-line used to spell out the day's target ("target 8.59
+km · weekly ÷ 6.0 · no long runs"). It is gone: the verdict stopped being read
+against that number, so it was a figure with nothing left to explain. All that
+sub-line carries now is "longest 10.55 km" on a day with more than one run. The
+target itself is still in the data table's Target column and behind the Today's
+target tile.
 
 The **Today's target** tile is a what-if calculator: both inputs (km/wk and days/wk)
 are editable, so a change in volume or frequency can be tried out, and it shows the
@@ -274,24 +282,40 @@ All of it is derived in-browser from one array of daily distances.
   reason, the bar colours too**, since the verdict compares neighbouring windows
   directly. Deliberate, but worth knowing before wondering why a whole history
   changed colour.
-- **Verdict** (`classify`) — the **bar colours**, and the only thing the four
-  verdict hues mean. It is read off the **distance-per-week windows on that day**
-  — the same `volSeries` the second panel draws — comparing each window against
-  the next longer one, shortest first, and stopping at the first rung that holds:
+- **Verdict** (`classify`) — the **bar colours**. One sentence: it is
+  **the shortest window slot that is at least as high as every longer one**,
+  read off the day's **distance per week** (the same `volSeries` panel 2 draws).
 
   | | | |
   |---|---|---|
-  | `w0 ≥ w1` | **highly productive** | this week is at least holding the block up |
-  | else `w1 ≥ w2` | **productive** | the block is at least holding the quarter up |
-  | else `w2 ≥ w3` | **steady** | the quarter is at least holding the year up |
-  | else | **unproductive** | every span sits below the one above it |
+  | `w0 ≥ w1, w2, w3` | **highly productive** | this week tops everything |
+  | else `w1 ≥ w2, w3` | **productive** | the block tops the quarter and the year |
+  | else `w2 ≥ w3` | **steady** | the quarter tops the year |
+  | else | **unproductive** | only the year is on top |
 
-  Flat colours, no ramp: a rung either holds or it doesn't, so there is nothing
-  left to ramp along. `c.at` is the index of the window that won, or `null` for
-  unproductive, purely so `verdictWhy()` can name the comparison ("4w ≥ 16w", or
-  the whole chain "1w < 4w < 16w < 64w") next to the word in the readout and the
-  table. A **rest day still has no verdict** (`classify` returns `null`) and keeps
-  its pale `--rest` stub, so every colour on the chart belongs to a run.
+  Each rung has to beat **every** longer window, not just the next one along.
+  `w0 ≥ w1` on its own would call a week highly productive while it sat below the
+  quarter *and* the year, which is not a claim worth making.
+
+  Three things fall out of that and are worth holding onto:
+
+  - **`c.at` is a window slot, not a rung index**, and it is the slot whose
+    colour the bar is painted in — so a purple bar says "the purple line is the
+    highest one", with no legend lookup in between. `verdictWhy()` spells the
+    same thing out in words next to the verdict ("4w ≥ 16w, 64w", or "64w
+    highest" for the longest window, which has nothing longer to beat).
+  - **Unproductive is the same rule, not a fallback.** Slot 3's rung is
+    vacuously true — there is nothing longer for it to beat — so the chain always
+    terminates at it, and "unproductive" is just `at = 3`. It is also an honest
+    reading: failing every earlier rung forces `w3` strictly above all three
+    others, so the longest window really is on top whenever it gets there.
+  - **Highly productive ⟺ the 1-week line *is* the MAX line.** `w0` topping
+    every longer window is exactly `volSeries[0][i] === volSeries[MAXI][i]`. The
+    headless probe asserts the equivalence in both directions.
+
+  Flat colours, no ramp: a rung either holds or it doesn't. A **rest day has no
+  verdict at all** (`classify` returns `null`) and keeps its pale `--rest` stub,
+  so every colour on the chart belongs to a run.
 
   **Why not judge the run.** The old verdict was the day's distance over a target
   for that day, ramped by how far past it landed. It never really worked: a
@@ -299,18 +323,20 @@ All of it is derived in-browser from one array of daily distances.
   length on purpose, so the colour said more about which *kind* of day it was
   than about whether training was going anywhere. Comparing the windows instead
   asks the question the chart is actually for. What went with it: the long-run
-  scheme (its 1.5×/2× centres, `LONG_MIN_RUNS_PER_WEEK` gate and
-  `longNeedsSingleRun` setting), the `stableBand` setting, and the OKLab ramps —
-  see "Colour system" for the hatch that went with the long-run scheme.
+  scheme (its 1.5×/2× centres and `longNeedsSingleRun` setting), the `stableBand`
+  setting, and the OKLab ramps — see "Colour system" for the hatch that went with
+  the long-run scheme.
 
-  **A skew worth knowing about.** On a day you ran, the 1-week window *contains*
-  that run, so `w0 ≥ w1` is the easy rung to clear: on a real 1339-day export
-  that is 423 of 603 run days highly productive, 137 productive, 42 steady and
-  **1** unproductive. That is the rule behaving as specified, not a bug — but it
-  does mean "highly productive" is the common reading rather than a rare one.
-  (Reading the windows as of *yesterday* instead would give 368/166/62/6, and
-  scoring every day rather than only run days 727/375/207/30. Neither is what is
-  implemented.)
+  **The skew, and why it is fine.** On a day you ran, the 1-week window *contains*
+  that run, so slot 0's rung is the easy one to clear: on a real 1339-day export
+  the verdicts come out **393 highly productive / 137 productive / 67 steady / 6
+  unproductive** across 603 run days. That is not a bug and it is not (only) the
+  rule flattering itself — this history is a volume ramp from late 2024 onwards,
+  so short windows genuinely do sit above long ones most of the time, and the days
+  that actually work against the ramp are the rest days, which are grey by design.
+  The first cut of this rule compared each window only against the next one along
+  and gave 423/137/42/**1**; requiring every longer window is what moved 30 days
+  out of the top verdict and 5 more into the bottom one.
 - **Target** — still computed and still shown (the readout's distance line and the
   data table's Target column), it just no longer colours anything. What a run that
   day had to be to hold the average steady:
@@ -685,78 +711,85 @@ much height:
 | Verdicts | the four-verdict/rest colour legend and `colourVerdicts` |
 
 Two placements are worth naming. **The legend is split across two groups**, not
-kept as one block: the window-line swatches are the show/hide control for those
-lines, so they belong beside the panels they colour, while the verdict swatches
-belong beside the toggle that switches them off. And **`minLapM` and `useGap` sit under
+kept as one block — even though both halves are now literally the same four
+colours: the window-line swatches are the show/hide control for those lines, so
+they belong beside the panels they colour, while the verdict swatches belong
+beside the toggle that switches them off. Each half says so in its own note, so
+the repetition reads as the point rather than as an oversight. And **`minLapM` and `useGap` sit under
 VDOT** even though both also move the pace-zone histogram — they are VDOT
 inputs, and the histogram is read against the day's VDOT, so that is where they
 come from. Reset sits outside all four, since it owns the lot.
 
 ## Colour system
 
-Four verdicts, one flat colour each, plus rest days. Hexes live in the CSS custom
-properties at the top of the file (light and dark, each declared under three scopes
-— see the comment there).
+**One** four-colour scheme does two jobs, because they are the same job: the four
+rolling **window lines** (slot 0 → slot 3) and the four **verdicts**. A verdict is
+"which window slot is on top from here out", so slot *k*'s line and verdict *k*
+share a colour, and a purple bar means the purple line is the highest one. Hexes
+live in the CSS custom properties at the top of the file (light and dark, each
+declared under three scopes — see the comment there).
 
-| verdict | colour | light | dark |
-|---|---|---|---|
-| highly productive | purple `--v-hp` | `#6b3fa0` | `#7f41b7` |
-| productive | green `--v-pr` | `#2c8a52` | `#007440` |
-| steady | blue `--v-st` | `#5fa4e6` | `#3e96ea` |
-| unproductive | orange `--v-un` | `#e08a1e` | `#d97900` |
+| slot | verdict | colour | light | dark |
+|---|---|---|---|---|
+| 0 (1w) | highly productive | purple `--v-hp` | `#6b3fa0` | `#7f41b7` |
+| 1 (4w) | productive | green `--v-pr` | `#2c8a52` | `#007440` |
+| 2 (16w) | steady | blue `--v-st` | `#2880b0` | `#3e96ea` |
+| 3 (64w) | unproductive | orange `--v-un` | `#e08a1e` | `#d97900` |
+
+Plus `--wmax` for the MAX line — plain ink (`#0b0b0b` light, `#ffffff` dark)
+rather than a hue, because it is the line meant to be read first and should not
+compete as a fifth category. The VDOT panel keeps its own `--vdot` violet; it is
+a single-series panel and not part of this scheme.
 
 Rest days are a pale neutral `--rest` (this is also what the bar panel's rest-day
 stubs are drawn in); with `colourVerdicts` switched off every run falls back to a
 mid neutral `--nocolour`.
 
-Validated on the **all-pairs** basis, not the adjacent one: the verdicts are an
-ordered scale, but any two of them can end up as neighbouring bars, so every pair
-has to separate. Light clears it at worst ΔE **11.2** (protan) / 24.1
-normal-vision, dark at **10.9** / 21.5. Two contrast WARNs accepted, the same
-trade `--w4` already makes: light's blue and orange sit at ~2.6:1 against the
-near-white surface, dark's purple at 2.7:1 — the legend, the hover readout badge
-and the table all name every verdict in words, which is the relief that warning
-asks for.
+The earlier per-slot hues (`--w1` `#0060a6` blue, `--w4` `#00ab86` green, `--w16`
+`#d57700` orange, `--w64` `#a3215a` crimson, and dark's equivalents) are gone.
+They were a fine four-colour set but they made the bar/line correspondence a
+legend lookup rather than something you can just see. Before them, one hue per
+*panel* (`--vol` rose, `--freq` grey, `--freq2` teal), which encoded what the
+panel title already says.
+
+Validated on the **all-pairs** basis, not the adjacent one, which both uses need
+for their own reason: four series crossing each other constantly in one plot, and
+any two verdicts able to end up as neighbouring bars. Light clears it at worst ΔE
+**9.3** (protan) / 15.6 normal-vision, dark at **10.9** / 21.5.
+
+**Contrast.** Light's blue started as a much paler `#5fa4e6` (2.58:1 against the
+near-white surface). That was fine as a *bar* and too faint as a *line*, which
+these colours now also have to be — visibly so in a render, not just on paper. It
+was pulled down to OKLCH L 0.57 for **4.26:1**, which costs nothing on CVD (9.3
+either way; the binding pair is green↔orange, not purple↔blue), and the panels got
+readable. Light's orange is the one WARN left, at 2.61:1, and it stays: a sweep of
+that whole hue family found nothing darker that isn't a brown. Dark's purple and
+green measure 2.77 and 2.96:1, which reads far stronger than the number suggests
+for a saturated hue on near-black. The legend, the hover readout and the table all
+label every line and name every verdict in words, which is the relief those
+warnings ask for.
 
 **The lightness pattern is load-bearing, not an accident.** Purple↔blue and
 green↔orange are both hard pairs under red-green CVD (a naive purple/green/blue/
 orange set lands at ΔE 2–6), and hue alone cannot fix either. So each mode splits
-the four across two lightness rows — purple and green dark, blue and orange light
-— which leaves each *within-row* pair (purple↔green, blue↔orange) separated by
-hue, where those pairs are CVD-safe anyway, and each *cross-row* pair separated
-by lightness as well. Pulling any one of the four back towards the others'
-brightness collapses the pair it was split from. Measured, not guessed: a gamut
-search over OKLCH lightness/chroma/hue with the `dataviz` validator as the scorer.
+the four across two lightness rows — light: purple and green dark-ish, blue mid,
+orange light; dark: purple and green dark, blue and orange light — which leaves
+each *within-row* pair separated by hue, where those pairs are CVD-safe anyway,
+and each *cross-row* pair separated by lightness as well. Pulling any one of the
+four back towards the others' brightness collapses the pair it was split from.
+Measured, not guessed: a gamut search over OKLCH lightness/chroma/hue with the
+`dataviz` validator as the scorer, then a per-slot sweep to buy back contrast
+without spending CVD.
 
 The 45° hatch that used to mark long runs, and the `--hatch` variable behind it,
 are gone with the long-run scheme — four hues on one channel is within what
 colour can carry, so there is nothing left for a second channel to encode.
 
-The three volume/frequency panels share **one** four-colour scheme, one colour
-per rolling window, so a colour means the same window everywhere: `--w1` blue,
-`--w4` green, `--w16` orange, `--w64` crimson, plus `--wmax` for the max line —
-plain ink (`#0b0b0b` light, `#ffffff` dark) rather than a hue, because it is the
-line meant to be read first and it should not compete as a fifth category. The
-VDOT panel keeps its own `--vdot` violet; it is a single-series panel and not
-part of this scheme.
-
-These four were validated on the **all-pairs** basis, not the adjacent one the
-rest of this file uses — they really are four series in one plot, crossing each
-other constantly, so every pair has to separate, not just neighbours. Light
-(`#0060a6`, `#00ab86`, `#d57700`, `#a3215a`) clears it at worst ΔE 12.8 (deutan)
-/ 23.4 normal-vision; dark (`#0074c8`, `#00ac86`, `#d97900`, `#bb3a6d`) at
-10.2 / 20.2. One WARN was accepted rather than chased: `--w4`'s light step sits
-at 2.85:1 contrast against the near-white surface. The relief the validator asks
-for is present — the legend and the hover readout label and swatch every line —
-and pushing it darker cost more on the CVD pairs than the contrast gained.
-The earlier per-panel hues (`--vol` rose, `--freq` grey, `--freq2` teal) are
-gone; they encoded which *panel* you were in, which the panel title already says,
-and there is no longer one line per panel to colour.
-
-**The important constraint:** these are already nine hues across the page (four
-windows, four verdicts, VDOT) and the count cannot keep growing — six mutually
-distinguishable ones do not exist within one chart, which is why the verdict set
-had to buy its separation with lightness rather than a fifth and sixth hue. The
+**The important constraint:** six mutually distinguishable hues do not exist
+within one chart, which is why this set had to buy its separation with lightness
+rather than a fifth and sixth hue — and, in the other direction, why collapsing
+the window and verdict schemes into one was a real gain and not just tidiness:
+it is four hues on the page doing the work of eight. The
 earlier two-scheme design (normal blue↔orange, long violet↔olive, marked apart by
 a hatch because *across* schemes colour could not separate at all — violet's
 complement lands in the yellow-green that collides with orange, ΔE ~2) is the
