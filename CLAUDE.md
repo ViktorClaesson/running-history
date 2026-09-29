@@ -20,27 +20,59 @@ to refresh). After that the page opens straight into the chart.
 
 ## What the chart shows
 
-Four stacked panels sharing one x-axis, one bar/point per calendar day:
+Five stacked panels sharing one x-axis, one bar/point per calendar day:
 
-1. **Bars** — height is the rolling average km/day over the trailing *volume*
-   window (default 4 weeks). Colour is a *verdict on that day's run* (see below).
-2. **Line** — average run days per week over the trailing *frequency* window
+1. **Bars** — height is **that day's own distance**, on a **logarithmic** axis.
+   Colour is a *verdict on that day's run* (see below). Log, not linear, so equal
+   *ratios* are equal heights: 5→10 km is the same step as 10→20. One 30 km day
+   therefore can't squash every ordinary run onto the baseline, and the gap
+   between a 4 and a 6 km day stays readable. See "The bar panel's log axis"
+   below for how the floor and the rest-day stubs work.
+2. **Line** — rolling **distance per week** over the trailing *volume* window
+   (default 4 weeks): `avg[i] * 7`, i.e. the measure the bars used to carry,
+   moved out into a panel of its own so the bars could become per-run distance.
+   Colour `--vol`.
+3. **Line** — average run days per week over the trailing *frequency* window
    (default 16 weeks, set independently), on a fixed 0–7 axis with a
    reference line per whole day. A day with two runs still counts as one day here.
-3. **Line** — average runs per week over the same frequency window: every run
+4. **Line** — average runs per week over the same frequency window: every run
    counts, so a double-run day shows as 2. Axis is not fixed at 0–7 like the panel
    above it, since it can run higher.
-4. **Line** — highest VDOT achieved by any workout in the trailing *VDOT* window
+5. **Line** — highest VDOT achieved by any workout in the trailing *VDOT* window
    (default 50 weeks, set independently — see "VDOT and pace zones" below).
    Undefined (a gap, not a zero) before the first-ever logged run.
 
-Panels 2–4 and the pace-zone histogram each have their own show/hide checkbox in
+Panels 2–5 and the pace-zone histogram each have their own show/hide checkbox in
 the settings sidebar (`visPanels`, persisted in `runviz.prefs.v1` as `panels`) —
 panel 1 (the bars) always stays up as the anchor chart. The x-axis date labels
-live on whichever of panels 1–4 is currently the lowest *visible* one
-(`bottomPanel()`), not hard-wired to panel 4, so hiding panels never leaves the
-chart without dates; that panel's bottom inset also widens to fit them, same as
-panel 4's always did.
+live on whichever of panels 1–5 is currently the lowest *visible* one
+(`bottomPanel()`), not hard-wired to the last panel, so hiding panels never leaves
+the chart without dates; that panel's bottom inset also widens to fit them, same as
+the VDOT panel's always did.
+
+## The bar panel's log axis
+
+Zero has no place on a log axis, and a rest day drawn as no bar at all is also
+nothing to aim a pointer at. So the panel is built with a floor *under* the
+data rather than at zero:
+
+- **`yHi`** is `logUp(max visible distance)` and **`yLo`** is
+  `min(logDown(min visible distance), yHi / 10)` — both rounded out to the
+  nearest 1/2/5-times-a-power-of-ten (`logUp`/`logDown`), with at least one full
+  decade of range forced, so a stretch where every run is much the same length
+  doesn't get that narrow range blown up across the whole panel.
+- **Gridlines** are every 1/2/5×decade value in `[yLo, yHi]` (`logTicks`).
+  Spacing is deliberately non-uniform — that's the scale, not a bug — so these
+  don't go through `niceTicks`, which the four linear panels still use.
+- **`yLo` maps to `MIN_RUN_H` (11px) above the plot floor**, not to the floor
+  itself, so the shortest run in view still has a bar with height you can see
+  and click. Anything below `yLo` clamps to that same 11px.
+- **A rest day gets `REST_STUB` (5px)** in the pale `--rest` grey. Deliberately
+  shorter than any real run's bar, and the reason the whole floor arrangement
+  exists: a no-run day is now a thing you can hover and click rather than a gap.
+- The line along the very bottom is `--baseline`, but it is the **stub floor,
+  not a zero line** — there isn't one on this axis, so unlike the linear panels
+  no gridline is drawn in `--baseline` and none is labelled 0.
 
 Hovering a day fills the readout sidebar: exact distance, the rolling average
 (also as km/wk, km/mo, km/yr), runs per week — as two lines, run days/week on top
@@ -85,7 +117,7 @@ A pan ends in a mouseup on the canvas, which the browser then reports as a click
 pinning whatever it happened to finish over.
 
 **Sidebar, not inline.** The readout used to sit directly above the chart, so
-scrolling down past a tall chart lost sight of it — no good once there were four
+scrolling down past a tall chart lost sight of it — no good once there were five
 stacked panels plus the pace-zone histogram to scroll through. It now lives in
 `<aside class="sidebar" id="readoutSidebar">`, a flex sibling of `.wrap` with
 `position: sticky; top: 20px`, so it stays in view while the page scrolls.
@@ -237,7 +269,7 @@ towards easy's own weak blue for Walking and Recovery — see `leadRamps` in
 `buildRamps()`), so the transition visually previews "getting closer to real
 training" without implying they're graded pace zones themselves.
 
-**The pace-zone histogram** (below the four main panels) is always up rather than
+**The pace-zone histogram** (below the five main panels) is always up rather than
 hidden until something is pinned, and follows `shownDay()` exactly like the
 readout: hover, else the pin, else `lastRunIdx` (the most recent day with a
 run), tagged with the same `dayTag()` pill the readout uses ("pinned" /
@@ -373,7 +405,7 @@ for a yellow that passes, because none does.
 `runviz.prefs.v1` holds everything the settings sidebar and the what-if box can be
 set to, so the page opens the way it was left: `windowVol`, `windowFreq`,
 `windowVdot`, `minLapM`, `stableBand`, `longNeedsSingleRun`, `colourNormal`,
-`colourLong`, `zoneBars`, `panels` (`{freq, runs, vdot, zone}`, each independently
+`colourLong`, `zoneBars`, `panels` (`{vol, freq, runs, vdot, zone}`, each independently
 show/hide — see below), and `plan` (`null` = the what-if box follows real
 history, `{km, days}` = edited). Three rules:
 
@@ -403,7 +435,7 @@ the defaults, and a remembered setting has to overwrite them at boot.
 
 - **Reset** in the settings sidebar: all three windows, the min-lap distance,
   stable band, the pace-zone bar count, the long-run rule, both colour toggles and
-  the four panel show/hide toggles back to their defaults (all shown), plus the
+  the five panel show/hide toggles back to their defaults (all shown), plus the
   view zoomed back out. It does *not* touch the what-if.
 - **reset** in the Today's target tile: clears the what-if back to following real
   history, and nothing else.
@@ -437,8 +469,21 @@ properties at the top of the file (light and dark, each declared under three sco
 | Normal run | blue `--n-pr` | orange `--n-un` | weakest step of `--n-pr` |
 | Long run | violet `--l-pr` | olive `--l-un` | weakest step of `--l-pr` |
 
-Rest days are a pale neutral `--rest`; a run whose scheme has colouring switched off
-is a mid neutral `--nocolour`.
+Rest days are a pale neutral `--rest` (this is also what the bar panel's rest-day
+stubs are drawn in); a run whose scheme has colouring switched off is a mid neutral
+`--nocolour`.
+
+The four line panels each have one hue of their own: `--vol` rose, `--freq` near-
+neutral grey, `--freq2` teal, `--vdot` violet. `--vol` was added with the
+`dataviz` validator against the other three, on the **adjacent** basis — the
+volume panel sits directly above the frequency panel, so `--vol` ↔ `--freq` is
+the pair that matters. Light `#e5405c` clears it at CVD ΔE 8.7 (and 8.6 worst
+all-pairs against the whole set); dark `#e8637d` at 13.4. The validator also
+reports two **pre-existing** complaints that have nothing to do with this
+addition and were not "fixed": `--freq` sits below the chroma floor because it
+is meant to read as a neutral, and in dark mode `--freq` ↔ `--freq2` is ΔE 1.4.
+Neither matters here — these are four separate single-series panels, each with
+its own title and its own labelled y-axis, never one plot with four series in it.
 
 **The important constraint:** six mutually distinguishable hues do not exist. Within
 a scheme the pair carries the meaning and is validated strongly (normal CVD ΔE 20.9 /
@@ -501,7 +546,7 @@ One file, in this order: CSS custom properties → styles → markup → load-ga
 entire body is wrapped in `if (DATA) { … }` so nothing runs until data exists.
 
 Roughly: `recompute` (avg + run counts + `computeTargets`) → `classify` (verdict per
-day) → `buildRamps`/`barColour` → `drawBars`/`drawFreq`/`drawAll` →
+day) → `buildRamps`/`barColour` → `drawBars`/`drawVol`/`drawFreq`/`drawAll` →
 `setReadout`/`renderTable`/`renderTiles`/`syncLabels`.
 
 ## Gotchas that have bitten before
@@ -518,6 +563,9 @@ day) → `buildRamps`/`barColour` → `drawBars`/`drawFreq`/`drawAll` →
   behind the `hidden` attribute. `.gate[hidden] { display: none }` exists for that
   reason.
 - **Never a dual axis.** Two measures = two stacked panels sharing the x mapping.
+- **The bar panel has no zero.** It is logarithmic; `Math.log(0)` is `-Infinity`.
+  Every read of a day's height must go through `topOf(i)`, which sends a rest day
+  to the stub rather than through `yOf`.
 - **Bars must never gap.** Each bar runs from its own day boundary to the next, both
   edges pixel-snapped, so neighbours share an edge exactly at any zoom.
 - **Zoom is cursor-anchored** — the fractional day under the pointer keeps its screen
