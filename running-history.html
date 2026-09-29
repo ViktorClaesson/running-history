@@ -33,6 +33,7 @@
     --hatch:          rgba(11,11,11,0.30);
     --nocolour:       #b5b3aa;   /* a run whose scheme has colouring switched off */
     --rest:           #e7e5dd;   /* no run at all */
+    --vol:            #e5405c;
     --freq:           #52514e;
     --freq2:          #2f8f7a;
     --vdot:           #7444b4;
@@ -97,6 +98,7 @@
       --hatch:          rgba(255,255,255,0.28);
       --nocolour:       #5c5a54;
       --rest:           #333230;
+      --vol:            #e8637d;
       --freq:           #c3c2b7;
       --freq2:          #5fc9ae;
       --vdot:           #a97cf0;
@@ -134,6 +136,7 @@
     --hatch:          rgba(255,255,255,0.28);
     --nocolour:       #5c5a54;
     --rest:           #333230;
+    --vol:            #e8637d;
     --freq:           #c3c2b7;
     --freq2:          #5fc9ae;
     --vdot:           #a97cf0;
@@ -275,6 +278,7 @@
   #chart2 { display: block; width: 100%; height: 156px; touch-action: none; cursor: crosshair; }
   #chart3 { display: block; width: 100%; height: 156px; touch-action: none; cursor: crosshair; }
   #chart4 { display: block; width: 100%; height: 156px; touch-action: none; cursor: crosshair; }
+  #chart5 { display: block; width: 100%; height: 156px; touch-action: none; cursor: crosshair; }
   .panel-title { font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
     color: var(--muted); padding: 4px 0 2px 54px; }
   .hint { padding: 6px 4px 0; font-size: 11px; color: var(--muted); }
@@ -350,6 +354,7 @@
     </div>
   </div>
   <div class="ctrls">
+  <label class="chk"><input type="checkbox" id="showVol" checked> Distance/week panel</label>
   <label class="chk"><input type="checkbox" id="showFreq" checked> Run days/week panel</label>
   <label class="chk"><input type="checkbox" id="showRuns" checked> Runs/week panel</label>
   <label class="chk"><input type="checkbox" id="showVdot" checked> VDOT panel</label>
@@ -379,12 +384,16 @@
   </div>
 </aside>
 <div class="wrap">
-  <h1>Running history — <span id="h1win">70</span>-day rolling average</h1>
+  <h1>Running history &mdash; every run, on a log scale</h1>
   <p class="sub">
-    One bar per day. Bar height is the average daily distance over the trailing
-    <span class="winN">70</span> days; the colour compares that day&rsquo;s run against the
-    target for that day &mdash; a week&rsquo;s volume shared over that week&rsquo;s runs, with the long
-    run counted twice. Read against 1&times; for a normal run, 2&times; for a long one.
+    One bar per day, height is that day&rsquo;s own distance on a <strong>logarithmic</strong>
+    axis &mdash; 5&rarr;10&nbsp;km is the same step as 10&rarr;20, so one very long run can&rsquo;t
+    flatten every short one and short runs stay readable against each other. A day with
+    no run gets a tiny grey stub below the axis floor rather than nothing at all, which
+    also keeps it easy to hover and click. The colour compares that day&rsquo;s run against
+    the target for that day &mdash; a week&rsquo;s volume shared over that week&rsquo;s runs,
+    with the long run counted twice. Read against 1&times; for a normal run, 2&times; for a
+    long one. Rolling weekly volume has moved to its own panel just below.
   </p>
 
   <div class="datarow">
@@ -397,6 +406,10 @@
 
   <div class="chartcard">
     <canvas id="chart"></canvas>
+    <div class="chart-panel" id="panel-vol">
+      <div class="panel-title">Average distance per week, over the trailing <span class="winN">70</span> days</div>
+      <canvas id="chart5"></canvas>
+    </div>
     <div class="chart-panel" id="panel-freq">
       <div class="panel-title">Average run days per week, over the trailing <span class="winFreqN">70</span> days</div>
       <canvas id="chart2"></canvas>
@@ -776,7 +789,7 @@ const PREF_DEFAULTS = {
   colourNormal: true,
   colourLong: true,
   zoneBars: 5,       // sub-bands per pace zone in the pace-zone histogram
-  panels: { freq: true, runs: true, vdot: true, zone: true },   // which optional panels are shown
+  panels: { vol: true, freq: true, runs: true, vdot: true, zone: true },   // which optional panels are shown
   plan: null,        // null = the what-if box follows real history; {km, days} = edited
 };
 function loadPrefs() {
@@ -798,7 +811,7 @@ function loadPrefs() {
     if (typeof raw[k] === 'boolean') p[k] = raw[k];
   }
   if (raw.panels && typeof raw.panels === 'object') {
-    for (const k of ['freq', 'runs', 'vdot', 'zone']) {
+    for (const k of ['vol', 'freq', 'runs', 'vdot', 'zone']) {
       if (typeof raw.panels[k] === 'boolean') p.panels[k] = raw.panels[k];
     }
   }
@@ -1385,6 +1398,8 @@ const cv3  = document.getElementById('chart3');
 const ctx3 = cv3.getContext('2d');
 const cv4  = document.getElementById('chart4');
 const ctx4 = cv4.getContext('2d');
+const cv5  = document.getElementById('chart5');
+const ctx5 = cv5.getContext('2d');
 
 let span = N;             // days visible
 let center = N / 2;       // index at the horizontal centre
@@ -1419,6 +1434,7 @@ const kick = () => { clampTarget(); if (!raf) raf = requestAnimationFrame(animat
 // at the same screen x in each.
 const PAD  = { l: 54, r: 14 };
 const BARS = { t: 14, b: 12 };    // top panel insets
+const VOLI  = { t: 10, b: 12 };  // km/week panel insets
 const FREQ  = { t: 10, b: 12 };  // run days/week panel insets
 const FREQ2 = { t: 10, b: 12 };  // runs/week panel insets
 const VDOTI = { t: 10, b: 26 };  // bottom panel insets (carries the x labels)
@@ -1429,6 +1445,7 @@ function bottomPanel() {
   if (visPanels.vdot) return 'vdot';
   if (visPanels.runs) return 'runs';
   if (visPanels.freq) return 'freq';
+  if (visPanels.vol) return 'vol';
   return 'bars';
 }
 let W = 0;
@@ -1449,6 +1466,33 @@ function niceTicks(max) {
   return out;
 }
 
+// A log axis wants gridlines on numbers you'd actually say out loud, so both ends
+// are rounded out to the nearest 1/2/5-times-a-power-of-ten and every such value
+// in between becomes a tick. Unlike niceTicks the spacing is not uniform — that is
+// the whole point of the scale.
+const LOG_MANT = [1, 2, 5];
+const logDec = v => Math.pow(10, Math.floor(Math.log10(v) + 1e-12));
+function logUp(v) {
+  const d = logDec(v), m = v / d;
+  return (LOG_MANT.find(x => x >= m - 1e-9) || 10) * d;
+}
+function logDown(v) {
+  const d = logDec(v), m = v / d;
+  return (LOG_MANT.slice().reverse().find(x => x <= m + 1e-9) || 1) * d;
+}
+function logTicks(lo, hi) {
+  const out = [];
+  for (let d = logDec(lo); d <= hi * 1.0001; d *= 10) {
+    for (const m of LOG_MANT) {
+      const v = m * d;
+      if (v >= lo * 0.9999 && v <= hi * 1.0001) out.push(v);
+    }
+  }
+  return out;
+}
+// enough decimals to tell one tick from the next once they drop below 1
+const logTickText = v => v >= 1 ? String(+v.toFixed(2)) : v.toFixed(Math.max(0, -Math.floor(Math.log10(v) + 1e-12)));
+
 const C = k => getComputedStyle(document.documentElement).getPropertyValue(k).trim();
 
 function fitCanvas(canvas, context) {
@@ -1467,7 +1511,16 @@ const visibleRange = () => [
   Math.min(N - 1, Math.ceil(left() + span) + 1),
 ];
 
-// ---- panel 1: distance ---------------------------------------------------
+// ---- panel 1: that day's own distance, on a log scale --------------------
+// Log rather than linear so equal ratios are equal heights: 5->10 km is the same
+// step as 10->20, which stops a single 30 km day from squashing every ordinary
+// run into the baseline and keeps the difference between a 4 and a 6 km day
+// readable. Zero has no place on a log axis, and a rest day drawn as no bar at
+// all is also nothing to aim a pointer at — so the axis floor sits a decade or
+// so under the shortest run in view, real runs are never drawn shorter than
+// MIN_RUN_H, and a rest day gets a fixed, clearly shorter grey stub beneath it.
+const REST_STUB = 5;   // px, a no-run day
+const MIN_RUN_H = 11;  // px, the shortest a real run is ever drawn
 function drawBars() {
   buildRamps();
   const { w, h } = fitCanvas(cv, ctx);
@@ -1475,30 +1528,43 @@ function drawBars() {
   const isBottom = bottomPanel() === 'bars';
   BARS.b = isBottom ? VDOTI.b : 12;
   const plotH = h - BARS.t - BARS.b;
+  const base = BARS.t + plotH;
   const [i0, i1] = visibleRange();
 
-  let yMax = 0;
-  for (let i = i0; i <= i1; i++) if (avg[i] > yMax) yMax = avg[i];
-  yMax = Math.max(yMax * 1.12, 1);
-  const ticks = niceTicks(yMax);
-  yMax = ticks[ticks.length - 1];
-  const dec = ticks.step < 1 ? (ticks.step < 0.2 ? 2 : 1) : 0;
-  const yOf = v => BARS.t + plotH * (1 - v / yMax);
+  let vMax = 0, vMin = Infinity;
+  for (let i = i0; i <= i1; i++) if (daily[i] > 0) { if (daily[i] > vMax) vMax = daily[i]; if (daily[i] < vMin) vMin = daily[i]; }
+  if (!(vMax > 0)) { vMin = 1; vMax = 10; }            // nothing in view: a plausible empty axis
+  const yHi = logUp(vMax);
+  // at least one full decade of axis, so a view where every run is much the same
+  // length doesn't blow that narrow range up across the whole panel
+  const yLo = Math.min(logDown(vMin), yHi / 10);
+  const L0 = Math.log(yLo), L1 = Math.log(yHi);
+  const usable = plotH - MIN_RUN_H;
+  // yLo lands MIN_RUN_H above the floor, so the shortest run in view still has a
+  // bar you can see and click, and the rest stub stays visibly shorter than it
+  const yOf = v => base - MIN_RUN_H - usable * (Math.log(v) - L0) / (L1 - L0);
+  const topOf = i => daily[i] > 0 ? Math.min(yOf(daily[i]), base - MIN_RUN_H) : base - REST_STUB;
 
   ctx.font = '11px system-ui, -apple-system, sans-serif';
   ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
-  for (const t of ticks) {
+  for (const t of logTicks(yLo, yHi)) {
     const y = Math.round(yOf(t)) + 0.5;
-    ctx.strokeStyle = t === 0 ? C('--baseline') : C('--grid');
+    ctx.strokeStyle = C('--grid');
     ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(PAD.l, y); ctx.lineTo(w - PAD.r, y); ctx.stroke();
     ctx.fillStyle = C('--muted');
-    ctx.fillText(t.toFixed(dec), PAD.l - 8, y);
+    ctx.fillText(logTickText(t), PAD.l - 8, y);
+  }
+  // the floor the rest stubs stand on — not a zero line, there isn't one here
+  {
+    const y = Math.round(base) + 0.5;
+    ctx.strokeStyle = C('--baseline'); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(PAD.l, y); ctx.lineTo(w - PAD.r, y); ctx.stroke();
   }
   ctx.save();
   ctx.translate(13, BARS.t + plotH/2); ctx.rotate(-Math.PI/2);
   ctx.textAlign = 'center'; ctx.fillStyle = C('--muted');
-  ctx.fillText('km per day', 0, 0);
+  ctx.fillText('km (log)', 0, 0);
   ctx.restore();
 
   // Bars butt up against each other at every zoom level: each bar spans from its
@@ -1509,8 +1575,8 @@ function drawBars() {
   for (let i = i0; i <= i1; i++) {
     const x0 = Math.round(xOf(i)), x1 = Math.round(xOf(i + 1));
     const bw = Math.max(1, x1 - x0);
-    const y = yOf(avg[i]);
-    const hh = BARS.t + plotH - y;
+    const y = topOf(i);
+    const hh = base - y;
     if (hh <= 0) continue;
     const c = classify(i);
     ctx.fillStyle = barColour(c);
@@ -1528,15 +1594,15 @@ function drawBars() {
   const outline = (i, dashed) => {
     const x0 = Math.round(xOf(i)), x1 = Math.round(xOf(i + 1));
     const bw = Math.max(1, x1 - x0);
-    const y = yOf(avg[i]);
+    const y = topOf(i);
     ctx.strokeStyle = C('--text-primary');
     ctx.lineWidth = 1;
     ctx.globalAlpha = dashed ? 0.16 : 0.25;
-    ctx.beginPath(); ctx.moveTo(x0 + bw/2 + 0.5, BARS.t); ctx.lineTo(x0 + bw/2 + 0.5, BARS.t + plotH); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x0 + bw/2 + 0.5, BARS.t); ctx.lineTo(x0 + bw/2 + 0.5, base); ctx.stroke();
     ctx.globalAlpha = 1;
     ctx.lineWidth = 1.5;
     if (dashed) ctx.setLineDash([3, 2]);
-    ctx.strokeRect(x0 - 0.25, y - 1, bw + 0.5, BARS.t + plotH - y + 1);
+    ctx.strokeRect(x0 - 0.25, y - 1, bw + 0.5, base - y + 1);
     ctx.setLineDash([]);
   };
   const inView = i => i !== null && i >= i0 && i <= i1;
@@ -1544,6 +1610,82 @@ function drawBars() {
   if (inView(hover)) outline(hover, false);
   ctx.restore();
   if (isBottom) drawXAxisLabels(ctx, w, BARS.t, plotH, i0, i1);
+}
+
+// ---- panel 1b: rolling distance per week over the volume window ----------
+// The measure the bars used to carry, now a line of its own: the trailing
+// WINDOW_VOL average expressed per week (avg km/day x 7) so it reads in the same
+// unit as a training plan. Same shape as the two frequency panels below it.
+function drawVol() {
+  const { w, h } = fitCanvas(cv5, ctx5);
+  const isBottom = bottomPanel() === 'vol';
+  VOLI.b = isBottom ? VDOTI.b : 12;
+  const plotH = h - VOLI.t - VOLI.b;
+  const [i0, i1] = visibleRange();
+  const perWeek = i => avg[i] * 7;
+  let yMax = 0;
+  for (let i = i0; i <= i1; i++) if (perWeek(i) > yMax) yMax = perWeek(i);
+  const ticks = niceTicks(Math.max(yMax * 1.12, 1));
+  yMax = ticks[ticks.length - 1];
+  const dec = ticks.step < 1 ? 1 : 0;
+  const yOf = v => VOLI.t + plotH * (1 - v / yMax);
+  const c = ctx5;
+
+  const pxAt = i => xOf(i) + barW() / 2;
+  c.save();
+  c.beginPath(); c.rect(PAD.l, VOLI.t - 4, plotW(), plotH + 8); c.clip();
+  c.beginPath();
+  c.moveTo(pxAt(i0), VOLI.t + plotH);
+  for (let i = i0; i <= i1; i++) c.lineTo(pxAt(i), yOf(perWeek(i)));
+  c.lineTo(pxAt(i1), VOLI.t + plotH);
+  c.closePath();
+  c.fillStyle = C('--vol'); c.globalAlpha = 0.10; c.fill(); c.globalAlpha = 1;
+  c.restore();
+
+  c.font = '11px system-ui, -apple-system, sans-serif';
+  c.textAlign = 'right'; c.textBaseline = 'middle';
+  for (const t of ticks) {
+    const y = Math.round(yOf(t)) + 0.5;
+    c.strokeStyle = t === 0 ? C('--baseline') : C('--grid');
+    c.lineWidth = 1;
+    c.beginPath(); c.moveTo(PAD.l, y); c.lineTo(w - PAD.r, y); c.stroke();
+    c.fillStyle = C('--muted');
+    c.fillText(t.toFixed(dec), PAD.l - 8, y);
+  }
+  c.save();
+  c.translate(13, VOLI.t + plotH/2); c.rotate(-Math.PI/2);
+  c.textAlign = 'center'; c.fillStyle = C('--muted');
+  c.fillText('km / week', 0, 0);
+  c.restore();
+
+  c.save();
+  c.beginPath(); c.rect(PAD.l, VOLI.t - 4, plotW(), plotH + 8); c.clip();
+  const px = i => xOf(i) + barW() / 2;
+
+  c.beginPath();
+  for (let i = i0; i <= i1; i++) {
+    const x = px(i), y = yOf(perWeek(i));
+    if (i === i0) c.moveTo(x, y); else c.lineTo(x, y);
+  }
+  c.strokeStyle = C('--vol'); c.lineWidth = 2;
+  c.lineJoin = 'round'; c.lineCap = 'round';
+  c.stroke();
+
+  // Same split as the bars: the pinned day is a hollow ring, the hovered one solid.
+  const dot = (i, hollow) => {
+    const x = Math.round(px(i)) + 0.5, y = yOf(perWeek(i));
+    c.strokeStyle = C('--text-primary'); c.lineWidth = 1; c.globalAlpha = hollow ? 0.16 : 0.25;
+    c.beginPath(); c.moveTo(x, VOLI.t); c.lineTo(x, VOLI.t + plotH); c.stroke();
+    c.globalAlpha = 1;
+    c.beginPath(); c.arc(x, y, 4.5, 0, Math.PI * 2);
+    c.fillStyle = hollow ? C('--surface-1') : C('--vol'); c.fill();
+    c.strokeStyle = hollow ? C('--vol') : C('--surface-1'); c.lineWidth = 2; c.stroke();
+  };
+  const seen = i => i !== null && i >= i0 && i <= i1;
+  if (seen(selected) && selected !== hover) dot(selected, true);
+  if (seen(hover)) dot(hover, false);
+  c.restore();
+  if (isBottom) drawXAxisLabels(c, w, VOLI.t, plotH, i0, i1);
 }
 
 // ---- panel 2: run days per week over the trailing window -----------------
@@ -1809,6 +1951,7 @@ function drawVdot() {
 
 function drawAll() {
   drawBars();
+  if (visPanels.vol) drawVol();
   if (visPanels.freq) drawFreq();
   if (visPanels.runs) drawRuns();
   if (visPanels.vdot) drawVdot();
@@ -2128,7 +2271,7 @@ function onTouchMove(e) {
   }
 }
 
-for (const el of [cv, cv2, cv3, cv4]) {
+for (const el of [cv, cv2, cv3, cv4, cv5]) {
   el.addEventListener('mousemove', onMove);
   el.addEventListener('mouseleave', () => { hover = null; refreshReadout(); renderZonePanel(); drawAll(); });
   el.addEventListener('wheel', onWheel, { passive: false });
@@ -2156,7 +2299,8 @@ for (const el of [cv, cv2, cv3, cv4]) {
 }
 window.addEventListener('mouseup', () => {
   draggedNotClicked = !!(drag && drag.moved);
-  drag = null; cv.style.cursor = 'crosshair'; cv2.style.cursor = 'crosshair'; cv3.style.cursor = 'crosshair'; cv4.style.cursor = 'crosshair';
+  drag = null;
+  for (const el of [cv, cv2, cv3, cv4, cv5]) el.style.cursor = 'crosshair';
 });
 window.addEventListener('keydown', e => {
   if (e.key !== 'Escape' || selected === null) return;
@@ -2191,7 +2335,6 @@ document.getElementById('reset').onclick = () => {
   tSpan = N; tCenter = N / 2; kick();
 };
 function syncLabels() {
-  document.getElementById('h1win').textContent = WINDOW_VOL;
   const pct = +(stableBand * 100).toFixed(1);
   for (const el of document.querySelectorAll('.bandN')) el.textContent = pct;
   for (const el of document.querySelectorAll('.gradN')) el.textContent = +(50 - pct).toFixed(1);
@@ -2207,10 +2350,10 @@ function syncLabels() {
 // Pushes visPanels into both the checkboxes and the panel wrapper divs' `hidden`
 // attribute — the one place panel visibility is written to the DOM, same idea as
 // syncControls() below.
-const PANEL_CHK = { freq: 'showFreq', runs: 'showRuns', vdot: 'showVdot', zone: 'showZone' };
-const PANEL_EL = { freq: 'panel-freq', runs: 'panel-runs', vdot: 'panel-vdot', zone: 'zonecard' };
+const PANEL_CHK = { vol: 'showVol', freq: 'showFreq', runs: 'showRuns', vdot: 'showVdot', zone: 'showZone' };
+const PANEL_EL = { vol: 'panel-vol', freq: 'panel-freq', runs: 'panel-runs', vdot: 'panel-vdot', zone: 'zonecard' };
 function syncPanelVisibility() {
-  for (const k of ['freq', 'runs', 'vdot', 'zone']) {
+  for (const k of ['vol', 'freq', 'runs', 'vdot', 'zone']) {
     document.getElementById(PANEL_CHK[k]).checked = visPanels[k];
     // 'zone' also depends on whether there's a day to show it for — renderZonePanel()
     // owns that half of its `hidden` state, this only ever forces it fully hidden.
@@ -2318,7 +2461,7 @@ zoneBarsInput.onchange = zoneBarsInput.oninput = () => {
   savePrefs();
   renderZonePanel();
 };
-for (const k of ['freq', 'runs', 'vdot']) {
+for (const k of ['vol', 'freq', 'runs', 'vdot']) {
   document.getElementById(PANEL_CHK[k]).onchange = e => {
     visPanels[k] = e.target.checked;
     savePrefs();
