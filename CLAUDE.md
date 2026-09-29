@@ -171,7 +171,11 @@ All of it is derived in-browser from one array of daily distances.
   **max across the four windows** — the upper envelope, not a running all-time
   best. It answers "at whatever timescale flatters me most, where am I".
   Drawn last, in plain ink (`--wmax`) at full strength, over the four windows at
-  `WIN_ALPHA` 0.55, and with **no area fill** — the single-line panels this grew
+  `WIN_ALPHA` 0.55 — **`fadeWindows`** turns that transparency off, which is
+  what you want when comparing two windows against *each other* rather than
+  against the max: every crossing is legible at full strength, at the cost of a
+  busier panel. It's what makes the max read as the primary line without being
+  any thicker, so it's on by default. No area fill either — the single-line panels this grew
   out of each had one, and the VDOT panel still does, but with five lines
   crossing each other a shaded region under the max only reads as the max line
   having a shadow. **`maxBehind`** flips the z-order: MAX is the upper envelope,
@@ -466,7 +470,7 @@ for a yellow that passes, because none does.
 set to, so the page opens the way it was left: `windowBase`, `windowMult`,
 `windowVdot`, `minLapM`,
 `stableBand`, `longNeedsSingleRun`, `colourNormal`,
-`colourLong`, `zoneBars`, `maxBehind`, `panels` (`{vol, freq, runs, vdot, zone}`, each independently
+`colourLong`, `zoneBars`, `maxBehind`, `fadeWindows`, `panels` (`{vol, freq, runs, vdot, zone}`, each independently
 show/hide — see below), `lines` (`{max, s0, s1, s2, s3}` — slot keys, which of
 the five lines the three window panels draw), and `plan` (`null` = the what-if box follows real
 history, `{km, days}` = edited). Three rules:
@@ -505,7 +509,7 @@ the defaults, and a remembered setting has to overwrite them at boot.
 - **Reset** in the settings sidebar: the window base and multiple, the VDOT
   window, the min-lap distance,
   stable band, the pace-zone bar count, the long-run rule, the MAX draw order,
-  both colour toggles, the five panel show/hide toggles and the five line
+  the window-line fade, both colour toggles, the five panel show/hide toggles and the five line
   show/hide toggles back to their defaults (all shown), plus the view zoomed
   back out. It does *not* touch the what-if.
 - **reset** in the Today's target tile: clears the what-if back to following real

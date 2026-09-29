@@ -413,6 +413,9 @@
   <label class="chk" title="How many sub-bands each of the five pace zones splits into in the pace-zone histogram.">Pace-zone bars
     <input type="number" id="zoneBars" min="1" max="20" step="1" value="5"> per zone
   </label>
+  <label class="chk" title="The four window lines are drawn semi-transparent by default, which is what makes the max read as the primary line without being any thicker. Turn this off to compare two windows against each other at full strength, at the cost of a busier panel.">
+    <input type="checkbox" id="fadeWindows" checked> Fade the window lines
+  </label>
   <label class="chk" title="The max line sits on top of the four windows by default, which is what makes it the one read first. Put it underneath and the shortest window stays visible along the stretches where it IS the max, so the max shows only where it pulls away.">
     <input type="checkbox" id="maxBehind"> Draw MAX behind the windows
   </label>
@@ -836,7 +839,8 @@ const PREF_DEFAULTS = {
   // one is purely a decluttering move: it still appears in the hover readout and
   // still counts towards MAX. All shown by default.
   lines: { max: true, s0: true, s1: true, s2: true, s3: true },
-  maxBehind: false,  // draw the max line under the four windows rather than over them
+  maxBehind: false,   // draw the max line under the four windows rather than over them
+  fadeWindows: true,  // the four window lines semi-transparent, so the max reads first
   plan: null,        // null = the what-if box follows real history; {km, days} = edited
 };
 // Slot keys, not week counts — a slot keeps its colour and its show/hide
@@ -857,7 +861,7 @@ function loadPrefs() {
   if (num(raw.minLapM, 100, 5000)) p.minLapM = Math.round(raw.minLapM / 100) * 100;
   if (num(raw.stableBand, 0, 0.05)) p.stableBand = raw.stableBand;
   if (num(raw.zoneBars, 1, 20)) p.zoneBars = Math.round(raw.zoneBars);
-  for (const k of ['longNeedsSingleRun', 'colourNormal', 'colourLong', 'maxBehind']) {
+  for (const k of ['longNeedsSingleRun', 'colourNormal', 'colourLong', 'maxBehind', 'fadeWindows']) {
     if (typeof raw[k] === 'boolean') p[k] = raw[k];
   }
   if (raw.panels && typeof raw.panels === 'object') {
@@ -888,6 +892,7 @@ function savePrefs() {
     stableBand,
     longNeedsSingleRun,
     maxBehind,
+    fadeWindows,
     colourNormal: colourScheme.normal,
     colourLong: colourScheme.long,
     zoneBars: ZONE_BARS,
@@ -1325,6 +1330,12 @@ let visLines = { ...prefs.lines };
 // Whether the max is drawn under the four windows instead of over them. Only a
 // z-order: it changes nothing about what is computed or which lines are drawn.
 let maxBehind = prefs.maxBehind;
+// Whether the four window lines are drawn semi-transparent. On by default: it
+// is what makes the max read as the primary line without being any thicker.
+// Off is for comparing two windows against each other rather than against the
+// max — at full strength every crossing is legible, at the cost of a busier
+// panel. Like maxBehind, purely a drawing choice.
+let fadeWindows = prefs.fadeWindows;
 const ZONE_ANCHOR_PCT = [0.657, 0.818, 0.880, 0.976, 1.062];
 const ZONE_BOUND_PCT = [null,   // easy's floor is per-day now — see easyFloorPct()
   (ZONE_ANCHOR_PCT[0] + ZONE_ANCHOR_PCT[1]) / 2,
@@ -1823,9 +1834,10 @@ function drawWindowPanel(canvas, c, set, insets, panelKey, axisLabel, opts = {})
   };
   // Longest window first, so the spikiest line (the shortest window) ends up on
   // top of the smooth ones rather than buried under them.
+  const winAlpha = fadeWindows ? WIN_ALPHA : 1;
   const strokeWindows = () => {
     for (let k = WINDOWS.length - 1; k >= 0; k--) {
-      if (visLines[WINDOWS[k].key]) stroke(set[k], WINDOWS[k].css, WIN_ALPHA);
+      if (visLines[WINDOWS[k].key]) stroke(set[k], WINDOWS[k].css, winAlpha);
     }
   };
   // MAX is the upper envelope, so wherever it equals a window line the two sit
@@ -2383,6 +2395,7 @@ document.getElementById('reset').onclick = () => {
   stableBand = PREF_DEFAULTS.stableBand;
   longNeedsSingleRun = PREF_DEFAULTS.longNeedsSingleRun;
   maxBehind = PREF_DEFAULTS.maxBehind;
+  fadeWindows = PREF_DEFAULTS.fadeWindows;
   colourScheme.normal = PREF_DEFAULTS.colourNormal;
   colourScheme.long = PREF_DEFAULTS.colourLong;
   ZONE_BARS = PREF_DEFAULTS.zoneBars;
@@ -2458,6 +2471,7 @@ function syncControls() {
   bandInput.value = +(stableBand * 100).toFixed(1);
   longSingleBox.checked = longNeedsSingleRun;
   maxBehindBox.checked = maxBehind;
+  fadeWindowsBox.checked = fadeWindows;
   for (const [scheme, id] of [['normal', 'colourNormal'], ['long', 'colourLong']]) {
     document.getElementById(id).checked = colourScheme[scheme];
     document.getElementById('row-' + scheme).classList.toggle('off', !colourScheme[scheme]);
@@ -2490,6 +2504,12 @@ longSingleBox.onchange = () => {
   refreshReadout();
   tableKey = '';
   drawAll();
+};
+const fadeWindowsBox = document.getElementById('fadeWindows');
+fadeWindowsBox.onchange = () => {
+  fadeWindows = fadeWindowsBox.checked;
+  savePrefs();
+  drawAll();   // a drawing choice only — nothing to recompute
 };
 const maxBehindBox = document.getElementById('maxBehind');
 maxBehindBox.onchange = () => {
