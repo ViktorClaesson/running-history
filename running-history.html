@@ -237,12 +237,17 @@
   /* The four windows plus their max, as one small table per measure. Every row
      is always present (five windows, run or no run), so unlike the free-text
      detail lines this can't change the sidebar's height from day to day. */
-  .readout .wingrid { display: grid; grid-template-columns: auto auto auto 1fr; gap: 1px 7px;
+  .readout .wingrid { display: grid; grid-template-columns: auto auto auto 1fr; gap: 1px 5px;
     align-items: baseline; margin-top: 3px; font-variant-numeric: tabular-nums; font-size: 12px; }
   .readout .wingrid .sw { width: 10px; height: 3px; border-radius: 2px; align-self: center; }
   .readout .wingrid .wl { color: var(--text-secondary); }
   .readout .wingrid .wv { text-align: right; font-weight: 600; }
-  .readout .wingrid .wx { color: var(--muted); font-size: 11px; }
+  /* The dim note is the first thing to give when a row runs out of room, and it
+     does: a 100+ km week makes the distance rows' "470 km/mo · 5,638 km/yr" the
+     widest thing in the sidebar. Smaller than the rest of the row so those
+     weeks stop wrapping — sized against a 280px sidebar, which is what this is
+     actually used at. */
+  .readout .wingrid .wx { color: var(--muted); font-size: 10px; }
   .readout .wingrid .wl.r-max, .readout .wingrid .wv.r-max { font-weight: 700; color: var(--text-primary); }
   /* so a wrapped detail line breaks at the · separators, never mid-phrase
      ("no / long runs", "564 / km/yr") */

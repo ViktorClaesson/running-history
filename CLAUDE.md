@@ -81,7 +81,11 @@ the line drawn on top. Every line is listed whether or not it is currently
 Each row carries a dim note to the right of its value — the raw counts behind the
 rate ("78 of 112 days", "87 runs in 112 days"), or for the distance table that
 same rate restated as km/mo and km/yr. (The km/wk part is left out there, since
-that is the value it sits next to.) Then the day's peak VDOT (plus what that day's own
+that is the value it sits next to.) That note is **10px, a step down from the
+rest of the row** — it is the widest thing in the sidebar once a week goes over
+99 km ("508 km/mo · 6,098 km/yr") and was wrapping on 16 days of a real
+history at 11px; at 10px nothing wraps across all 1339. Sized against a 280px
+sidebar, which is the width this is actually used at. Then the day's peak VDOT (plus what that day's own
 reading is actually based on: full activity or best lap, with its distance, time
 and pace — see `vdotBasisText()`), the day's target, and the verdict. **Clicking
 a day pins it** there — see below.
