@@ -384,18 +384,30 @@ a genuinely hard lap implies close to the runner's real ceiling. Verified agains
 vdoto2.com's own worked example — VDOT 51.8 round-trips to its quoted easy/marathon/
 threshold/interval/repetition paces (5:14/4:23/4:08/3:48/3:33 min/km) within rounding.
 
-A day's own VDOT is the higher of **the whole day treated as one effort**, and the
-**max implied VDOT over its laps that are at least `MIN_LAP_M` long** (default
-1500m, adjustable 100–5000m). The length floor exists because `pctVo2max()` is
+A day's own VDOT is the **max implied VDOT over every effort that day**: each
+**activity treated whole**, plus each of its **laps that are at least `MIN_LAP_M`
+long** (default 1500m, adjustable 100–5000m).
+
+**An effort is an activity, never a day.** This used to treat the whole day as
+one effort, which on a day with two runs glued them into a single continuous
+one — and that *inflates* VDOT, because `pctVo2max()` falls with duration, so
+the same pace held for twice as long implies a much higher ceiling. On a real
+export it hit **33 of 57 multi-run days, by up to 2.05 VDOT**. It barely touched
+the rolling-max *line* (2 days of 1339, at most 0.44 — the all-time peaks were
+set by single-run days anyway), but the day readings in the readout and the
+height of the near-max dots were wrong on every one of those days. `acts` in the
+data pipeline exists for this: the day's runs are kept apart rather than summed.
+
+The length floor exists because `pctVo2max()` is
 calibrated against race durations — roughly 3.5 minutes and up — and a very short,
 very fast lap (a sprint, the last few strides of a rep) computes a VO2 cost far
 beyond what's actually reached in that time, wildly overstating VDOT: a real
 export surfaced a day reading VDOT 70+ against a true ceiling around 52, traced to
 a short fast lap. No *tag* filtering beyond the length floor — a slow warmup or
 rest lap that happens to clear it still never wins the search on its own. Checking
-the whole day too (not just as a fallback for days with no lap data) is what makes
-an evenly-paced tempo run or race its own best evidence when it beats every
-individual lap. The **VDOT panel** is the rolling max of that across the trailing *VDOT*
+each activity whole too (not just as a fallback for ones with no lap data) is
+what makes an evenly-paced tempo run or race its own best evidence when it beats
+every individual lap. The **VDOT panel** is the rolling max of that across the trailing *VDOT*
 window (`WINDOW_VDOT`, default 50 weeks — the only window still adjustable, and
 the only one that wants years rather than weeks, because "what's my fitness
 ceiling" and "how often am I running" are different-timescale questions). It's a plain sliding-window max
@@ -432,8 +444,10 @@ Three things worth knowing:
 **Laps** come from Runalyze's `splits` column: `<tag><km>|<time>` pieces joined by
 `-`, e.g. `I1.012|3:54`. The tag (`W`arm-up, `I`nterval, `R`est/`P`ause, `C`ooldown,
 `U`ntagged autolap) is read from real exports but not used for anything — see above.
-A day with no parsed splits (older activities, or ones Runalyze didn't lap) falls
-back to treating the whole day as a single lap.
+They hang off their own activity in `acts`, not off the day. An activity with no
+parsed splits (an older one, or one Runalyze didn't lap) falls back to being
+treated as a single lap — **per activity**, so one run of a day having splits
+never drops the other run's minutes, nor averages the two into one pace.
 
 **Grade-adjusted pace** (`useGap`, "Grade-adjusted pace" under VDOT panel, **off
 by default**) swaps every *time* the pace maths reads for the equivalent flat one,
@@ -448,17 +462,19 @@ Runalyze's `gap` column is grade-adjusted **speed in km/h**, not a pace and not 
 factor (checked against real activities' own distance/time: a flat run's `gap`
 sits within a fraction of a percent of its raw speed, a 34 m/km day about 7%
 above it). `gapRatioOf()` turns it into `gap ÷ raw speed`, clamped to 0.5–2, and
-the pipeline stores the result as *time*: `gsec` per day next to `sec`, and
-`gsec` per lap next to `sec`. On a real export the ratio's median is 1.005 and
+the pipeline stores the result as *time*: `gsec` next to `sec` on every activity and
+every lap. On a real export the ratio's median is 1.005 and
 its max 1.118.
 
 Two things are worth knowing about that ratio. Runalyze reports GAP **once per
-activity**, so the same ratio is spread over every lap of it — the only honest
+activity**, which is also the level `acts` stores a time at, so the same ratio
+is spread over every lap of that activity — the only honest
 option available, since it says "this run was worth this much more than its raw
 pace" without pretending to know which kilometre the hills were in. And **not
 every activity has one** (661 of 664 runs in a real export; the missing ones are
-old). `lapSec()`/`dayTime()` fall back to the raw time whenever there is no
-adjusted one, so the toggle can only ever re-time a day, never blank it.
+old). `effortSec()` — one function, since an activity and a lap are
+the same shape — falls back to the raw time whenever there is no adjusted one,
+so the toggle can only ever re-time a day, never blank it.
 
 `gapOn()` is the real gate: `useGap` *and* the export having a usable `gap`
 column at all (`DATA.gapCount`). An export without one disables the checkbox and
@@ -850,24 +866,26 @@ way but on a different basis — see "VDOT and pace zones" above.
   22–31 Aug 2026: unshifted agrees on all ten days activity by activity, shifted
   disagrees on three. If this ever looks wrong again, the discriminator is an
   activity starting between 22:00 and midnight — nothing else moves.
-- Each activity is filed under that day, then aggregated per day into `values`
-  (total km), `maxRun` (longest single run), `nRuns` (count), `sec` (total elapsed
-  seconds, for VDOT), `gsec` (the same, grade-adjusted — see "Grade-adjusted
-  pace" above) and `laps` (parsed `splits`, carrying their own `sec`/`gsec`, also
-  for VDOT). 63 of my days have more than one run.
+- Each activity is filed under that day. The day gets `values` (total km),
+  `maxRun` (longest single run) and `nRuns` (count) — and then **`acts`, one row
+  per activity**, each `{km, sec, gsec, laps}` with its own parsed `splits` (each
+  lap `{km, sec, gsec}` in turn). 57 of my days have more than one run, which is
+  why the times are **not** summed into a day total: everything that reads a
+  *pace* has to read one continuous effort. See "VDOT and pace zones" above.
 - **Sport IDs are per-account**, so there is no way to detect "running" generically.
   `summariseSports` shows every sport with count / total km / median speed and
   pre-ticks a guess: the busiest sport with median speed 7.5–17 km/h, plus anything
   comparable in volume. Speed alone over-selects — cross-country skiing at 8.2 km/h
   sits squarely in running range.
-- Parsed data is cached in `localStorage` under `runviz.data.v2` (`SCHEMA = 5`).
+- Parsed data is cached in `localStorage` under `runviz.data.v2` (`SCHEMA = 6`).
   `SCHEMA` guards what the cached numbers *mean*, not only their shape — the day
   attribution fix bumped it to 3 with the shape unchanged, because the cached values
   were wrong and can only be rebuilt from the CSV. It was bumped again to 4 when
-  `sec`/`laps` were added for VDOT, and to 5 when the grade-adjusted times
-  (`gsec` per day, `gsec` per lap, `gapCount`) joined them — both times because
-  the shape itself changed: an older cached copy simply doesn't have those
-  arrays. A stale schema opens the gate
+  `sec`/`laps` were added for VDOT, to 5 when the grade-adjusted times
+  (`gsec` per day, `gsec` per lap, `gapCount`) joined them, and to 6 when the
+  day-level `sec`/`gsec`/`laps` were replaced by per-activity `acts` — every
+  time because the shape itself changed: an older cached copy simply doesn't
+  have those arrays. A stale schema opens the gate
   with `staleCache` set, which says why it is asking for the file again instead of
   doing it silently. Selected sports in `runviz.sports.v2`.
   Settings in `runviz.prefs.v1` (see below).

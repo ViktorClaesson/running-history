@@ -565,7 +565,10 @@
 // itself and is as close to "remember the path" as the platform allows.
 // ---------------------------------------------------------------------------
 const LS_DATA = 'runviz.data.v2', LS_SPORTS = 'runviz.sports.v2';
-const SCHEMA = 5;   // 5: added grade-adjusted times (per day and per lap), alongside the raw ones
+// 6: one row per ACTIVITY inside each day (`acts`), each carrying its own time
+//    and its own laps, replacing the day-level `sec`/`gsec`/`laps` totals — a
+//    day's two runs are two efforts, not one long one. See recomputeDayVdot.
+const SCHEMA = 6;
 
 const lsGet = k => { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); return true; }
@@ -692,10 +695,13 @@ function buildData({ header, rows }, sportIds, fileName) {
     const secs = header.s != null ? (parseFloat(r[header.s]) || 0) : 0;
     const ratio = gapRatioOf(header, r, dist, secs);
     if (ratio !== 1) gapCount++;
-    const g = per.get(key) || { sum: 0, max: 0, n: 0, sec: 0, gsec: 0, laps: [] };
+    const g = per.get(key) || { sum: 0, max: 0, n: 0, acts: [] };
     g.sum += dist; g.max = Math.max(g.max, dist); g.n++;
-    g.sec += secs; g.gsec += secs / ratio;
-    if (header.splits != null && r[header.splits]) g.laps.push(...parseSplits(r[header.splits], ratio));
+    // Each activity is kept as its own row rather than summed into a day total:
+    // everything downstream that reads a *pace* has to read one continuous
+    // effort, and a day's two runs have a rest in between. See recomputeDayVdot.
+    g.acts.push({ km: dist, sec: secs, gsec: secs / ratio,
+      laps: header.splits != null && r[header.splits] ? parseSplits(r[header.splits], ratio) : [] });
     per.set(key, g);
     runCount++;
   }
@@ -704,14 +710,15 @@ function buildData({ header, rows }, sportIds, fileName) {
   const start = keys[0], end = keys[keys.length - 1];
   const day = 86400000, t0 = Date.parse(start + 'T00:00:00Z');
   const days = Math.round((Date.parse(end + 'T00:00:00Z') - t0) / day) + 1;
-  const values = [], maxRun = [], nRuns = [], sec = [], gsec = [], laps = [];
+  const values = [], maxRun = [], nRuns = [], acts = [];
   const r3 = v => Math.round(v * 1000) / 1000;
+  const r3s = e => ({ km: r3(e.km), sec: e.sec, gsec: Math.round(e.gsec) });
   for (let i = 0; i < days; i++) {
     const g = per.get(new Date(t0 + i * day).toISOString().slice(0, 10));
     values.push(g ? r3(g.sum) : 0); maxRun.push(g ? r3(g.max) : 0); nRuns.push(g ? g.n : 0);
-    sec.push(g ? g.sec : 0); gsec.push(g ? Math.round(g.gsec) : 0); laps.push(g ? g.laps : []);
+    acts.push(g ? g.acts.map(a => ({ ...r3s(a), laps: a.laps.map(r3s) })) : []);
   }
-  return { schema: SCHEMA, start, values, maxRun, nRuns, sec, gsec, laps, runCount, gapCount,
+  return { schema: SCHEMA, start, values, maxRun, nRuns, acts, runCount, gapCount,
            fileName, sports: [...sportIds], loadedAt: new Date().toISOString().slice(0, 10) };
 }
 
@@ -775,9 +782,9 @@ function openGate(changing, staleCache) {
   // A SCHEMA bump means the cached copy is not just old but wrong, and it can only
   // be rebuilt from the CSV — so say why rather than silently asking again.
   gateMsg.textContent = staleCache
-    ? 'The remembered copy was built before lap splits were read for the VDOT '
-      + 'chart, so it has been discarded. Pick the CSV again to rebuild it — your '
-      + 'settings are kept.'
+    ? 'The remembered copy was built by an older version of this page and no '
+      + 'longer holds everything the VDOT chart needs, so it has been discarded. '
+      + 'Pick the CSV again to rebuild it — your settings are kept.'
     : '';
   gateMsg.className = 'gate-msg';
   sportBox.hidden = true;
@@ -1030,9 +1037,10 @@ let WINDOW_VDOT = prefs.windowVdot;
 const daily = DATA.values;
 const maxRun = DATA.maxRun;   // longest single run that day
 const nRuns  = DATA.nRuns;    // how many separate runs that day
-const daySec = DATA.sec || [];    // total elapsed seconds that day, across all its runs
-const dayGsec = DATA.gsec || [];  // the same, grade-adjusted (see `useGap` below)
-const dayLaps = DATA.laps || [];  // that day's parsed lap splits ({km, sec, gsec}[]), oldest export missing this
+// That day's activities, kept apart rather than summed: one {km, sec, gsec,
+// laps} per run, each lap {km, sec, gsec} in turn. Everything that reads a pace
+// reads one of these, never a day total — see recomputeDayVdot.
+const dayActs = DATA.acts || [];
 const N = daily.length;
 const start = new Date(DATA.start + "T00:00:00");
 const dateAt = i => new Date(start.getTime() + i * 86400000);
@@ -1161,30 +1169,36 @@ let MIN_LAP_M = prefs.minLapM;
 // was actually a climb. Distances, volume, frequency and the targets are all
 // untouched: kilometres run are kilometres run.
 //
-// Every read goes through `lapSec`/`dayTime`, which fall back to the raw time
-// whenever there is no adjusted one to use — an export with no `gap` column at
-// all (`gapOn()` false, and the control disabled), or the older activities
-// inside one that has it. So the toggle can never blank a day, only re-time it.
+// Every read goes through `effortSec` — an activity and a lap are the same
+// shape here — which falls back to the raw time whenever there is no adjusted
+// one to use: an export with no `gap` column at all (`gapOn()` false, and the
+// control disabled), or the older activities inside one that has it. So the
+// toggle can never blank a day, only re-time it.
 let useGap = prefs.useGap;
 const gapOn = () => useGap && DATA.gapCount > 0;
-const lapSec = lap => gapOn() && lap.gsec > 0 ? lap.gsec : lap.sec;
-const dayTime = i => gapOn() && dayGsec[i] > 0 ? dayGsec[i] : daySec[i];
+const effortSec = e => gapOn() && e.gsec > 0 ? e.gsec : e.sec;
 const dayVdot = new Array(N);
 const dayVdotSource = new Array(N);   // {km, sec, kind:'lap'|'day', adj} behind dayVdot[i], or null
+// The search is over EFFORTS, and the day is never one of them: on a day with
+// two runs there is a rest in between, so gluing them into one continuous
+// 16 km overstates VDOT badly — pctVo2max falls with duration, so the same
+// pace held for twice as long implies a much higher ceiling. Each activity is
+// checked whole, and each of its long-enough laps, and the best of the lot wins.
 function recomputeDayVdot() {
   const minLapKm = MIN_LAP_M / 1000;
   for (let i = 0; i < N; i++) {
     let best = 0, bestSrc = null;
-    const dsec = dayTime(i);
-    if (daily[i] > 0 && dsec > 0) {
-      best = impliedVdot(daily[i], dsec);
-      bestSrc = { km: daily[i], sec: dsec, kind: 'day', adj: dsec !== daySec[i] };
-    }
-    for (const lap of (dayLaps[i] || [])) {
-      if (lap.km < minLapKm) continue;
-      const lsec = lapSec(lap);
-      const v = impliedVdot(lap.km, lsec);
-      if (v > best) { best = v; bestSrc = { km: lap.km, sec: lsec, kind: 'lap', adj: lsec !== lap.sec }; }
+    const take = (km, sec, raw, kind) => {
+      const v = impliedVdot(km, sec);
+      if (v > best) { best = v; bestSrc = { km, sec, kind, adj: sec !== raw }; }
+    };
+    for (const act of (dayActs[i] || [])) {
+      const asec = effortSec(act);
+      if (act.km > 0 && asec > 0) take(act.km, asec, act.sec, 'act');
+      for (const lap of act.laps) {
+        if (lap.km < minLapKm) continue;
+        take(lap.km, effortSec(lap), lap.sec, 'lap');
+      }
     }
     dayVdot[i] = best;
     dayVdotSource[i] = bestSrc;
@@ -1496,8 +1510,14 @@ const STANDING_BIN = 0, WALKING_BIN = 1, RECOVERY_BIN = 2, ZONE_BIN_OFFSET = 3;
 function paceHistogramFor(i) {
   const v = vdot[i];
   if (!(v > 0)) return null;
-  const laps = (dayLaps[i] && dayLaps[i].length) ? dayLaps[i]
-    : (daily[i] > 0 && dayTime(i) > 0 ? [{ km: daily[i], sec: dayTime(i) }] : []);
+  // Per activity, and the fallback to "the whole thing as one lap" is per
+  // activity too: one run of the day having splits is no reason to drop the
+  // other one's minutes, and no reason to average the two into one pace.
+  const laps = [];
+  for (const act of (dayActs[i] || [])) {
+    if (act.laps.length) laps.push(...act.laps);
+    else if (act.km > 0 && effortSec(act) > 0) laps.push(act);
+  }
   if (!laps.length) return null;
   const bins = new Array(ZONE_BIN_OFFSET + 5 * ZONE_BARS).fill(0);
   const floor = easyFloorPct(v);
@@ -1505,7 +1525,7 @@ function paceHistogramFor(i) {
     // With grade adjustment on, a lap is binned by its equivalent flat pace and
     // counted for that many minutes — the adjusted duration, not the real one,
     // so a bin's height stays the time implied by the pace it is drawn at.
-    const sec = lapSec(lap);
+    const sec = effortSec(lap);
     const vel = lap.km * 1000 / (sec / 60);
     const mins = sec / 60;
     if (vel < STANDING_MAX_VEL) { bins[STANDING_BIN] += mins; continue; }
@@ -2340,9 +2360,9 @@ function renderZonePanel() {
     `<span class="item"><span class="swatch" style="background:${leadRamps.recovery}"></span>Recovery</span>` +
     ZONES.map(z => `<span class="item"><span class="swatch" style="background:${C(z.strong)}"></span>${z.label}</span>`).join('');
   // The histogram is only ever as granular as the recorded laps — if Runalyze
-  // didn't save any splits for this day (an older activity, a device that
-  // doesn't autolap, a manual entry), paceHistogramFor() falls back to treating
-  // the whole day as one lap at its average pace, and every minute lands in a
+  // didn't save any splits for an activity (an older one, a device that doesn't
+  // autolap, a manual entry), paceHistogramFor() falls back to treating that
+  // activity as one lap at its average pace, and all of its minutes land in a
   // single bin no matter how many ZONE_BARS are configured.
   zoneBody.innerHTML = `<div class="zone-legend">${legend}</div>` +
     `<div class="zone-hover" id="zoneHoverInfo">${realBins ? 'Hover a bar to see its pace range' : '&nbsp;'}</div>` +
