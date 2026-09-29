@@ -623,6 +623,15 @@ Roughly: `recompute` (the four windows' series + their max + `computeTargets`) â
   so all three match by construction. See the readout section above before touching
   its flex properties.
 - Floating point: `1.05 - 1 > 0.05`, so band edges need the epsilon in `classify`.
+- **Negative zero.** A sliding-window sum adds and subtracts the same distances
+  in a different order, so it doesn't land back on exactly 0 over a stretch with
+  no runs â€” it lands on dust, often *negative* dust, which `toFixed`/`Intl`
+  render as "-0.0 km". On a real export that was 171 dusty values showing up as
+  a minus zero on 158 days of the readout. `recompute()` and `computeTargets()`
+  therefore snap their running sums to 0 below `1e-9` (distances are rounded to
+  1e-3 km when the data is built, so anything smaller is dust by definition).
+  Snapped at the source, not at each format call, so every reader of the series
+  gets a clean zero.
 
 ## How to verify a change
 

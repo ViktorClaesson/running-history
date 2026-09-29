@@ -972,6 +972,14 @@ function recompute() {
         km -= daily[i - d];
         if (daily[i - d] > 0) ran--;
         ranTotal -= nRuns[i - d];
+        // A sliding sum that adds and subtracts the same values in a different
+        // order doesn't land back on exactly 0 — it lands on float dust, often
+        // NEGATIVE dust, which then formats as "-0.0 km" across a stretch with
+        // no runs in it. Distances are rounded to 1e-3 km when the data is
+        // built, so anything this small is dust by definition. Snapped here
+        // rather than at every format call, so every reader of the series (the
+        // panels, the readout, the tiles, the table) gets a clean zero.
+        if (km < 1e-9) km = 0;
       }
       volSeries[w][i]  = km * 7 / d;
       freqSeries[w][i] = ran * 7 / d;
@@ -1195,6 +1203,7 @@ function computeTargets() {
     sum += daily[i-1];
     const dropped = i - 1 - WINDOW_VOL;
     if (dropped >= 0) sum -= daily[dropped];
+    if (sum < 1e-9) sum = 0;   // same float-dust snap as recompute() — see there
     const weekly = sum * 7 / WINDOW_VOL;
     weeklyPrev[i] = weekly;
     const divisor = rpwPrev[i] + (longOn[i] ? 1 : 0);
