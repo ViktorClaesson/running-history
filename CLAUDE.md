@@ -341,6 +341,42 @@ ceiling" and "how often am I running" are different-timescale questions). It's a
 A day with no parsed splits (older activities, or ones Runalyze didn't lap) falls
 back to treating the whole day as a single lap.
 
+**Grade-adjusted pace** (`useGap`, "Grade-adjusted pace" under VDOT panel, **off
+by default**) swaps every *time* the pace maths reads for the equivalent flat one,
+so a hilly run stops reading as an easy day and its minutes stop landing in
+Recovery when they were a climb. It moves the day VDOTs, the VDOT panel and the
+pace-zone histogram, and nothing else: distances, volume, frequency, targets and
+verdicts are all untouched, because kilometres run are kilometres run. Off by
+default since the raw pace is what was actually run — this is a second opinion on
+it, not a correction.
+
+Runalyze's `gap` column is grade-adjusted **speed in km/h**, not a pace and not a
+factor (checked against real activities' own distance/time: a flat run's `gap`
+sits within a fraction of a percent of its raw speed, a 34 m/km day about 7%
+above it). `gapRatioOf()` turns it into `gap ÷ raw speed`, clamped to 0.5–2, and
+the pipeline stores the result as *time*: `gsec` per day next to `sec`, and
+`gsec` per lap next to `sec`. On a real export the ratio's median is 1.005 and
+its max 1.118.
+
+Two things are worth knowing about that ratio. Runalyze reports GAP **once per
+activity**, so the same ratio is spread over every lap of it — the only honest
+option available, since it says "this run was worth this much more than its raw
+pace" without pretending to know which kilometre the hills were in. And **not
+every activity has one** (661 of 664 runs in a real export; the missing ones are
+old). `lapSec()`/`dayTime()` fall back to the raw time whenever there is no
+adjusted one, so the toggle can only ever re-time a day, never blank it.
+
+`gapOn()` is the real gate: `useGap` *and* the export having a usable `gap`
+column at all (`DATA.gapCount`). An export without one disables the checkbox and
+shows it unticked, but leaves the remembered `useGap` alone, so loading such a
+file and going back to one with GAP doesn't silently forget the setting.
+
+A bin's height is the adjusted minutes too, not the real ones — the time implied
+by the pace the bar is drawn at, so a day's bars still sum to one coherent
+duration (checked: they sum to exactly `gsec ÷ 60`). `vdotBasisText()` labels
+the figure "grade-adj." when the time it quotes has been adjusted, rather than
+quietly disagreeing with what Runalyze and the watch say.
+
 **Pace zones** (easy/marathon/threshold/interval/repetition) are five %VDOT bands,
 anchored at 65.7/81.8/88.0/97.6/106.2% (back-solved from the vdoto2.com example
 above) with the boundary between two neighbours at their midpoint, so the bands
@@ -522,7 +558,7 @@ for a yellow that passes, because none does.
 
 `runviz.prefs.v1` holds everything the settings sidebar and the what-if box can be
 set to, so the page opens the way it was left: `windowBase`, `windowMult`,
-`windowVdot`, `minLapM`,
+`windowVdot`, `minLapM`, `useGap`,
 `stableBand`, `longNeedsSingleRun`, `colourNormal`,
 `colourLong`, `zoneBars`, `maxBehind`, `fadeWindows`, `panels` (`{vol, freq, runs, vdot, zone}`, each independently
 show/hide — see below), `lines` (`{max, s0, s1, s2, s3}` — slot keys, which of
@@ -532,8 +568,9 @@ history, `{km, days}` = edited). Three rules:
 - **Read at the very top of the `if (DATA)` block**, above `WINDOWS` and
   `let WINDOW_VDOT`, because `recompute()` runs at load and reads `WINDOWS` — the
   declaration-order gotcha below. (`WINDOW_VDOT` isn't read by `recompute()`, but
-  is declared alongside for the same reason. `MIN_LAP_M` is declared further down, right next to `recomputeDayVdot()`
-  — nothing earlier touches it, so it doesn't need to move. `ZONE_BARS` is declared
+  is declared alongside for the same reason. `MIN_LAP_M` and `useGap` are declared further down, right next to
+  `recomputeDayVdot()` — nothing earlier touches them, so they don't need to
+  move. `ZONE_BARS` is declared
   right next to the `ZONES` constant, for the same reason.)
 - **Validated field by field on load** (`loadPrefs`), against the same limits as the
   inputs, so a stale or hand-edited entry can only produce a state the UI can reach.
@@ -544,7 +581,9 @@ history, `{km, days}` = edited). Three rules:
   the four windows are derived from base and multiple now. A stale entry still
   carrying the old fields is simply ignored and dropped on the next save, as is
   one carrying the old week-count `lines` keys.)
-  `minLapM` is rounded to the nearest 100m, range 100–5000. `zoneBars` is rounded
+  `minLapM` is rounded to the nearest 100m, range 100–5000. `useGap` is a plain
+  boolean, and is kept even when the loaded export has no `gap` column to use it
+  on — see "Grade-adjusted pace" above. `zoneBars` is rounded
   to the nearest whole number, range 1–20. Anything that fails falls back to
   `PREF_DEFAULTS` for that field alone.
 - **Written only when something is off-default** (`savePrefs`), and the entry is
@@ -562,7 +601,8 @@ the defaults, and a remembered setting has to overwrite them at boot.
 
 - **Reset** in the settings sidebar: the window base and multiple, the VDOT
   window, the min-lap distance,
-  stable band, the pace-zone bar count, the long-run rule, the MAX draw order,
+  stable band, the grade-adjusted-pace toggle, the pace-zone bar count, the
+  long-run rule, the MAX draw order,
   the window-line fade, both colour toggles, the five panel show/hide toggles and the five line
   show/hide toggles back to their defaults (all shown), plus the view back to
   its default span. It does *not* touch the what-if.
@@ -596,17 +636,17 @@ much height:
 | Group | Holds |
 |---|---|
 | Volume & frequency panels | the five line show/hide swatches, the three panel show/hide boxes, `windowBase`/`windowMult`, `fadeWindows`, `maxBehind` |
-| VDOT panel | its show/hide, `windowVdot`, `minLapM` |
+| VDOT panel | its show/hide, `windowVdot`, `minLapM`, `useGap` |
 | Pace zones | its show/hide, `zoneBars` |
 | Targets & verdicts | the normal/long/rest colour legend, `longNeedsSingleRun`, `stableBand` |
 
 Two placements are worth naming. **The legend is split across two groups**, not
 kept as one block: the window-line swatches are the show/hide control for those
 lines, so they belong beside the panels they colour, while the verdict ramps
-belong beside the target settings that produce them. And **`minLapM` sits under
-VDOT** even though it also moves the pace-zone histogram — it is a VDOT input,
-and the histogram is read against the day's VDOT, so that is where it comes
-from. Reset sits outside all four, since it owns the lot.
+belong beside the target settings that produce them. And **`minLapM` and `useGap` sit under
+VDOT** even though both also move the pace-zone histogram — they are VDOT
+inputs, and the histogram is read against the day's VDOT, so that is where they
+come from. Reset sits outside all four, since it owns the lot.
 
 ## Colour system
 
@@ -676,19 +716,22 @@ way but on a different basis — see "VDOT and pace zones" above.
   activity starting between 22:00 and midnight — nothing else moves.
 - Each activity is filed under that day, then aggregated per day into `values`
   (total km), `maxRun` (longest single run), `nRuns` (count), `sec` (total elapsed
-  seconds, for VDOT) and `laps` (parsed `splits`, also for VDOT — see "VDOT and
-  pace zones" above). 63 of my days have more than one run.
+  seconds, for VDOT), `gsec` (the same, grade-adjusted — see "Grade-adjusted
+  pace" above) and `laps` (parsed `splits`, carrying their own `sec`/`gsec`, also
+  for VDOT). 63 of my days have more than one run.
 - **Sport IDs are per-account**, so there is no way to detect "running" generically.
   `summariseSports` shows every sport with count / total km / median speed and
   pre-ticks a guess: the busiest sport with median speed 7.5–17 km/h, plus anything
   comparable in volume. Speed alone over-selects — cross-country skiing at 8.2 km/h
   sits squarely in running range.
-- Parsed data is cached in `localStorage` under `runviz.data.v2` (`SCHEMA = 4`).
+- Parsed data is cached in `localStorage` under `runviz.data.v2` (`SCHEMA = 5`).
   `SCHEMA` guards what the cached numbers *mean*, not only their shape — the day
   attribution fix bumped it to 3 with the shape unchanged, because the cached values
   were wrong and can only be rebuilt from the CSV. It was bumped again to 4 when
-  `sec`/`laps` were added for VDOT, this time because the shape itself changed: an
-  older cached copy simply doesn't have those arrays. A stale schema opens the gate
+  `sec`/`laps` were added for VDOT, and to 5 when the grade-adjusted times
+  (`gsec` per day, `gsec` per lap, `gapCount`) joined them — both times because
+  the shape itself changed: an older cached copy simply doesn't have those
+  arrays. A stale schema opens the gate
   with `staleCache` set, which says why it is asking for the file again instead of
   doing it silently. Selected sports in `runviz.sports.v2`.
   Settings in `runviz.prefs.v1` (see below).

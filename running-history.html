@@ -312,6 +312,9 @@
   }
   button:hover, label.chk:hover { background: var(--ghost); }
   label.chk { display: inline-flex; align-items: center; gap: 6px; }
+  /* a setting this export's data can't support: still says what it would do */
+  label.chk.off { opacity: 0.45; cursor: default; }
+  label.chk.off:hover { background: transparent; }
   label.chk select { font: inherit; font-size: 12px; color: var(--text-primary);
     background: transparent; border: 0; padding: 0; cursor: pointer; }
   label.chk input[type=number] { font: inherit; font-size: 12px; color: var(--text-primary);
@@ -425,6 +428,9 @@
       </label>
       <label class="chk" title="A lap shorter than this can't be trusted on its own for VDOT — too short and fast a rep overstates it wildly. The whole workout is always checked too, and the higher of the two wins. It feeds the pace-zone histogram as well, since that is read against the day's VDOT.">Min lap for VDOT
         <input type="number" id="minLapM" min="100" max="5000" step="100" value="1500"> m
+      </label>
+      <label class="chk" id="useGapLabel" title="Read every pace off Runalyze's grade-adjusted pace — each activity's equivalent flat time — instead of the time actually taken. Moves VDOT and the pace-zone histogram; distances, volume and the targets are untouched. Activities the export has no GAP for keep their raw time.">
+        <input type="checkbox" id="useGap"> Grade-adjusted pace
       </label>
     </div>
   </section>
@@ -565,7 +571,7 @@
 // itself and is as close to "remember the path" as the platform allows.
 // ---------------------------------------------------------------------------
 const LS_DATA = 'runviz.data.v2', LS_SPORTS = 'runviz.sports.v2';
-const SCHEMA = 4;   // 4: added per-day elapsed seconds and parsed lap splits, for VDOT
+const SCHEMA = 5;   // 5: added grade-adjusted times (per day and per lap), alongside the raw ones
 
 const lsGet = k => { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); return true; }
@@ -637,22 +643,44 @@ function parseTimeToSec(s) {
   for (const part of s.split(':')) sec = sec * 60 + Number(part);
   return Number.isFinite(sec) ? sec : 0;
 }
-function parseSplits(str) {
+// `gapRatio` is the whole activity's grade-adjusted speed over its raw speed.
+// Runalyze reports GAP once per activity, not per lap, so spreading that one
+// ratio over every lap of the activity is the only honest thing available: it
+// says "this run was worth this much more than its raw pace" without pretending
+// to know which kilometre the hills were in.
+function parseSplits(str, gapRatio) {
   if (!str) return [];
   const out = [];
   for (const piece of str.split('-')) {
     const m = /^[A-Za-z]([0-9.]+)\|([0-9:]+)/.exec(piece);
     if (!m) continue;
     const km = parseFloat(m[1]), sec = parseTimeToSec(m[2]);
-    if (km > 0 && sec > 0) out.push({ km, sec });
+    if (km > 0 && sec > 0) out.push({ km, sec, gsec: sec / gapRatio });
   }
   return out;
+}
+
+// Runalyze's `gap` column is grade-adjusted *speed* in km/h (verified against
+// the raw distance/time of real activities: a flat run's gap sits within a
+// fraction of a percent of its own speed, a 34 m/km day about 7% above it).
+// Turned into a ratio here, so the rest of the pipeline only ever deals in
+// "this activity's equivalent flat time". Clamped, and 1 when the column is
+// missing or unusable — a third of a real export's older activities have no gap
+// at all, and those must simply stay at their raw times rather than vanish.
+function gapRatioOf(header, r, dist, secs) {
+  if (header.gap == null || !(dist > 0) || !(secs > 0)) return 1;
+  const gapSpeed = parseFloat(r[header.gap]);
+  if (!Number.isFinite(gapSpeed) || gapSpeed <= 0) return 1;
+  const raw = dist / (secs / 3600);
+  const ratio = gapSpeed / raw;
+  if (!Number.isFinite(ratio) || ratio < 0.5 || ratio > 2) return 1;
+  return ratio;
 }
 
 // --- aggregate the chosen sports into one row per calendar day ----------------
 function buildData({ header, rows }, sportIds, fileName) {
   const per = new Map();
-  let runCount = 0;
+  let runCount = 0, gapCount = 0;   // gapCount: activities with a usable GAP reading
   for (const r of rows) {
     if (!sportIds.has(r[header.sportid])) continue;
     const t = Number(r[header.time]);
@@ -668,9 +696,12 @@ function buildData({ header, rows }, sportIds, fileName) {
     const key = new Date(t * 1000).toISOString().slice(0, 10);
     const dist = parseFloat(r[header.distance]) || 0;
     const secs = header.s != null ? (parseFloat(r[header.s]) || 0) : 0;
-    const g = per.get(key) || { sum: 0, max: 0, n: 0, sec: 0, laps: [] };
-    g.sum += dist; g.max = Math.max(g.max, dist); g.n++; g.sec += secs;
-    if (header.splits != null && r[header.splits]) g.laps.push(...parseSplits(r[header.splits]));
+    const ratio = gapRatioOf(header, r, dist, secs);
+    if (ratio !== 1) gapCount++;
+    const g = per.get(key) || { sum: 0, max: 0, n: 0, sec: 0, gsec: 0, laps: [] };
+    g.sum += dist; g.max = Math.max(g.max, dist); g.n++;
+    g.sec += secs; g.gsec += secs / ratio;
+    if (header.splits != null && r[header.splits]) g.laps.push(...parseSplits(r[header.splits], ratio));
     per.set(key, g);
     runCount++;
   }
@@ -679,15 +710,15 @@ function buildData({ header, rows }, sportIds, fileName) {
   const start = keys[0], end = keys[keys.length - 1];
   const day = 86400000, t0 = Date.parse(start + 'T00:00:00Z');
   const days = Math.round((Date.parse(end + 'T00:00:00Z') - t0) / day) + 1;
-  const values = [], maxRun = [], nRuns = [], sec = [], laps = [];
+  const values = [], maxRun = [], nRuns = [], sec = [], gsec = [], laps = [];
   const r3 = v => Math.round(v * 1000) / 1000;
   for (let i = 0; i < days; i++) {
     const g = per.get(new Date(t0 + i * day).toISOString().slice(0, 10));
     values.push(g ? r3(g.sum) : 0); maxRun.push(g ? r3(g.max) : 0); nRuns.push(g ? g.n : 0);
-    sec.push(g ? g.sec : 0); laps.push(g ? g.laps : []);
+    sec.push(g ? g.sec : 0); gsec.push(g ? Math.round(g.gsec) : 0); laps.push(g ? g.laps : []);
   }
-  return { schema: SCHEMA, start, values, maxRun, nRuns, sec, laps, runCount, fileName,
-           sports: [...sportIds], loadedAt: new Date().toISOString().slice(0, 10) };
+  return { schema: SCHEMA, start, values, maxRun, nRuns, sec, gsec, laps, runCount, gapCount,
+           fileName, sports: [...sportIds], loadedAt: new Date().toISOString().slice(0, 10) };
 }
 
 // --- a re-openable reference to the file, where the browser supports it -------
@@ -871,6 +902,7 @@ const PREF_DEFAULTS = {
   windowMult: 4,     // each next window is this many times the one before, 2-8
   windowVdot: 350,   // 50 weeks
   minLapM: 1500,     // laps shorter than this can't be trusted for VDOT on their own
+  useGap: false,     // read paces off Runalyze's grade-adjusted pace instead of the raw one
   stableBand: 0.01,
   longNeedsSingleRun: true,
   colourNormal: true,
@@ -903,7 +935,7 @@ function loadPrefs() {
   if (num(raw.minLapM, 100, 5000)) p.minLapM = Math.round(raw.minLapM / 100) * 100;
   if (num(raw.stableBand, 0, 0.05)) p.stableBand = raw.stableBand;
   if (num(raw.zoneBars, 1, 20)) p.zoneBars = Math.round(raw.zoneBars);
-  for (const k of ['longNeedsSingleRun', 'colourNormal', 'colourLong', 'maxBehind', 'fadeWindows']) {
+  for (const k of ['longNeedsSingleRun', 'colourNormal', 'colourLong', 'maxBehind', 'fadeWindows', 'useGap']) {
     if (typeof raw[k] === 'boolean') p[k] = raw[k];
   }
   if (raw.panels && typeof raw.panels === 'object') {
@@ -931,6 +963,7 @@ function savePrefs() {
     windowMult,
     windowVdot: WINDOW_VDOT,
     minLapM: MIN_LAP_M,
+    useGap,
     stableBand,
     longNeedsSingleRun,
     maxBehind,
@@ -1003,7 +1036,8 @@ const daily = DATA.values;
 const maxRun = DATA.maxRun;   // longest single run that day
 const nRuns  = DATA.nRuns;    // how many separate runs that day
 const daySec = DATA.sec || [];    // total elapsed seconds that day, across all its runs
-const dayLaps = DATA.laps || [];  // that day's parsed lap splits ({km, sec}[]), oldest export missing this
+const dayGsec = DATA.gsec || [];  // the same, grade-adjusted (see `useGap` below)
+const dayLaps = DATA.laps || [];  // that day's parsed lap splits ({km, sec, gsec}[]), oldest export missing this
 const N = daily.length;
 const start = new Date(DATA.start + "T00:00:00");
 const dateAt = i => new Date(start.getTime() + i * 86400000);
@@ -1124,20 +1158,38 @@ function impliedVdot(km, sec) {
 // the two wins — a long tempo run IS its own best evidence when it beats every
 // individual lap (e.g. an evenly-paced race with no lap data at all).
 let MIN_LAP_M = prefs.minLapM;
+// Grade-adjusted pace. Off by default, because the raw pace is what was actually
+// run and this is a second opinion on it, not a correction. On, every time that
+// feeds a pace — the VDOT search below and the pace-zone histogram — reads the
+// activity's equivalent flat time instead of its real one, so a hilly run stops
+// being read as an easy day and the zones stop filling up with "recovery" that
+// was actually a climb. Distances, volume, frequency and the targets are all
+// untouched: kilometres run are kilometres run.
+//
+// Every read goes through `lapSec`/`dayTime`, which fall back to the raw time
+// whenever there is no adjusted one to use — an export with no `gap` column at
+// all (`gapOn()` false, and the control disabled), or the older activities
+// inside one that has it. So the toggle can never blank a day, only re-time it.
+let useGap = prefs.useGap;
+const gapOn = () => useGap && DATA.gapCount > 0;
+const lapSec = lap => gapOn() && lap.gsec > 0 ? lap.gsec : lap.sec;
+const dayTime = i => gapOn() && dayGsec[i] > 0 ? dayGsec[i] : daySec[i];
 const dayVdot = new Array(N);
-const dayVdotSource = new Array(N);   // {km, sec, kind:'lap'|'day'} behind dayVdot[i], or null
+const dayVdotSource = new Array(N);   // {km, sec, kind:'lap'|'day', adj} behind dayVdot[i], or null
 function recomputeDayVdot() {
   const minLapKm = MIN_LAP_M / 1000;
   for (let i = 0; i < N; i++) {
     let best = 0, bestSrc = null;
-    if (daily[i] > 0 && daySec[i] > 0) {
-      best = impliedVdot(daily[i], daySec[i]);
-      bestSrc = { km: daily[i], sec: daySec[i], kind: 'day' };
+    const dsec = dayTime(i);
+    if (daily[i] > 0 && dsec > 0) {
+      best = impliedVdot(daily[i], dsec);
+      bestSrc = { km: daily[i], sec: dsec, kind: 'day', adj: dsec !== daySec[i] };
     }
     for (const lap of (dayLaps[i] || [])) {
       if (lap.km < minLapKm) continue;
-      const v = impliedVdot(lap.km, lap.sec);
-      if (v > best) { best = v; bestSrc = { km: lap.km, sec: lap.sec, kind: 'lap' }; }
+      const lsec = lapSec(lap);
+      const v = impliedVdot(lap.km, lsec);
+      if (v > best) { best = v; bestSrc = { km: lap.km, sec: lsec, kind: 'lap', adj: lsec !== lap.sec }; }
     }
     dayVdot[i] = best;
     dayVdotSource[i] = bestSrc;
@@ -1442,13 +1494,17 @@ function paceHistogramFor(i) {
   const v = vdot[i];
   if (!(v > 0)) return null;
   const laps = (dayLaps[i] && dayLaps[i].length) ? dayLaps[i]
-    : (daily[i] > 0 && daySec[i] > 0 ? [{ km: daily[i], sec: daySec[i] }] : []);
+    : (daily[i] > 0 && dayTime(i) > 0 ? [{ km: daily[i], sec: dayTime(i) }] : []);
   if (!laps.length) return null;
   const bins = new Array(ZONE_BIN_OFFSET + 5 * ZONE_BARS).fill(0);
   const floor = easyFloorPct(v);
   for (const lap of laps) {
-    const vel = lap.km * 1000 / (lap.sec / 60);
-    const mins = lap.sec / 60;
+    // With grade adjustment on, a lap is binned by its equivalent flat pace and
+    // counted for that many minutes — the adjusted duration, not the real one,
+    // so a bin's height stays the time implied by the pace it is drawn at.
+    const sec = lapSec(lap);
+    const vel = lap.km * 1000 / (sec / 60);
+    const mins = sec / 60;
     if (vel < STANDING_MAX_VEL) { bins[STANDING_BIN] += mins; continue; }
     if (vel < WALKING_MAX_VEL) { bins[WALKING_BIN] += mins; continue; }
     const pct = vo2FromVelocity(vel) / v;
@@ -2129,7 +2185,11 @@ function vdotBasisText(i) {
   const src = dayVdotSource[i];
   if (!src) return daily[i] > 0 ? 'no timing data' : 'no run';
   const pace = paceStr(src.sec / 60 / src.km);
-  return `${src.kind === 'lap' ? 'best lap' : 'full activity'} ${km(src.km)}km in ${durStr(src.sec)} (${pace}/km) &rarr; ${dayVdot[i].toFixed(1)}`;
+  // With grade adjustment on, the time and pace quoted here are the equivalent
+  // flat ones, not what the watch said — worth saying so rather than having the
+  // readout quietly disagree with Runalyze.
+  const how = src.adj ? ' grade-adj.' : '';
+  return `${src.kind === 'lap' ? 'best lap' : 'full activity'} ${km(src.km)}km in ${durStr(src.sec)}${how} (${pace}/km) &rarr; ${dayVdot[i].toFixed(1)}`;
 }
 
 // ---- readout -------------------------------------------------------------
@@ -2508,6 +2568,7 @@ document.getElementById('reset').onclick = () => {
   rebuildWindows();
   WINDOW_VDOT = PREF_DEFAULTS.windowVdot;
   MIN_LAP_M = PREF_DEFAULTS.minLapM;
+  useGap = PREF_DEFAULTS.useGap;
   stableBand = PREF_DEFAULTS.stableBand;
   longNeedsSingleRun = PREF_DEFAULTS.longNeedsSingleRun;
   maxBehind = PREF_DEFAULTS.maxBehind;
@@ -2583,6 +2644,18 @@ function syncControls() {
   winMultInput.value = windowMult;
   winVdotInput.value = WINDOW_VDOT / 7;
   minLapInput.value = MIN_LAP_M;
+  // An export with no usable `gap` column has nothing to switch to, so the box
+  // is disabled and shown unticked — but the remembered setting is left alone,
+  // so loading such a file and then going back to one with GAP doesn't silently
+  // forget that the toggle was on.
+  const gapUsable = DATA.gapCount > 0;
+  useGapChk.checked = useGap && gapUsable;
+  useGapChk.disabled = !gapUsable;
+  document.getElementById('useGapLabel').classList.toggle('off', !gapUsable);
+  if (!gapUsable) {
+    document.getElementById('useGapLabel').title =
+      'This export has no grade-adjusted pace to read — no usable `gap` column.';
+  }
   zoneBarsInput.value = ZONE_BARS;
   bandInput.value = +(stableBand * 100).toFixed(1);
   longSingleBox.checked = longNeedsSingleRun;
@@ -2683,6 +2756,19 @@ minLapInput.onchange = minLapInput.oninput = () => {
   const v = Math.round(Number(minLapInput.value) / 100) * 100;
   if (!Number.isFinite(v) || v < 100 || v > 5000) return;   // ignore half-typed values
   MIN_LAP_M = v;
+  savePrefs();
+  recomputeDayVdot();
+  recomputeVdot();
+  refreshReadout();
+  renderZonePanel();
+  drawAll();
+};
+// Same redraw set as the min-lap input: every pace in the page is derived, so
+// the day VDOTs, the rolling max, the readout and the histogram all have to be
+// rebuilt. Nothing in the volume/frequency half of the page depends on it.
+const useGapChk = document.getElementById('useGap');
+useGapChk.onchange = () => {
+  useGap = useGapChk.checked;
   savePrefs();
   recomputeDayVdot();
   recomputeVdot();
