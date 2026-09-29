@@ -244,7 +244,6 @@
   .readout .wingrid .wv { text-align: right; font-weight: 600; }
   .readout .wingrid .wx { color: var(--muted); font-size: 11px; }
   .readout .wingrid .wl.r-max, .readout .wingrid .wv.r-max { font-weight: 700; color: var(--text-primary); }
-  .readout .wingrid .sw.r-max { height: 4px; }
   /* so a wrapped detail line breaks at the · separators, never mid-phrase
      ("no / long runs", "564 / km/yr") */
   .readout .seg { white-space: nowrap; }
@@ -294,7 +293,6 @@
   .legend-note { color: var(--muted); font-size: 11px; }
   /* the window lines are lines, not fills, so their legend swatch is a bar */
   .legend .swatch.line { width: 16px; height: 3px; border-radius: 2px; }
-  .legend .swatch.line.max { height: 4px; }
   button, label.chk {
     font: inherit; font-size: 12px; color: var(--text-secondary);
     background: transparent; border: 1px solid var(--border); border-radius: 6px;
@@ -386,7 +384,7 @@
       <span class="legend-dim">stable = within &plusmn;<span class="bandN">1</span>% of target; colour ramps to full over the remaining <span class="gradN">49</span>%</span>
     </div>
     <div class="legend-row" id="row-windows" title="Hiding a line only takes it off the three panels — it stays in the hover readout and still counts towards MAX."><span class="legend-tag">Windows</span>
-      <label class="item"><input type="checkbox" id="line-max" checked><span class="swatch line max" style="background:var(--wmax)"></span>MAX</label>
+      <label class="item"><input type="checkbox" id="line-max" checked><span class="swatch line" style="background:var(--wmax)"></span>MAX</label>
       <label class="item"><input type="checkbox" id="line-w1" checked><span class="swatch line" style="background:var(--w1)"></span>1w</label>
       <label class="item"><input type="checkbox" id="line-w4" checked><span class="swatch line" style="background:var(--w4)"></span>4w</label>
       <label class="item"><input type="checkbox" id="line-w16" checked><span class="swatch line" style="background:var(--w16)"></span>16w</label>
@@ -1699,9 +1697,12 @@ function drawBars() {
 // and semi-transparent so they read as context, plus the per-day max of the
 // four in plain ink at full strength — that's the line meant to be read first.
 // A colour means the same window in every panel (see the --w* custom properties).
+// All five are drawn at the same weight. The max used to be thicker as well as
+// darker; that read as heavy-handed, and it wasn't carrying any of the work —
+// full-strength plain ink against four semi-transparent hues already separates
+// it, at any width.
 const WIN_ALPHA = 0.55;     // the four window lines: present, but recessive
-const WIN_WIDTH = 1.4;
-const MAX_WIDTH = 2.4;
+const LINE_WIDTH = 1.6;
 function drawWindowPanel(canvas, c, set, insets, panelKey, axisLabel, opts = {}) {
   const { w, h } = fitCanvas(canvas, c);
   const isBottom = bottomPanel() === panelKey;
@@ -1777,7 +1778,7 @@ function drawWindowPanel(canvas, c, set, insets, panelKey, axisLabel, opts = {})
       if (i === i0) c.moveTo(x, y); else c.lineTo(x, y);
     }
     c.strokeStyle = C(WINDOWS[k].css);
-    c.lineWidth = WIN_WIDTH;
+    c.lineWidth = LINE_WIDTH;
     c.globalAlpha = WIN_ALPHA;
     c.stroke();
   }
@@ -1788,7 +1789,7 @@ function drawWindowPanel(canvas, c, set, insets, panelKey, axisLabel, opts = {})
       const x = px(i), y = yOf(mx[i]);
       if (i === i0) c.moveTo(x, y); else c.lineTo(x, y);
     }
-    c.strokeStyle = C('--wmax'); c.lineWidth = MAX_WIDTH;
+    c.strokeStyle = C('--wmax'); c.lineWidth = LINE_WIDTH;
     c.stroke();
   }
 

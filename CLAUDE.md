@@ -157,8 +157,11 @@ All of it is derived in-browser from one array of daily distances.
   **max across the four windows** — the upper envelope, not a running all-time
   best. It answers "at whatever timescale flatters me most, where am I".
   Drawn last, in plain ink (`--wmax`) at full strength, over the four windows at
-  `WIN_ALPHA` 0.55. Hiding a window line (below) does **not** take it out of
-  MAX — MAX is always the max of all four. In practice it tracks the 1-week line most of the
+  `WIN_ALPHA` 0.55. **All five are the same weight** (`LINE_WIDTH`) — the max
+  was briefly drawn thicker as well as darker, which read as heavy-handed and
+  wasn't carrying any of the work: full-strength ink against four
+  semi-transparent hues separates it at any width. Hiding a window line (below)
+  does **not** take it out of MAX — MAX is always the max of all four. In practice it tracks the 1-week line most of the
   time and pulls away from it exactly when a short window collapses (a taper, an
   injury, a holiday) while a longer one is still high — which is the case worth
   seeing.
