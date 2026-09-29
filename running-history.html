@@ -291,6 +291,13 @@
   .swatch.hatched::after { content: ''; position: absolute; inset: 0;
     background: repeating-linear-gradient(45deg, var(--hatch) 0 1.5px, transparent 1.5px 4px); }
   .ctrls { display: flex; flex-direction: column; align-items: stretch; gap: 10px; }
+  /* Grouped by what each setting moves. A rule between groups rather than more
+     whitespace, so the sidebar doesn't get much taller for the sake of it. */
+  .setgroup { display: flex; flex-direction: column; gap: 10px; }
+  .setgroup + .setgroup { padding-top: 14px; border-top: 1px solid var(--border); }
+  .setgroup-title { margin: 0; font-size: 11px; font-weight: 600; letter-spacing: .06em;
+    text-transform: uppercase; color: var(--muted); }
+  #settingsSidebar > #reset { margin-top: 2px; }
   .legend .item { display: inline-flex; align-items: center; gap: 6px; }
   .swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
   .swatch.ramp { width: 26px; }
@@ -373,65 +380,94 @@
 <body>
 <div class="page">
 <aside class="sidebar settings-sidebar" id="settingsSidebar">
-  <div class="legend">
-    <div class="legend-row" id="row-normal"><label class="legend-tag"><input type="checkbox" id="colourNormal" checked> Normal run</label>
-      <span class="item"><span class="swatch ramp" style="background:linear-gradient(90deg,var(--n-un-weak),var(--n-un))"></span>▼ unproductive</span>
-      <span class="item"><span class="swatch" style="background:var(--n-pr-weak)"></span>= stable</span>
-      <span class="item"><span class="swatch ramp" style="background:linear-gradient(90deg,var(--n-pr-weak),var(--n-pr))"></span>▲ productive</span>
+  <!-- Grouped by what each setting actually moves, since "which panel is this
+       about" is the question being asked when someone comes looking. Each
+       group keeps its own legend next to its own controls: the window-line
+       swatches belong with the volume/frequency panels they colour, the
+       run-verdict ramps belong with the target settings that produce them. -->
+  <section class="setgroup">
+    <h2 class="setgroup-title">Volume &amp; frequency panels</h2>
+    <div class="legend">
+      <div class="legend-row" id="row-windows" title="Hiding a line only takes it off the three panels — it stays in the hover readout and still counts towards MAX."><span class="legend-tag">Lines</span>
+        <label class="item"><input type="checkbox" id="line-max" checked><span class="swatch line" style="background:var(--wmax)"></span>MAX</label>
+        <label class="item"><input type="checkbox" id="line-s0" checked><span class="swatch line" style="background:var(--w1)"></span><span class="winLabel0">1w</span></label>
+        <label class="item"><input type="checkbox" id="line-s1" checked><span class="swatch line" style="background:var(--w4)"></span><span class="winLabel1">4w</span></label>
+        <label class="item"><input type="checkbox" id="line-s2" checked><span class="swatch line" style="background:var(--w16)"></span><span class="winLabel2">16w</span></label>
+        <label class="item"><input type="checkbox" id="line-s3" checked><span class="swatch line" style="background:var(--w64)"></span><span class="winLabel3">64w</span></label>
+        <span class="legend-dim"><span class="winsN">1 / 4 / 16 / 64</span>-week rolling averages, and the highest of the four on the day. Untick one to take it off the panels; it stays in the readout and still counts towards MAX.</span>
+      </div>
     </div>
-    <div class="legend-row" id="row-long"><label class="legend-tag"><input type="checkbox" id="colourLong" checked> Long run <span class="legend-dim">(&gt;1.5&times; target, hatched; needs &ge;3 runs/wk)</span></label>
-      <span class="item"><span class="swatch ramp hatched" style="background:linear-gradient(90deg,var(--l-un-weak),var(--l-un))"></span>▼ unproductive</span>
-      <span class="item"><span class="swatch hatched" style="background:var(--l-pr-weak)"></span>= stable</span>
-      <span class="item"><span class="swatch ramp hatched" style="background:linear-gradient(90deg,var(--l-pr-weak),var(--l-pr))"></span>▲ productive</span>
+    <div class="ctrls">
+      <label class="chk"><input type="checkbox" id="showVol" checked> Distance/week panel</label>
+      <label class="chk"><input type="checkbox" id="showFreq" checked> Run days/week panel</label>
+      <label class="chk"><input type="checkbox" id="showRuns" checked> Runs/week panel</label>
+      <label class="chk" title="Weeks in the shortest of the four rolling windows. The other three follow from the multiple below.">Shortest window
+        <input type="number" id="windowBase" min="1" max="8" step="1" value="1"> weeks
+      </label>
+      <label class="chk" title="Each window is this many times the one before it, so the four are base, base x m, base x m squared, base x m cubed. The second and third of the four are also what the per-day target is computed from, so changing these moves the bar colours too.">Next window &times;
+        <input type="number" id="windowMult" min="2" max="8" step="1" value="4">
+      </label>
+      <label class="chk" title="The four window lines are drawn semi-transparent by default, which is what makes the max read as the primary line without being any thicker. Turn this off to compare two windows against each other at full strength, at the cost of a busier panel.">
+        <input type="checkbox" id="fadeWindows" checked> Fade the window lines
+      </label>
+      <label class="chk" title="The max line sits on top of the four windows by default, which is what makes it the one read first. Put it underneath and the shortest window stays visible along the stretches where it IS the max, so the max shows only where it pulls away.">
+        <input type="checkbox" id="maxBehind"> Draw MAX behind the windows
+      </label>
     </div>
-    <div class="legend-row"><span class="legend-tag">No run</span>
-      <span class="item"><span class="swatch" style="background:var(--rest)"></span>rest day</span>
-      <span class="legend-dim">stable = within &plusmn;<span class="bandN">1</span>% of target; colour ramps to full over the remaining <span class="gradN">49</span>%</span>
+  </section>
+
+  <section class="setgroup">
+    <h2 class="setgroup-title">VDOT panel</h2>
+    <div class="ctrls">
+      <label class="chk"><input type="checkbox" id="showVdot" checked> VDOT panel</label>
+      <label class="chk">VDOT window
+        <input type="number" id="windowVdotWeeks" min="1" max="260" step="1" value="50"> weeks
+      </label>
+      <label class="chk" title="A lap shorter than this can't be trusted on its own for VDOT — too short and fast a rep overstates it wildly. The whole workout is always checked too, and the higher of the two wins. It feeds the pace-zone histogram as well, since that is read against the day's VDOT.">Min lap for VDOT
+        <input type="number" id="minLapM" min="100" max="5000" step="100" value="1500"> m
+      </label>
     </div>
-    <div class="legend-row" id="row-windows" title="Hiding a line only takes it off the three panels — it stays in the hover readout and still counts towards MAX."><span class="legend-tag">Windows</span>
-      <label class="item"><input type="checkbox" id="line-max" checked><span class="swatch line" style="background:var(--wmax)"></span>MAX</label>
-      <label class="item"><input type="checkbox" id="line-s0" checked><span class="swatch line" style="background:var(--w1)"></span><span class="winLabel0">1w</span></label>
-      <label class="item"><input type="checkbox" id="line-s1" checked><span class="swatch line" style="background:var(--w4)"></span><span class="winLabel1">4w</span></label>
-      <label class="item"><input type="checkbox" id="line-s2" checked><span class="swatch line" style="background:var(--w16)"></span><span class="winLabel2">16w</span></label>
-      <label class="item"><input type="checkbox" id="line-s3" checked><span class="swatch line" style="background:var(--w64)"></span><span class="winLabel3">64w</span></label>
-      <span class="legend-dim"><span class="winsN">1 / 4 / 16 / 64</span>-week rolling averages, and the highest of the four on the day. Untick one to take it off the panels; it stays in the readout and still counts towards MAX.</span>
+  </section>
+
+  <section class="setgroup">
+    <h2 class="setgroup-title">Pace zones</h2>
+    <div class="ctrls">
+      <label class="chk"><input type="checkbox" id="showZone" checked> Pace-zone histogram</label>
+      <label class="chk" title="How many sub-bands each of the five pace zones splits into in the pace-zone histogram.">Pace-zone bars
+        <input type="number" id="zoneBars" min="1" max="20" step="1" value="5"> per zone
+      </label>
     </div>
-  </div>
-  <div class="ctrls">
-  <label class="chk"><input type="checkbox" id="showVol" checked> Distance/week panel</label>
-  <label class="chk"><input type="checkbox" id="showFreq" checked> Run days/week panel</label>
-  <label class="chk"><input type="checkbox" id="showRuns" checked> Runs/week panel</label>
-  <label class="chk"><input type="checkbox" id="showVdot" checked> VDOT panel</label>
-  <label class="chk"><input type="checkbox" id="showZone" checked> Pace-zone histogram</label>
-  <label class="chk">VDOT window
-    <input type="number" id="windowVdotWeeks" min="1" max="260" step="1" value="50"> weeks
-  </label>
-  <label class="chk" title="Weeks in the shortest of the four rolling windows. The other three follow from the multiple below.">Shortest window
-    <input type="number" id="windowBase" min="1" max="8" step="1" value="1"> weeks
-  </label>
-  <label class="chk" title="Each window is this many times the one before it, so the four are base, base x m, base x m squared, base x m cubed. The second and third of the four are also what the per-day target is computed from, so changing these moves the bar colours too.">Next window &times;
-    <input type="number" id="windowMult" min="2" max="8" step="1" value="4">
-  </label>
-  <label class="chk" title="A lap shorter than this can't be trusted on its own for VDOT — too short and fast a rep overstates it wildly. The whole workout is always checked too, and the higher of the two wins.">Min lap for VDOT
-    <input type="number" id="minLapM" min="100" max="5000" step="100" value="1500"> m
-  </label>
-  <label class="chk" title="How many sub-bands each of the five pace zones splits into in the pace-zone histogram.">Pace-zone bars
-    <input type="number" id="zoneBars" min="1" max="20" step="1" value="5"> per zone
-  </label>
-  <label class="chk" title="The four window lines are drawn semi-transparent by default, which is what makes the max read as the primary line without being any thicker. Turn this off to compare two windows against each other at full strength, at the cost of a busier panel.">
-    <input type="checkbox" id="fadeWindows" checked> Fade the window lines
-  </label>
-  <label class="chk" title="The max line sits on top of the four windows by default, which is what makes it the one read first. Put it underneath and the shortest window stays visible along the stretches where it IS the max, so the max shows only where it pulls away.">
-    <input type="checkbox" id="maxBehind"> Draw MAX behind the windows
-  </label>
-  <label class="chk" title="Whether a day has to contain one long run on its own, rather than reaching the distance across several runs.">
-    <input type="checkbox" id="longSingle" checked> Long run needs a single run
-  </label>
-  <label class="chk" title="How close to the target still counts as holding steady.">Stable band &plusmn;
-    <input type="number" id="stableBand" min="0" max="5" step="0.5" value="1">%
-  </label>
-  <button id="reset" title="Put the VDOT window, min lap distance, stable band, colour toggles and long-run rule back to their defaults, and zoom back out. Leaves the what-if target alone — that has its own reset.">Reset</button>
-  </div>
+  </section>
+
+  <section class="setgroup">
+    <h2 class="setgroup-title">Targets &amp; verdicts</h2>
+    <div class="legend">
+      <div class="legend-row" id="row-normal"><label class="legend-tag"><input type="checkbox" id="colourNormal" checked> Normal run</label>
+        <span class="item"><span class="swatch ramp" style="background:linear-gradient(90deg,var(--n-un-weak),var(--n-un))"></span>▼ unproductive</span>
+        <span class="item"><span class="swatch" style="background:var(--n-pr-weak)"></span>= stable</span>
+        <span class="item"><span class="swatch ramp" style="background:linear-gradient(90deg,var(--n-pr-weak),var(--n-pr))"></span>▲ productive</span>
+      </div>
+      <div class="legend-row" id="row-long"><label class="legend-tag"><input type="checkbox" id="colourLong" checked> Long run <span class="legend-dim">(&gt;1.5&times; target, hatched; needs &ge;3 runs/wk)</span></label>
+        <span class="item"><span class="swatch ramp hatched" style="background:linear-gradient(90deg,var(--l-un-weak),var(--l-un))"></span>▼ unproductive</span>
+        <span class="item"><span class="swatch hatched" style="background:var(--l-pr-weak)"></span>= stable</span>
+        <span class="item"><span class="swatch ramp hatched" style="background:linear-gradient(90deg,var(--l-pr-weak),var(--l-pr))"></span>▲ productive</span>
+      </div>
+      <div class="legend-row"><span class="legend-tag">No run</span>
+        <span class="item"><span class="swatch" style="background:var(--rest)"></span>rest day</span>
+        <span class="legend-dim">stable = within &plusmn;<span class="bandN">1</span>% of target; colour ramps to full over the remaining <span class="gradN">49</span>%</span>
+      </div>
+    </div>
+    <div class="ctrls">
+      <label class="chk" title="Whether a day has to contain one long run on its own, rather than reaching the distance across several runs.">
+        <input type="checkbox" id="longSingle" checked> Long run needs a single run
+      </label>
+      <label class="chk" title="How close to the target still counts as holding steady.">Stable band &plusmn;
+        <input type="number" id="stableBand" min="0" max="5" step="0.5" value="1">%
+      </label>
+    </div>
+  </section>
+
+  <button id="reset" title="Put every setting in this sidebar back to its default and zoom back out. Leaves the what-if target alone — that has its own reset.">Reset</button>
 </aside>
 <div class="wrap">
   <h1>Running history &mdash; every run, on a log scale</h1>

@@ -528,15 +528,34 @@ Double-clicking a panel still resets only the zoom, which is view state and
 deliberately *not* remembered — persisting it would fight the Reset button and open
 the page mid-history.
 
-**The settings sidebar** (legend — including a row of window-colour swatches for
-the four lines and MAX — plus all the controls above, formerly a header row
-across the top of the chartcard) is the third sidebar-shaped thing on the page,
-on the opposite side from the readout — `<aside id="settingsSidebar">`, always
-visible rather than following `selected`/`hover` like the other two (a gear-button
-toggle for it was tried and dropped — always-on won). Being a vertical list rather
-than a horizontal bar-controls row meant `.ctrls` lost its `margin-left: auto`
-(nothing to push right against in a column) and gained
+**The settings sidebar** is the third sidebar-shaped thing on the page, on the
+opposite side from the readout — `<aside id="settingsSidebar">`, always visible
+rather than following `selected`/`hover` like the other two (a gear-button
+toggle for it was tried and dropped — always-on won). Being a vertical list
+rather than the horizontal chartcard header row it replaced meant `.ctrls` lost
+its `margin-left: auto` (nothing to push right against in a column) and gained
 `flex-direction: column; align-items: stretch` instead.
+
+It is split into four `.setgroup` sections, **grouped by what each setting
+moves** rather than by what kind of control it is — "which panel is this about"
+is the question being asked when someone comes looking for a setting. A 1px
+rule separates them rather than more whitespace, so the grouping doesn't cost
+much height:
+
+| Group | Holds |
+|---|---|
+| Volume & frequency panels | the five line show/hide swatches, the three panel show/hide boxes, `windowBase`/`windowMult`, `fadeWindows`, `maxBehind` |
+| VDOT panel | its show/hide, `windowVdot`, `minLapM` |
+| Pace zones | its show/hide, `zoneBars` |
+| Targets & verdicts | the normal/long/rest colour legend, `longNeedsSingleRun`, `stableBand` |
+
+Two placements are worth naming. **The legend is split across two groups**, not
+kept as one block: the window-line swatches are the show/hide control for those
+lines, so they belong beside the panels they colour, while the verdict ramps
+belong beside the target settings that produce them. And **`minLapM` sits under
+VDOT** even though it also moves the pace-zone histogram — it is a VDOT input,
+and the histogram is read against the day's VDOT, so that is where it comes
+from. Reset sits outside all four, since it owns the lot.
 
 ## Colour system
 
