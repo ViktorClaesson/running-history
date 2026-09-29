@@ -41,7 +41,8 @@ Five stacked panels sharing one x-axis, one bar/point per calendar day:
    since it can run higher.
 5. **Line** — highest VDOT achieved by any workout in the trailing *VDOT* window
    (default 50 weeks, set independently — see "VDOT and pace zones" below).
-   Undefined (a gap, not a zero) before the first-ever logged run.
+   Undefined (a gap, not a zero) before the first-ever logged run. Plus **dots**
+   for the days that went after that ceiling — see "Near-max days" below.
 
 Panels 2–5 and the pace-zone histogram each have their own show/hide checkbox in
 the settings sidebar (`visPanels`, persisted in `runviz.prefs.v1` as `panels`) —
@@ -89,7 +90,8 @@ rest of the row** — it is the widest thing in the sidebar once a week goes ove
 history at 11px; at 10px nothing wraps across all 1339. Sized against a 280px
 sidebar, which is the width this is actually used at. Then the day's peak VDOT (plus what that day's own
 reading is actually based on: full activity or best lap, with its distance, time
-and pace — see `vdotBasisText()`) and the verdict. **Clicking
+and pace, and how far that reading fell short of the peak — see
+`vdotBasisText()`) and the verdict. **Clicking
 a day pins it** there — see below.
 
 The distance row's own sub-line used to spell out the day's target ("target 8.59
@@ -400,6 +402,33 @@ ceiling" and "how often am I running" are different-timescale questions). It's a
 (monotonic deque, O(N)), not a target, so — unlike the volume/frequency target math
 — there's no circularity to avoid in including the day itself.
 
+**Near-max days.** The panel's line is a rolling *max*, so a session that came
+close to the ceiling without beating it leaves no mark on it at all: the line
+carries on flat, and a day worth noticing looks exactly like a rest week. The
+dots put those days back. One per run day whose own reading (`dayVdot[i]`) is
+within `vdotNearPct` (default 10%) of the peak in force *that day* (`vdot[i]`),
+drawn at **the day's own value**, not on the line — so a near miss sits just
+under the line and a day that set, or re-equalled, the peak sits on it.
+
+`vdotVsPeak(i)` is that ratio (1 = it is the peak; it can never exceed 1, since
+the window includes the day itself) and `isNearMax(i)` is the threshold on it.
+The readout says the same thing in words on the VDOT line — "· at the peak" or
+"· 5.3% off the peak" — appended by `vdotBasisText()`.
+
+Three things worth knowing:
+
+- **Peak-setting days get no second marker.** Landing on the line is the
+  distinction, and the gap under it is the whole point of every other dot. On a
+  real 1339-day export, 63 of 603 run days clear 10%, of which 12 *are* the peak.
+- **The dots move the y-floor.** They sit up to `vdotNearPct` below the line, so
+  `drawVdot()` folds the qualifying `dayVdot` values into `yMin` or the panel
+  clips them. Only the floor can move — no reading is ever above the peak that
+  contains it.
+- **Draw-time only.** Nothing computed depends on either setting, so both
+  handlers do `syncLabels()` + `drawAll()` and no recompute. The panel title
+  carries what the dots mean ("— dots: days within 10% of it", `.vdotNearNote`),
+  so the panel needs no legend of its own; the note goes away when they're off.
+
 **Laps** come from Runalyze's `splits` column: `<tag><km>|<time>` pieces joined by
 `-`, e.g. `I1.012|3:54`. The tag (`W`arm-up, `I`nterval, `R`est/`P`ause, `C`ooldown,
 `U`ntagged autolap) is read from real exports but not used for anything — see above.
@@ -623,7 +652,7 @@ for a yellow that passes, because none does.
 
 `runviz.prefs.v1` holds everything the settings sidebar and the what-if box can be
 set to, so the page opens the way it was left: `windowBase`, `windowMult`,
-`windowVdot`, `minLapM`, `useGap`,
+`windowVdot`, `minLapM`, `useGap`, `vdotNearDots`, `vdotNearPct`,
 `colourVerdicts`, `zoneBars`, `maxBehind`, `fadeWindows`, `panels` (`{vol, freq, runs, vdot, zone}`, each independently
 show/hide — see below), `lines` (`{max, s0, s1, s2, s3}` — slot keys, which of
 the five lines the three window panels draw), and `plan` (`null` = the what-if box follows real
@@ -645,7 +674,8 @@ history, `{km, days}` = edited). Three rules:
   the four windows are derived from base and multiple now. A stale entry still
   carrying the old fields is simply ignored and dropped on the next save, as is
   one carrying the old week-count `lines` keys.)
-  `minLapM` is rounded to the nearest 100m, range 100–5000. `useGap` is a plain
+  `minLapM` is rounded to the nearest 100m, range 100–5000. `vdotNearPct` is
+  rounded to a whole percent, range 1–50 (off is `vdotNearDots`, not 0). `useGap` is a plain
   boolean, and is kept even when the loaded export has no `gap` column to use it
   on — see "Grade-adjusted pace" above. `zoneBars` is rounded
   to the nearest whole number, range 1–20. Anything that fails falls back to
@@ -664,7 +694,8 @@ the defaults, and a remembered setting has to overwrite them at boot.
 **There are two resets, and each owns only what sits next to it.**
 
 - **Reset** in the settings sidebar: the window base and multiple, the VDOT
-  window, the min-lap distance, the grade-adjusted-pace toggle, the pace-zone bar
+  window, the min-lap distance, the grade-adjusted-pace toggle, the near-max dots
+  and their percentage, the pace-zone bar
   count, the MAX draw order, the window-line fade, the verdict colour toggle, the
   five panel show/hide toggles and the five line show/hide toggles back to their
   defaults (all shown), plus the view back to its default span. It does *not*
@@ -706,7 +737,7 @@ much height:
 | Group | Holds |
 |---|---|
 | Volume & frequency panels | the five line show/hide swatches, the three panel show/hide boxes, `windowBase`/`windowMult`, `fadeWindows`, `maxBehind` |
-| VDOT panel | its show/hide, `windowVdot`, `minLapM`, `useGap` |
+| VDOT panel | its show/hide, `windowVdot`, `minLapM`, `useGap`, `vdotNearDots`/`vdotNearPct` |
 | Pace zones | its show/hide, `zoneBars` |
 | Verdicts | the four-verdict/rest colour legend and `colourVerdicts` |
 
@@ -912,6 +943,23 @@ with `--dump-dom | grep -o '<title>[^<]*'`. Wrap it in `try/catch` and report
 `e.message`, otherwise a thrown error just looks like empty output. Beware
 redeclaring an existing top-level name in the probe (`const ro`, `const out`) — that
 is a `SyntaxError` that kills the whole block.
+
+Two things the probe needs that aren't obvious:
+
+- **`window.RUNVIZ` has to be seeded**, because headless Chrome has none of the
+  `localStorage` the real page reads. The bootstrap script already exposes
+  `parseCsv`/`summariseSports`/`buildData`, so a script inserted immediately
+  *before* `<script>\nconst DATA = window.RUNVIZ;` can do
+  `window.RUNVIZ = buildData(parseCsv(csvText), ids, name)` with the CSV baked in
+  (`JSON.stringify` it from node) and `ids` taken from the `g.guess` sports. Hide
+  the gate too, or it covers the page in a screenshot.
+- **The app's `const`/`let` are invisible from the probe**, because the whole body
+  sits inside `if (DATA) { … }`. Its *function declarations* are visible (sloppy
+  mode hoists them out of the block) but nothing else is. Plant
+  `window.__eval = s => eval(s);` just before that block's closing brace — a
+  direct eval there sees every binding — and the probe can read and set anything.
+  Anchor that replacement on the *last* `renderZonePanel();\n}`, not the first;
+  the first is inside a function and its `eval` has the wrong scope.
 
 Assert against an independent implementation where the maths matters: the target
 formula was checked by brute-forcing every day inside the probe and comparing

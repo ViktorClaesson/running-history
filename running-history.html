@@ -420,6 +420,12 @@
       <label class="chk" title="A lap shorter than this can't be trusted on its own for VDOT — too short and fast a rep overstates it wildly. The whole workout is always checked too, and the higher of the two wins. It feeds the pace-zone histogram as well, since that is read against the day's VDOT.">Min lap for VDOT
         <input type="number" id="minLapM" min="100" max="5000" step="100" value="1500"> m
       </label>
+      <label class="chk" title="The VDOT line is a rolling max, so a session that came close to the ceiling without beating it leaves no mark on it — the line just carries on flat. These dots put those days back: one per run day whose own reading is within the percentage below of the peak in force that day, drawn at the day's own value, so a near miss sits just under the line and a day that set the peak sits on it.">
+        <input type="checkbox" id="vdotNearDots" checked> Mark near-max days
+      </label>
+      <label class="chk" title="How close to that day's peak a day's own VDOT reading has to be to get a dot.">&hellip;within
+        <input type="number" id="vdotNearPct" min="1" max="50" step="1" value="10"> % of the peak
+      </label>
       <label class="chk" id="useGapLabel" title="Read every pace off Runalyze's grade-adjusted pace — each activity's equivalent flat time — instead of the time actually taken. Moves VDOT and the pace-zone histogram; distances, volume and the targets are untouched. Activities the export has no GAP for keep their raw time.">
         <input type="checkbox" id="useGap"> Grade-adjusted pace
       </label>
@@ -499,7 +505,7 @@
       <canvas id="chart3"></canvas>
     </div>
     <div class="chart-panel" id="panel-vdot">
-      <div class="panel-title">Highest VDOT in the trailing <span class="winVdotN">910</span> days</div>
+      <div class="panel-title">Highest VDOT in the trailing <span class="winVdotN">910</span> days<span class="vdotNearNote"></span></div>
       <canvas id="chart4"></canvas>
     </div>
     <div class="hint">Scroll or pinch to zoom — the day under the cursor stays put while both sides scale around it. Drag to pan. Double-click, or press <kbd>r</kbd>, to go back to the default view, the longest window ending on the most recent day.
@@ -891,6 +897,8 @@ const PREF_DEFAULTS = {
   windowVdot: 350,   // 50 weeks
   minLapM: 1500,     // laps shorter than this can't be trusted for VDOT on their own
   useGap: false,     // read paces off Runalyze's grade-adjusted pace instead of the raw one
+  vdotNearDots: true,  // mark the days that came close to the VDOT ceiling without beating it
+  vdotNearPct: 10,     // how close "close" is, in percent of the peak in force that day
   colourVerdicts: true,   // colour the bars by verdict at all
   zoneBars: 5,       // sub-bands per pace zone in the pace-zone histogram
   panels: { vol: true, freq: true, runs: true, vdot: true, zone: true },   // which optional panels are shown
@@ -919,7 +927,8 @@ function loadPrefs() {
   if (num(raw.windowVdot, 7, 1820)) p.windowVdot = week(raw.windowVdot, 1820);
   if (num(raw.minLapM, 100, 5000)) p.minLapM = Math.round(raw.minLapM / 100) * 100;
   if (num(raw.zoneBars, 1, 20)) p.zoneBars = Math.round(raw.zoneBars);
-  for (const k of ['colourVerdicts', 'maxBehind', 'fadeWindows', 'useGap']) {
+  if (num(raw.vdotNearPct, 1, 50)) p.vdotNearPct = Math.round(raw.vdotNearPct);
+  for (const k of ['colourVerdicts', 'maxBehind', 'fadeWindows', 'useGap', 'vdotNearDots']) {
     if (typeof raw[k] === 'boolean') p[k] = raw[k];
   }
   if (raw.panels && typeof raw.panels === 'object') {
@@ -948,6 +957,8 @@ function savePrefs() {
     windowVdot: WINDOW_VDOT,
     minLapM: MIN_LAP_M,
     useGap,
+    vdotNearDots,
+    vdotNearPct,
     maxBehind,
     fadeWindows,
     colourVerdicts,
@@ -1197,6 +1208,21 @@ function recomputeVdot() {
   }
 }
 recomputeVdot();
+
+// ---- the attempts that didn't move the ceiling ---------------------------
+// The VDOT line is a rolling MAX, so a hard session that came close to the peak
+// but didn't beat it leaves no mark on it at all: the line just carries on flat,
+// and a day worth noticing looks exactly like a rest week. These two settings
+// put those days back on the panel as dots — see drawVdot.
+let vdotNearDots = prefs.vdotNearDots;
+let vdotNearPct = prefs.vdotNearPct;
+// That day's own reading as a fraction of the peak in force that day: 1 means it
+// IS the peak (it set it, or re-equalled it), 0.95 means it fell 5% short. null
+// when the day has no reading at all, or when no run has happened yet for a peak
+// to exist. dayVdot[i] can never exceed vdot[i] — the window includes today — so
+// this is never above 1.
+const vdotVsPeak = i => (dayVdot[i] > 0 && vdot[i] > 0) ? dayVdot[i] / vdot[i] : null;
+const isNearMax = i => { const r = vdotVsPeak(i); return r != null && r >= 1 - vdotNearPct / 100; };
 
 // --- perceptual colour mixing (OKLab) so mid-ramp steps don't go muddy -------
 function srgbToLinear(c) { c /= 255; return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); }
@@ -2085,6 +2111,10 @@ function drawVdot() {
   const [i0, i1] = visibleRange();
   let yMax = 0, yMin = Infinity, any = false;
   for (let i = i0; i <= i1; i++) if (vdot[i] != null) { any = true; if (vdot[i] > yMax) yMax = vdot[i]; if (vdot[i] < yMin) yMin = vdot[i]; }
+  // The dots are drawn at the day's OWN reading, which sits under the line by up
+  // to vdotNearPct — so they have to be in the extent or the panel clips them.
+  // Only the floor can move: no reading is ever above the peak that contains it.
+  if (vdotNearDots) for (let i = i0; i <= i1; i++) if (isNearMax(i) && dayVdot[i] < yMin) yMin = dayVdot[i];
   if (!any) { yMin = 0; yMax = 1; }
   const ticks = niceTicks(Math.max(yMax * 1.06, 1));
   yMax = ticks[ticks.length - 1];
@@ -2135,6 +2165,21 @@ function drawVdot() {
   c.lineJoin = 'round'; c.lineCap = 'round';
   c.stroke();
 
+  // Every day that went after the ceiling, at its own reading rather than at the
+  // line: a near miss sits just under the line, a day that set (or re-equalled)
+  // the peak sits on it. No second marker for the peak-setters — landing on the
+  // line is the distinction, and the gap below it is the whole point of the rest.
+  // Thin surface-coloured ring so a cluster of them stays countable, and so one
+  // sitting on the line still reads as a dot rather than a bulge in it.
+  if (vdotNearDots) {
+    c.lineWidth = 1; c.strokeStyle = C('--surface-1'); c.fillStyle = C('--vdot');
+    for (let i = i0; i <= i1; i++) {
+      if (!isNearMax(i)) continue;
+      c.beginPath(); c.arc(px(i), yOf(dayVdot[i]), 2.75, 0, Math.PI * 2);
+      c.fill(); c.stroke();
+    }
+  }
+
   const dot = (i, hollow) => {
     if (vdot[i] == null) return;
     const x = Math.round(px(i)) + 0.5, y = yOf(vdot[i]);
@@ -2179,7 +2224,13 @@ function vdotBasisText(i) {
   // flat ones, not what the watch said — worth saying so rather than having the
   // readout quietly disagree with Runalyze.
   const how = src.adj ? ' grade-adj.' : '';
-  return `${src.kind === 'lap' ? 'best lap' : 'full activity'} ${km(src.km)}km in ${durStr(src.sec)}${how} (${pace}/km) &rarr; ${dayVdot[i].toFixed(1)}`;
+  // Where that reading stands against the peak in force that day — what the
+  // near-max dots mark on the panel, spelled out.
+  const r = vdotVsPeak(i);
+  const vs = r == null ? ''
+    : r >= 0.9995 ? ' &middot; at the peak'
+    : ` &middot; ${((1 - r) * 100).toFixed(1)}% off the peak`;
+  return `${src.kind === 'lap' ? 'best lap' : 'full activity'} ${km(src.km)}km in ${durStr(src.sec)}${how} (${pace}/km) &rarr; ${dayVdot[i].toFixed(1)}${vs}`;
 }
 
 // ---- readout -------------------------------------------------------------
@@ -2565,6 +2616,8 @@ document.getElementById('reset').onclick = () => {
   WINDOW_VDOT = PREF_DEFAULTS.windowVdot;
   MIN_LAP_M = PREF_DEFAULTS.minLapM;
   useGap = PREF_DEFAULTS.useGap;
+  vdotNearDots = PREF_DEFAULTS.vdotNearDots;
+  vdotNearPct = PREF_DEFAULTS.vdotNearPct;
   maxBehind = PREF_DEFAULTS.maxBehind;
   fadeWindows = PREF_DEFAULTS.fadeWindows;
   colourVerdicts = PREF_DEFAULTS.colourVerdicts;
@@ -2581,6 +2634,10 @@ document.getElementById('reset').onclick = () => {
 };
 function syncLabels() {
   for (const el of document.querySelectorAll('.winVdotN')) el.textContent = WINDOW_VDOT;
+  // The dots have no legend of their own — the panel title says what they are.
+  for (const el of document.querySelectorAll('.vdotNearNote')) {
+    el.textContent = vdotNearDots ? ` \u2014 dots: days within ${vdotNearPct}% of it` : '';
+  }
   // Everything that spells out which four windows are in play: the panel
   // titles, the legend notes (including the verdict legend, which names the
   // windows it compares), each legend item's own label, and the data table's
@@ -2635,6 +2692,8 @@ function syncControls() {
   winMultInput.value = windowMult;
   winVdotInput.value = WINDOW_VDOT / 7;
   minLapInput.value = MIN_LAP_M;
+  nearDotsChk.checked = vdotNearDots;
+  nearPctInput.value = vdotNearPct;
   // An export with no usable `gap` column has nothing to switch to, so the box
   // is disabled and shown unticked — but the remembered setting is left alone,
   // so loading such a file and then going back to one with GAP doesn't silently
@@ -2730,6 +2789,26 @@ minLapInput.onchange = minLapInput.oninput = () => {
   renderZonePanel();
   drawAll();
 };
+// Both near-max settings are draw-time only — nothing computed depends on them,
+// so the panel title and a redraw are the whole job.
+const nearDotsChk = document.getElementById('vdotNearDots');
+nearDotsChk.onchange = () => {
+  vdotNearDots = nearDotsChk.checked;
+  savePrefs();
+  syncLabels();
+  drawAll();
+};
+const nearPctInput = document.getElementById('vdotNearPct');
+nearPctInput.onchange = nearPctInput.oninput = () => {
+  const v = Math.round(Number(nearPctInput.value));
+  if (!Number.isFinite(v) || v < 1 || v > 50) return;   // ignore half-typed values
+  vdotNearPct = v;
+  savePrefs();
+  syncLabels();
+  refreshReadout();
+  drawAll();
+};
+
 // Same redraw set as the min-lap input: every pace in the page is derived, so
 // the day VDOTs, the rolling max, the readout and the histogram all have to be
 // rebuilt. Nothing in the volume/frequency half of the page depends on it.
