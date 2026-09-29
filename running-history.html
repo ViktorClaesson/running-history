@@ -385,11 +385,11 @@
     </div>
     <div class="legend-row" id="row-windows" title="Hiding a line only takes it off the three panels — it stays in the hover readout and still counts towards MAX."><span class="legend-tag">Windows</span>
       <label class="item"><input type="checkbox" id="line-max" checked><span class="swatch line" style="background:var(--wmax)"></span>MAX</label>
-      <label class="item"><input type="checkbox" id="line-w1" checked><span class="swatch line" style="background:var(--w1)"></span>1w</label>
-      <label class="item"><input type="checkbox" id="line-w4" checked><span class="swatch line" style="background:var(--w4)"></span>4w</label>
-      <label class="item"><input type="checkbox" id="line-w16" checked><span class="swatch line" style="background:var(--w16)"></span>16w</label>
-      <label class="item"><input type="checkbox" id="line-w64" checked><span class="swatch line" style="background:var(--w64)"></span>64w</label>
-      <span class="legend-dim">week-ish / month-ish / quarter-ish / year-ish rolling averages, and the highest of the four on the day. Untick one to take it off the panels; it stays in the readout and still counts towards MAX.</span>
+      <label class="item"><input type="checkbox" id="line-s0" checked><span class="swatch line" style="background:var(--w1)"></span><span class="winLabel0">1w</span></label>
+      <label class="item"><input type="checkbox" id="line-s1" checked><span class="swatch line" style="background:var(--w4)"></span><span class="winLabel1">4w</span></label>
+      <label class="item"><input type="checkbox" id="line-s2" checked><span class="swatch line" style="background:var(--w16)"></span><span class="winLabel2">16w</span></label>
+      <label class="item"><input type="checkbox" id="line-s3" checked><span class="swatch line" style="background:var(--w64)"></span><span class="winLabel3">64w</span></label>
+      <span class="legend-dim"><span class="winsN">1 / 4 / 16 / 64</span>-week rolling averages, and the highest of the four on the day. Untick one to take it off the panels; it stays in the readout and still counts towards MAX.</span>
     </div>
   </div>
   <div class="ctrls">
@@ -400,6 +400,12 @@
   <label class="chk"><input type="checkbox" id="showZone" checked> Pace-zone histogram</label>
   <label class="chk">VDOT window
     <input type="number" id="windowVdotWeeks" min="1" max="260" step="1" value="50"> weeks
+  </label>
+  <label class="chk" title="Weeks in the shortest of the four rolling windows. The other three follow from the multiple below.">Shortest window
+    <input type="number" id="windowBase" min="1" max="8" step="1" value="1"> weeks
+  </label>
+  <label class="chk" title="Each window is this many times the one before it, so the four are base, base x m, base x m squared, base x m cubed. The second and third of the four are also what the per-day target is computed from, so changing these moves the bar colours too.">Next window &times;
+    <input type="number" id="windowMult" min="2" max="8" step="1" value="4">
   </label>
   <label class="chk" title="A lap shorter than this can't be trusted on its own for VDOT — too short and fast a rep overstates it wildly. The whole workout is always checked too, and the higher of the two wins.">Min lap for VDOT
     <input type="number" id="minLapM" min="100" max="5000" step="100" value="1500"> m
@@ -440,15 +446,15 @@
   <div class="chartcard">
     <canvas id="chart"></canvas>
     <div class="chart-panel" id="panel-vol">
-      <div class="panel-title">Distance per week &mdash; 1 / 4 / 16 / 64-week rolling averages, and their max</div>
+      <div class="panel-title">Distance per week &mdash; <span class="winsN">1 / 4 / 16 / 64</span>-week rolling averages, and their max</div>
       <canvas id="chart5"></canvas>
     </div>
     <div class="chart-panel" id="panel-freq">
-      <div class="panel-title">Run days per week &mdash; 1 / 4 / 16 / 64-week rolling averages, and their max</div>
+      <div class="panel-title">Run days per week &mdash; <span class="winsN">1 / 4 / 16 / 64</span>-week rolling averages, and their max</div>
       <canvas id="chart2"></canvas>
     </div>
     <div class="chart-panel" id="panel-runs">
-      <div class="panel-title">Runs per week &mdash; 1 / 4 / 16 / 64-week rolling averages, and their max</div>
+      <div class="panel-title">Runs per week &mdash; <span class="winsN">1 / 4 / 16 / 64</span>-week rolling averages, and their max</div>
       <canvas id="chart3"></canvas>
     </div>
     <div class="chart-panel" id="panel-vdot">
@@ -468,7 +474,7 @@
     <summary>Data table (days currently in view)</summary>
     <div class="tablewrap">
       <table>
-        <thead><tr><th>Date</th><th>Distance (km)</th><th>4-week avg (km/day)</th><th>Run days / week</th><th>Runs / week</th><th>Target (km)</th><th>Verdict</th></tr></thead>
+        <thead><tr><th>Date</th><th>Distance (km)</th><th><span class="winVolN">4</span>-week avg (km/day)</th><th>Run days / week</th><th>Runs / week</th><th>Target (km)</th><th>Verdict</th></tr></thead>
         <tbody id="tbody"></tbody>
       </table>
     </div>
@@ -813,6 +819,8 @@ if (DATA) {
 // runs at load and reads WINDOW_VDOT's neighbours — see the declaration-order gotcha.
 const LS_PREFS = 'runviz.prefs.v1';
 const PREF_DEFAULTS = {
+  windowBase: 1,     // weeks in the shortest of the four rolling windows, 1-8
+  windowMult: 4,     // each next window is this many times the one before, 2-8
   windowVdot: 350,   // 50 weeks
   minLapM: 1500,     // laps shorter than this can't be trusted for VDOT on their own
   stableBand: 0.01,
@@ -824,10 +832,12 @@ const PREF_DEFAULTS = {
   // Which of the five lines each volume/frequency panel actually draws. Hiding
   // one is purely a decluttering move: it still appears in the hover readout and
   // still counts towards MAX. All shown by default.
-  lines: { max: true, w1: true, w4: true, w16: true, w64: true },
+  lines: { max: true, s0: true, s1: true, s2: true, s3: true },
   plan: null,        // null = the what-if box follows real history; {km, days} = edited
 };
-const LINE_KEYS = ['max', 'w1', 'w4', 'w16', 'w64'];
+// Slot keys, not week counts — a slot keeps its colour and its show/hide
+// setting when windowBase/windowMult change what it actually measures.
+const LINE_KEYS = ['max', 's0', 's1', 's2', 's3'];
 function loadPrefs() {
   const p = { ...PREF_DEFAULTS, panels: { ...PREF_DEFAULTS.panels }, lines: { ...PREF_DEFAULTS.lines } };
   const raw = lsGet(LS_PREFS);
@@ -837,6 +847,8 @@ function loadPrefs() {
   // The VDOT window is set in whole weeks, so a stray value is rounded to one.
   const num = (v, lo, hi) => Number.isFinite(v) && v >= lo && v <= hi;
   const week = (v, maxDays) => Math.min(maxDays, Math.max(7, Math.round(v / 7) * 7));
+  if (num(raw.windowBase, 1, 8)) p.windowBase = Math.round(raw.windowBase);
+  if (num(raw.windowMult, 2, 8)) p.windowMult = Math.round(raw.windowMult);
   if (num(raw.windowVdot, 7, 1820)) p.windowVdot = week(raw.windowVdot, 1820);
   if (num(raw.minLapM, 100, 5000)) p.minLapM = Math.round(raw.minLapM / 100) * 100;
   if (num(raw.stableBand, 0, 0.05)) p.stableBand = raw.stableBand;
@@ -865,6 +877,8 @@ const prefs = loadPrefs();
 // never been touched leaves nothing behind, and Reset really does forget.
 function savePrefs() {
   const cur = {
+    windowBase,
+    windowMult,
     windowVdot: WINDOW_VDOT,
     minLapM: MIN_LAP_M,
     stableBand,
@@ -891,21 +905,42 @@ function savePrefs() {
 // setting to go and change. Fixed rather than configurable: the point of four
 // lines is that they're the same four every time, and a colour means the same
 // window in every panel. Roughly a week, a month, a quarter and a year.
-const WINDOWS = [
-  { key: 'w1',  days: 7,   label: '1w',  title: 'week-ish',    css: '--w1'  },
-  { key: 'w4',  days: 28,  label: '4w',  title: 'month-ish',   css: '--w4'  },
-  { key: 'w16', days: 112, label: '16w', title: 'quarter-ish', css: '--w16' },
-  { key: 'w64', days: 448, label: '64w', title: 'year-ish',    css: '--w64' },
-];
-// The target/verdict maths still needs exactly one volume window and one
-// frequency window — a run can only be judged against a single number. These
-// are the two that used to be the adjustable defaults, now just fixed: 4 weeks
-// reacts fast enough to a training block, 16 weeks doesn't jitter with every
-// rest day. They index into WINDOWS, so the target is always reading one of the
-// lines actually on screen.
+// There are always exactly four of them — four is what the colour scheme and
+// the readout tables are built for — but *which* four is set by two numbers:
+// the shortest window in weeks, and the multiple between one window and the
+// next. Defaults 1 and 4 give the 1 / 4 / 16 / 64 weeks this was designed
+// around (week-ish, month-ish, quarter-ish, year-ish). The keys are slot
+// numbers, not week counts, because a slot keeps its colour and its show/hide
+// setting when the numbers behind it change.
+const N_WINDOWS = 4;
+const WIN_CSS = ['--w1', '--w4', '--w16', '--w64'];
+let windowBase = prefs.windowBase;   // weeks, 1-8
+let windowMult = prefs.windowMult;   // 2-8
+const WINDOWS = Array.from({ length: N_WINDOWS }, (_, k) => ({ key: 's' + k, css: WIN_CSS[k] }));
+// The target/verdict maths needs exactly one volume window and one frequency
+// window — a run can only be judged against a single number. They are the
+// second and third slots, which at the defaults are the 4 and 16 weeks this
+// used to have as fixed settings: 4 weeks reacts fast enough to a training
+// block, 16 weeks doesn't jitter with every rest day. Slots rather than fixed
+// numbers, so the target is always read off lines that are actually on screen —
+// which does mean changing the two numbers above moves the targets, and with
+// them the bar colours, not just what the line panels draw.
 const IV = 1, IF = 2;                 // WINDOWS index: volume / frequency
-const WINDOW_VOL = WINDOWS[IV].days;
-const WINDOW_FREQ = WINDOWS[IF].days;
+let WINDOW_VOL, WINDOW_FREQ;
+// Derives each slot's length from the two numbers. Called before recompute(),
+// and again whenever either setting changes.
+function rebuildWindows() {
+  let weeks = windowBase;
+  for (const w of WINDOWS) {
+    w.weeks = weeks;
+    w.days = weeks * 7;
+    w.label = weeks + 'w';
+    weeks *= windowMult;
+  }
+  WINDOW_VOL = WINDOWS[IV].days;
+  WINDOW_FREQ = WINDOWS[IF].days;
+}
+rebuildWindows();
 // The VDOT window is still adjustable, and still its own thing: "what's my
 // current fitness ceiling" wants years, not the weeks that make sense for
 // "how often am I running".
@@ -2341,6 +2376,9 @@ window.addEventListener('keydown', e => {
 // keeps it holding just the what-if if that is still edited — so neither reset has
 // to know what the other one owns.
 document.getElementById('reset').onclick = () => {
+  windowBase = PREF_DEFAULTS.windowBase;
+  windowMult = PREF_DEFAULTS.windowMult;
+  rebuildWindows();
   WINDOW_VDOT = PREF_DEFAULTS.windowVdot;
   MIN_LAP_M = PREF_DEFAULTS.minLapM;
   stableBand = PREF_DEFAULTS.stableBand;
@@ -2363,6 +2401,14 @@ function syncLabels() {
   for (const el of document.querySelectorAll('.bandN')) el.textContent = pct;
   for (const el of document.querySelectorAll('.gradN')) el.textContent = +(50 - pct).toFixed(1);
   for (const el of document.querySelectorAll('.winVdotN')) el.textContent = WINDOW_VDOT;
+  // Everything that spells out which four windows are in play: the panel
+  // titles, the legend note, each legend item's own label, and the data
+  // table's column header for the volume window.
+  for (const el of document.querySelectorAll('.winsN')) el.textContent = WINDOWS.map(w => w.weeks).join(' / ');
+  WINDOWS.forEach((w, k) => {
+    for (const el of document.querySelectorAll('.winLabel' + k)) el.textContent = w.label;
+  });
+  for (const el of document.querySelectorAll('.winVolN')) el.textContent = WINDOWS[IV].weeks;
   renderTiles();
 }
 
@@ -2404,6 +2450,8 @@ for (const k of LINE_KEYS) {
 }
 
 function syncControls() {
+  winBaseInput.value = windowBase;
+  winMultInput.value = windowMult;
   winVdotInput.value = WINDOW_VDOT / 7;
   minLapInput.value = MIN_LAP_M;
   zoneBarsInput.value = ZONE_BARS;
@@ -2452,6 +2500,28 @@ bandInput.onchange = bandInput.oninput = () => {
   refreshReadout();
   tableKey = '';
   drawAll();
+};
+// The two numbers behind all four windows. Both move the whole set, and
+// because the target reads slots 1 and 2 they move the bars' colours too —
+// hence the full applyWindow() (recompute + relabel + tiles + readout + redraw)
+// rather than just a redraw.
+const winBaseInput = document.getElementById('windowBase');
+winBaseInput.onchange = winBaseInput.oninput = () => {
+  const v = Math.round(Number(winBaseInput.value));
+  if (!Number.isFinite(v) || v < 1 || v > 8) return;   // ignore half-typed values
+  windowBase = v;
+  rebuildWindows();
+  savePrefs();
+  applyWindow();
+};
+const winMultInput = document.getElementById('windowMult');
+winMultInput.onchange = winMultInput.oninput = () => {
+  const v = Math.round(Number(winMultInput.value));
+  if (!Number.isFinite(v) || v < 2 || v > 8) return;   // ignore half-typed values
+  windowMult = v;
+  rebuildWindows();
+  savePrefs();
+  applyWindow();
 };
 const winVdotInput = document.getElementById('windowVdotWeeks');
 winVdotInput.onchange = winVdotInput.oninput = () => {

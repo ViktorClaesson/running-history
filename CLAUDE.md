@@ -145,11 +145,25 @@ and never mid-phrase ("no / long runs", "564 / km/yr").
 
 All of it is derived in-browser from one array of daily distances.
 
-- **The four windows** — `WINDOWS`, fixed at **1 / 4 / 16 / 64 weeks**
-  (week-ish, month-ish, quarter-ish, year-ish) and stored internally in days
-  (7 / 28 / 112 / 448). Not configurable, on purpose: the point of drawing four
-  lines at once is that they're the *same* four every time, and a colour means the
-  same window in every panel. Three sets of series are derived, one value per
+- **The four windows** — `WINDOWS`. There are always exactly **four**
+  (`N_WINDOWS`): four is what the colour scheme and the readout tables are built
+  for, and a fifth would mean finding a fifth hue that separates from the other
+  four. *Which* four is set by two numbers in the sidebar, and
+  `rebuildWindows()` derives the rest — each slot is the one before it times the
+  multiple:
+  - `windowBase` — weeks in the shortest window, **1–8**, default **1**
+  - `windowMult` — the multiple between one window and the next, **2–8**,
+    default **4**
+
+  The defaults give the 1 / 4 / 16 / 64 weeks this was designed around
+  (week-ish, month-ish, quarter-ish, year-ish), stored internally in days
+  (7 / 28 / 112 / 448). A slot's **key is its index** (`s0`…`s3`), not its week
+  count, so it keeps its colour and its show/hide setting when the numbers behind
+  it change. Nothing stops the long end running past the length of the history
+  (8 × 8 gives 4096 weeks); those lines just sit near zero, which is the honest
+  reading given everything is divided by its full window.
+
+  Three sets of series are derived, one value per
   window per day, all expressed as rates so windows of very different lengths
   share an axis: `volSeries` (km/week), `freqSeries` (run days/week) and
   `runSeries` (runs/week).
@@ -176,10 +190,13 @@ All of it is derived in-browser from one array of daily distances.
   shortest window still drawn when MAX is off.
 - **The two windows the maths still needs** — a run can only be judged against a
   single number, so the target keeps exactly one volume window and one frequency
-  window: `IV`/`IF`, indices 1 and 2 into `WINDOWS`, i.e. `WINDOW_VOL` = 4 weeks
-  and `WINDOW_FREQ` = 16 weeks. These were the old adjustable defaults and are
-  now just constants. They index into `WINDOWS` rather than being free numbers so
-  the target is always read against a line that is actually on screen. `avg`,
+  window: `IV`/`IF`, **slots 1 and 2**, i.e. `WINDOW_VOL` and `WINDOW_FREQ`,
+  which at the defaults are the 4 and 16 weeks that used to be settings of their
+  own. Slots rather than free numbers, so the target is always read against a
+  line that is actually on screen — which does mean **`windowBase`/`windowMult`
+  move the targets, and with them the bar colours and verdicts**, not only what
+  the line panels draw. Deliberate, but worth knowing before wondering why a
+  whole history changed colour. `avg`,
   `perWeekAt()` and `perWeekRunsAt()` are the single-window views the tiles, the
   table and the target maths read.
 - **Target** — what a run that day had to be to hold the average steady:
@@ -437,11 +454,12 @@ for a yellow that passes, because none does.
 ## Remembered settings
 
 `runviz.prefs.v1` holds everything the settings sidebar and the what-if box can be
-set to, so the page opens the way it was left: `windowVdot`, `minLapM`,
+set to, so the page opens the way it was left: `windowBase`, `windowMult`,
+`windowVdot`, `minLapM`,
 `stableBand`, `longNeedsSingleRun`, `colourNormal`,
 `colourLong`, `zoneBars`, `panels` (`{vol, freq, runs, vdot, zone}`, each independently
-show/hide — see below), `lines` (`{max, w1, w4, w16, w64}`, which of the five
-lines the three window panels draw), and `plan` (`null` = the what-if box follows real
+show/hide — see below), `lines` (`{max, s0, s1, s2, s3}` — slot keys, which of
+the five lines the three window panels draw), and `plan` (`null` = the what-if box follows real
 history, `{km, days}` = edited). Three rules:
 
 - **Read at the very top of the `if (DATA)` block**, above `WINDOWS` and
@@ -452,11 +470,13 @@ history, `{km, days}` = edited). Three rules:
   right next to the `ZONES` constant, for the same reason.)
 - **Validated field by field on load** (`loadPrefs`), against the same limits as the
   inputs, so a stale or hand-edited entry can only produce a state the UI can reach.
-  `windowVdot` is rounded to the nearest whole week, since that's the only unit its
-  control can produce, and its range is 1–260 weeks — it wants years rather than
-  weeks. (`windowVol`/`windowFreq` used to live here too; the volume and frequency
-  panels draw all four fixed windows now, so there is nothing left to remember.
-  A stale entry still carrying them is simply ignored and dropped on the next save.)
+  `windowBase` (1–8) and `windowMult` (2–8) are rounded to whole numbers, and
+  `windowVdot` to the nearest whole week, since those are the only units their
+  controls can produce; `windowVdot`'s range is 1–260 weeks — it wants years
+  rather than weeks. (`windowVol`/`windowFreq` used to live here as day counts;
+  the four windows are derived from base and multiple now. A stale entry still
+  carrying the old fields is simply ignored and dropped on the next save, as is
+  one carrying the old week-count `lines` keys.)
   `minLapM` is rounded to the nearest 100m, range 100–5000. `zoneBars` is rounded
   to the nearest whole number, range 1–20. Anything that fails falls back to
   `PREF_DEFAULTS` for that field alone.
@@ -467,10 +487,14 @@ history, `{km, days}` = edited). Three rules:
 `syncControls()` (with `syncPanelVisibility()` and `syncLineVisibility()` under
 it) is the one place state is pushed *into* the DOM — the markup carries
 the defaults, and a remembered setting has to overwrite them at boot.
+`syncLabels()` owns the text that *spells out* which four windows are in play:
+`.winsN` (the three panel titles and the legend note), `.winLabel0`–`.winLabel3`
+(each legend item's own "4w") and `.winVolN` (the data table's column header).
 
 **There are two resets, and each owns only what sits next to it.**
 
-- **Reset** in the settings sidebar: the VDOT window, the min-lap distance,
+- **Reset** in the settings sidebar: the window base and multiple, the VDOT
+  window, the min-lap distance,
   stable band, the pace-zone bar count, the long-run rule, both colour toggles,
   the five panel show/hide toggles and the five line show/hide toggles back to
   their defaults (all shown), plus the view zoomed back out. It does *not* touch the what-if.
