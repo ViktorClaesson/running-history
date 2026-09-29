@@ -100,7 +100,8 @@ and once touched it shows the real figure alongside and offers a reset.
 
 ## The readout: pinning, and why it lives in a sticky sidebar
 
-**Pinning.** Clicking a day sets `selected`; clicking it again, or Esc, releases it.
+**Pinning.** Clicking a day sets `selected`; clicking it again, or `t` or Esc,
+releases it.
 `shownDay()` is hover, else the pinned day, else `lastRunIdx` — the most recent
 day with a run — so the readout (and the pace-zone histogram below, which also
 reads off `shownDay()`) always has something to show rather than sitting idle
@@ -124,6 +125,61 @@ persisted in `runviz.prefs.v1`.
 A pan ends in a mouseup on the canvas, which the browser then reports as a click —
 `draggedNotClicked` (set from `drag.moved`, threshold 3px) is what stops a pan from
 pinning whatever it happened to finish over.
+
+**Window-start marks.** Every line on every panel is an average over a window
+*ending* on the marked day, and where that window starts used to be a number in
+the legend and nothing on the chart. `markWindowStarts()` marks the first day
+inside each window — a dot in that window's own colour, plus a faint dashed line
+down through the plot — so each line's reach is something you can see against the
+bars it covers. Every panel gets them: the bars and the three window panels mark
+the four windows (`winMarks()`), and the VDOT panel marks its own `WINDOW_VDOT`
+in `--vdot`, since that window is its own thing.
+
+The dot sits **on its own line**, at that line's value on the start day — each
+caller passes its own y mapping in as `yAt`, so the dot reads as a point of that
+line rather than a tick floating above it, and which colour means which line
+needs no working out. Panels with no line for it to sit on fall back to a row
+just under the top inset (`MARK_Y`): the bars, where a window isn't a series at
+all, and any day the VDOT line is undefined for.
+
+**Both** marked days get a set, the same way both already get a bar outline and
+a line dot: hover's dots are filled and its dashed lines the stronger of the
+two, the pin's are a hollow ring and fainter — the same solid/dashed, filled/ring
+language as the day markers themselves. For any one window the two sets can
+never land on the same day: a window start is one fixed distance back from its
+day, so two different days have two different starts. That is what makes drawing
+both readable rather than eight dashed lines in a heap, and it is why the marks
+key off `hover` and `selected` directly rather than through `shownDay()` — which
+also falls back to the most recent run, and would leave marks on screen
+permanently with no marked day under them.
+
+A window reaching back past the left edge of the plot has no start to mark
+there, so it gets a **chevron** at that edge instead, in its own colour: the
+window is still in play, its beginning is just out of view — or, for the long
+windows early in the history, before the first day there is (which is the honest
+reading, since everything is divided by its full window either way). The
+chevrons stack rightwards, one slot per window — `m.slot` is the window's own
+index, so a window that is hidden or whose start is on screen leaves a gap rather
+than shifting the rest — which keeps several off-screen windows countable. When both days have the same window
+off-screen the hover chevron takes the slot, since "off to the left" is the whole
+message and both would be saying it; the pin's own chevron is drawn thinner and
+at half alpha, matching its dots.
+
+The marks follow `visLines`, unlike the readout: those toggles exist to declutter
+exactly these lines, and a mark for a line that isn't drawn is clutter of the
+same kind — which is also why hiding `1w` takes its dot off the *bars* panel too,
+where there is no line to hide.
+
+**The default view** is the longest window's worth of days
+(`defaultSpan()` = `WINDOWS[N_WINDOWS - 1].days`, 448 at the defaults) ending on
+the most recent day, not the whole history: zoomed all the way out, years of
+bars are a few pixels each and the short windows are a solid band of noise. One
+long window is the widest span where the panels still say something, and it is
+also exactly the span every line on screen is computed over. Scrolling out to
+the full history still works — the clamp is unchanged. `resetView()` is that
+same view, shared by the double-click, the `r` key and the settings Reset so
+"reset the zoom" means one thing everywhere. Changing `windowBase`/`windowMult` moves what
+`defaultSpan()` returns but deliberately does not re-fit the current view.
 
 **Sidebar, not inline.** The readout used to sit directly above the chart, so
 scrolling down past a tall chart lost sight of it — no good once there were five
@@ -200,11 +256,12 @@ All of it is derived in-browser from one array of daily distances.
   key), persisted in `runviz.prefs.v1` as `lines`. The control is the legend's
   own "Windows" row, whose swatches are checkboxes; an unticked one dims via
   `.legend .item.off`. This is a view filter and nothing more: a hidden line is
-  still in the hover readout and still counts towards MAX. Two things do follow
-  it, because both exist to make the remaining lines readable — the y-axis
-  scales to the highest line actually **drawn** rather than to MAX (except the
-  fixed 0–7 run-days axis), and the hover/pin marker moves to MAX, or to the
-  shortest window still drawn when MAX is off.
+  still in the hover readout and still counts towards MAX. Three things do
+  follow it, because all three exist to make the remaining lines readable — the
+  y-axis scales to the highest line actually **drawn** rather than to MAX
+  (except the fixed 0–7 run-days axis), the hover/pin marker moves to MAX, or to
+  the shortest window still drawn when MAX is off, and a window's start mark
+  goes with its line (see "Window-start marks" above).
 - **The two windows the maths still needs** — a run can only be judged against a
   single number, so the target keeps exactly one volume window and one frequency
   window: `IV`/`IF`, **slots 1 and 2**, i.e. `WINDOW_VOL` and `WINDOW_FREQ`,
@@ -290,6 +347,42 @@ ceiling" and "how often am I running" are different-timescale questions). It's a
 `U`ntagged autolap) is read from real exports but not used for anything — see above.
 A day with no parsed splits (older activities, or ones Runalyze didn't lap) falls
 back to treating the whole day as a single lap.
+
+**Grade-adjusted pace** (`useGap`, "Grade-adjusted pace" under VDOT panel, **off
+by default**) swaps every *time* the pace maths reads for the equivalent flat one,
+so a hilly run stops reading as an easy day and its minutes stop landing in
+Recovery when they were a climb. It moves the day VDOTs, the VDOT panel and the
+pace-zone histogram, and nothing else: distances, volume, frequency, targets and
+verdicts are all untouched, because kilometres run are kilometres run. Off by
+default since the raw pace is what was actually run — this is a second opinion on
+it, not a correction.
+
+Runalyze's `gap` column is grade-adjusted **speed in km/h**, not a pace and not a
+factor (checked against real activities' own distance/time: a flat run's `gap`
+sits within a fraction of a percent of its raw speed, a 34 m/km day about 7%
+above it). `gapRatioOf()` turns it into `gap ÷ raw speed`, clamped to 0.5–2, and
+the pipeline stores the result as *time*: `gsec` per day next to `sec`, and
+`gsec` per lap next to `sec`. On a real export the ratio's median is 1.005 and
+its max 1.118.
+
+Two things are worth knowing about that ratio. Runalyze reports GAP **once per
+activity**, so the same ratio is spread over every lap of it — the only honest
+option available, since it says "this run was worth this much more than its raw
+pace" without pretending to know which kilometre the hills were in. And **not
+every activity has one** (661 of 664 runs in a real export; the missing ones are
+old). `lapSec()`/`dayTime()` fall back to the raw time whenever there is no
+adjusted one, so the toggle can only ever re-time a day, never blank it.
+
+`gapOn()` is the real gate: `useGap` *and* the export having a usable `gap`
+column at all (`DATA.gapCount`). An export without one disables the checkbox and
+shows it unticked, but leaves the remembered `useGap` alone, so loading such a
+file and going back to one with GAP doesn't silently forget the setting.
+
+A bin's height is the adjusted minutes too, not the real ones — the time implied
+by the pace the bar is drawn at, so a day's bars still sum to one coherent
+duration (checked: they sum to exactly `gsec ÷ 60`). `vdotBasisText()` labels
+the figure "grade-adj." when the time it quotes has been adjusted, rather than
+quietly disagreeing with what Runalyze and the watch say.
 
 **Pace zones** (easy/marathon/threshold/interval/repetition) are five %VDOT bands,
 anchored at 65.7/81.8/88.0/97.6/106.2% (back-solved from the vdoto2.com example
@@ -472,7 +565,7 @@ for a yellow that passes, because none does.
 
 `runviz.prefs.v1` holds everything the settings sidebar and the what-if box can be
 set to, so the page opens the way it was left: `windowBase`, `windowMult`,
-`windowVdot`, `minLapM`,
+`windowVdot`, `minLapM`, `useGap`,
 `stableBand`, `longNeedsSingleRun`, `colourNormal`,
 `colourLong`, `zoneBars`, `maxBehind`, `fadeWindows`, `panels` (`{vol, freq, runs, vdot, zone}`, each independently
 show/hide — see below), `lines` (`{max, s0, s1, s2, s3}` — slot keys, which of
@@ -482,8 +575,9 @@ history, `{km, days}` = edited). Three rules:
 - **Read at the very top of the `if (DATA)` block**, above `WINDOWS` and
   `let WINDOW_VDOT`, because `recompute()` runs at load and reads `WINDOWS` — the
   declaration-order gotcha below. (`WINDOW_VDOT` isn't read by `recompute()`, but
-  is declared alongside for the same reason. `MIN_LAP_M` is declared further down, right next to `recomputeDayVdot()`
-  — nothing earlier touches it, so it doesn't need to move. `ZONE_BARS` is declared
+  is declared alongside for the same reason. `MIN_LAP_M` and `useGap` are declared further down, right next to
+  `recomputeDayVdot()` — nothing earlier touches them, so they don't need to
+  move. `ZONE_BARS` is declared
   right next to the `ZONES` constant, for the same reason.)
 - **Validated field by field on load** (`loadPrefs`), against the same limits as the
   inputs, so a stale or hand-edited entry can only produce a state the UI can reach.
@@ -494,7 +588,9 @@ history, `{km, days}` = edited). Three rules:
   the four windows are derived from base and multiple now. A stale entry still
   carrying the old fields is simply ignored and dropped on the next save, as is
   one carrying the old week-count `lines` keys.)
-  `minLapM` is rounded to the nearest 100m, range 100–5000. `zoneBars` is rounded
+  `minLapM` is rounded to the nearest 100m, range 100–5000. `useGap` is a plain
+  boolean, and is kept even when the loaded export has no `gap` column to use it
+  on — see "Grade-adjusted pace" above. `zoneBars` is rounded
   to the nearest whole number, range 1–20. Anything that fails falls back to
   `PREF_DEFAULTS` for that field alone.
 - **Written only when something is off-default** (`savePrefs`), and the entry is
@@ -512,10 +608,11 @@ the defaults, and a remembered setting has to overwrite them at boot.
 
 - **Reset** in the settings sidebar: the window base and multiple, the VDOT
   window, the min-lap distance,
-  stable band, the pace-zone bar count, the long-run rule, the MAX draw order,
+  stable band, the grade-adjusted-pace toggle, the pace-zone bar count, the
+  long-run rule, the MAX draw order,
   the window-line fade, both colour toggles, the five panel show/hide toggles and the five line
-  show/hide toggles back to their defaults (all shown), plus the view zoomed
-  back out. It does *not* touch the what-if.
+  show/hide toggles back to their defaults (all shown), plus the view back to
+  its default span. It does *not* touch the what-if.
 - **reset** in the Today's target tile: clears the what-if back to following real
   history, and nothing else.
 
@@ -524,9 +621,17 @@ and call `savePrefs()` — which rewrites the whole entry from current state, ke
 it if anything is still off-default and dropping it if nothing is. So a chart reset
 with an edited what-if leaves an entry holding only the plan, and vice versa.
 
-Double-clicking a panel still resets only the zoom, which is view state and
-deliberately *not* remembered — persisting it would fight the Reset button and open
-the page mid-history.
+**Two keys**, for the two things worth doing without aiming at anything: `r`
+resets the view, `t` releases the pin (Esc still does too — `t` is next door to
+`r`, which is what makes the pair usable one-handed with the other hand on the
+mouse). Both ignore modified presses, so ⌘R still reloads, and both ignore
+anything typed into a settings input, where a plain `r` is a keystroke and not a
+shortcut.
+
+Double-clicking a panel still resets only the view (`resetView()` — the default
+span, see "Window-start marks" above), which is view state and deliberately
+*not* remembered — persisting it would fight the Reset button and open the page
+mid-history.
 
 **The settings sidebar** is the third sidebar-shaped thing on the page, on the
 opposite side from the readout — `<aside id="settingsSidebar">`, always visible
@@ -545,17 +650,17 @@ much height:
 | Group | Holds |
 |---|---|
 | Volume & frequency panels | the five line show/hide swatches, the three panel show/hide boxes, `windowBase`/`windowMult`, `fadeWindows`, `maxBehind` |
-| VDOT panel | its show/hide, `windowVdot`, `minLapM` |
+| VDOT panel | its show/hide, `windowVdot`, `minLapM`, `useGap` |
 | Pace zones | its show/hide, `zoneBars` |
 | Targets & verdicts | the normal/long/rest colour legend, `longNeedsSingleRun`, `stableBand` |
 
 Two placements are worth naming. **The legend is split across two groups**, not
 kept as one block: the window-line swatches are the show/hide control for those
 lines, so they belong beside the panels they colour, while the verdict ramps
-belong beside the target settings that produce them. And **`minLapM` sits under
-VDOT** even though it also moves the pace-zone histogram — it is a VDOT input,
-and the histogram is read against the day's VDOT, so that is where it comes
-from. Reset sits outside all four, since it owns the lot.
+belong beside the target settings that produce them. And **`minLapM` and `useGap` sit under
+VDOT** even though both also move the pace-zone histogram — they are VDOT
+inputs, and the histogram is read against the day's VDOT, so that is where they
+come from. Reset sits outside all four, since it owns the lot.
 
 ## Colour system
 
@@ -625,19 +730,22 @@ way but on a different basis — see "VDOT and pace zones" above.
   activity starting between 22:00 and midnight — nothing else moves.
 - Each activity is filed under that day, then aggregated per day into `values`
   (total km), `maxRun` (longest single run), `nRuns` (count), `sec` (total elapsed
-  seconds, for VDOT) and `laps` (parsed `splits`, also for VDOT — see "VDOT and
-  pace zones" above). 63 of my days have more than one run.
+  seconds, for VDOT), `gsec` (the same, grade-adjusted — see "Grade-adjusted
+  pace" above) and `laps` (parsed `splits`, carrying their own `sec`/`gsec`, also
+  for VDOT). 63 of my days have more than one run.
 - **Sport IDs are per-account**, so there is no way to detect "running" generically.
   `summariseSports` shows every sport with count / total km / median speed and
   pre-ticks a guess: the busiest sport with median speed 7.5–17 km/h, plus anything
   comparable in volume. Speed alone over-selects — cross-country skiing at 8.2 km/h
   sits squarely in running range.
-- Parsed data is cached in `localStorage` under `runviz.data.v2` (`SCHEMA = 4`).
+- Parsed data is cached in `localStorage` under `runviz.data.v2` (`SCHEMA = 5`).
   `SCHEMA` guards what the cached numbers *mean*, not only their shape — the day
   attribution fix bumped it to 3 with the shape unchanged, because the cached values
   were wrong and can only be rebuilt from the CSV. It was bumped again to 4 when
-  `sec`/`laps` were added for VDOT, this time because the shape itself changed: an
-  older cached copy simply doesn't have those arrays. A stale schema opens the gate
+  `sec`/`laps` were added for VDOT, and to 5 when the grade-adjusted times
+  (`gsec` per day, `gsec` per lap, `gapCount`) joined them — both times because
+  the shape itself changed: an older cached copy simply doesn't have those
+  arrays. A stale schema opens the gate
   with `staleCache` set, which says why it is asking for the file again instead of
   doing it silently. Selected sports in `runviz.sports.v2`.
   Settings in `runviz.prefs.v1` (see below).

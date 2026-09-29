@@ -312,6 +312,9 @@
   }
   button:hover, label.chk:hover { background: var(--ghost); }
   label.chk { display: inline-flex; align-items: center; gap: 6px; }
+  /* a setting this export's data can't support: still says what it would do */
+  label.chk.off { opacity: 0.45; cursor: default; }
+  label.chk.off:hover { background: transparent; }
   label.chk select { font: inherit; font-size: 12px; color: var(--text-primary);
     background: transparent; border: 0; padding: 0; cursor: pointer; }
   label.chk input[type=number] { font: inherit; font-size: 12px; color: var(--text-primary);
@@ -325,6 +328,9 @@
   .panel-title { font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
     color: var(--muted); padding: 4px 0 2px 54px; }
   .hint { padding: 6px 4px 0; font-size: 11px; color: var(--muted); }
+  /* a key to press, not code: same face as the text it sits in, just boxed */
+  .hint kbd { font: inherit; border: 1px solid var(--border); border-radius: 3px;
+    padding: 0 3px; color: var(--text-secondary); }
 
   #chartZone { display: block; width: 100%; height: 220px; }
   .zone-legend { display: flex; gap: 14px; flex-wrap: wrap; padding: 0 4px 8px; font-size: 12px; color: var(--text-secondary); }
@@ -388,13 +394,13 @@
   <section class="setgroup">
     <h2 class="setgroup-title">Volume &amp; frequency panels</h2>
     <div class="legend">
-      <div class="legend-row" id="row-windows" title="Hiding a line only takes it off the three panels — it stays in the hover readout and still counts towards MAX."><span class="legend-tag">Lines</span>
+      <div class="legend-row" id="row-windows" title="Hiding a line takes it off the three panels and takes its window-start dot off every panel — it stays in the hover readout and still counts towards MAX."><span class="legend-tag">Lines</span>
         <label class="item"><input type="checkbox" id="line-max" checked><span class="swatch line" style="background:var(--wmax)"></span>MAX</label>
         <label class="item"><input type="checkbox" id="line-s0" checked><span class="swatch line" style="background:var(--w1)"></span><span class="winLabel0">1w</span></label>
         <label class="item"><input type="checkbox" id="line-s1" checked><span class="swatch line" style="background:var(--w4)"></span><span class="winLabel1">4w</span></label>
         <label class="item"><input type="checkbox" id="line-s2" checked><span class="swatch line" style="background:var(--w16)"></span><span class="winLabel2">16w</span></label>
         <label class="item"><input type="checkbox" id="line-s3" checked><span class="swatch line" style="background:var(--w64)"></span><span class="winLabel3">64w</span></label>
-        <span class="legend-dim"><span class="winsN">1 / 4 / 16 / 64</span>-week rolling averages, and the highest of the four on the day. Untick one to take it off the panels; it stays in the readout and still counts towards MAX.</span>
+        <span class="legend-dim"><span class="winsN">1 / 4 / 16 / 64</span>-week rolling averages, and the highest of the four on the day. Untick one to take it, and its window-start dot, off the panels; it stays in the readout and still counts towards MAX.</span>
       </div>
     </div>
     <div class="ctrls">
@@ -425,6 +431,9 @@
       </label>
       <label class="chk" title="A lap shorter than this can't be trusted on its own for VDOT — too short and fast a rep overstates it wildly. The whole workout is always checked too, and the higher of the two wins. It feeds the pace-zone histogram as well, since that is read against the day's VDOT.">Min lap for VDOT
         <input type="number" id="minLapM" min="100" max="5000" step="100" value="1500"> m
+      </label>
+      <label class="chk" id="useGapLabel" title="Read every pace off Runalyze's grade-adjusted pace — each activity's equivalent flat time — instead of the time actually taken. Moves VDOT and the pace-zone histogram; distances, volume and the targets are untouched. Activities the export has no GAP for keep their raw time.">
+        <input type="checkbox" id="useGap"> Grade-adjusted pace
       </label>
     </div>
   </section>
@@ -467,7 +476,7 @@
     </div>
   </section>
 
-  <button id="reset" title="Put every setting in this sidebar back to its default and zoom back out. Leaves the what-if target alone — that has its own reset.">Reset</button>
+  <button id="reset" title="Put every setting in this sidebar back to its default and the view back to the default span. Leaves the what-if target alone — that has its own reset.">Reset</button>
 </aside>
 <div class="wrap">
   <h1>Running history &mdash; every run, on a log scale</h1>
@@ -508,8 +517,9 @@
       <div class="panel-title">Highest VDOT in the trailing <span class="winVdotN">910</span> days</div>
       <canvas id="chart4"></canvas>
     </div>
-    <div class="hint">Scroll or pinch to zoom — the day under the cursor stays put while both sides scale around it. Drag to pan. Double-click to reset.
-      Click a day to pin its numbers in the readout above; click it again, or press Esc, to release.</div>
+    <div class="hint">Scroll or pinch to zoom — the day under the cursor stays put while both sides scale around it. Drag to pan. Double-click, or press <kbd>r</kbd>, to go back to the default view, the longest window ending on the most recent day.
+      Click a day to pin its numbers in the readout above; click it again, or press <kbd>t</kbd> or Esc, to release.
+      The coloured dots along the top of each panel mark where each window reaches back to — filled from the day under the pointer, hollow from the pinned one, and a chevron at the left edge for a window that reaches back past what's drawn.</div>
   </div>
 
   <div class="chartcard" id="zonecard" hidden>
@@ -564,7 +574,7 @@
 // itself and is as close to "remember the path" as the platform allows.
 // ---------------------------------------------------------------------------
 const LS_DATA = 'runviz.data.v2', LS_SPORTS = 'runviz.sports.v2';
-const SCHEMA = 4;   // 4: added per-day elapsed seconds and parsed lap splits, for VDOT
+const SCHEMA = 5;   // 5: added grade-adjusted times (per day and per lap), alongside the raw ones
 
 const lsGet = k => { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); return true; }
@@ -636,22 +646,44 @@ function parseTimeToSec(s) {
   for (const part of s.split(':')) sec = sec * 60 + Number(part);
   return Number.isFinite(sec) ? sec : 0;
 }
-function parseSplits(str) {
+// `gapRatio` is the whole activity's grade-adjusted speed over its raw speed.
+// Runalyze reports GAP once per activity, not per lap, so spreading that one
+// ratio over every lap of the activity is the only honest thing available: it
+// says "this run was worth this much more than its raw pace" without pretending
+// to know which kilometre the hills were in.
+function parseSplits(str, gapRatio) {
   if (!str) return [];
   const out = [];
   for (const piece of str.split('-')) {
     const m = /^[A-Za-z]([0-9.]+)\|([0-9:]+)/.exec(piece);
     if (!m) continue;
     const km = parseFloat(m[1]), sec = parseTimeToSec(m[2]);
-    if (km > 0 && sec > 0) out.push({ km, sec });
+    if (km > 0 && sec > 0) out.push({ km, sec, gsec: sec / gapRatio });
   }
   return out;
+}
+
+// Runalyze's `gap` column is grade-adjusted *speed* in km/h (verified against
+// the raw distance/time of real activities: a flat run's gap sits within a
+// fraction of a percent of its own speed, a 34 m/km day about 7% above it).
+// Turned into a ratio here, so the rest of the pipeline only ever deals in
+// "this activity's equivalent flat time". Clamped, and 1 when the column is
+// missing or unusable — a third of a real export's older activities have no gap
+// at all, and those must simply stay at their raw times rather than vanish.
+function gapRatioOf(header, r, dist, secs) {
+  if (header.gap == null || !(dist > 0) || !(secs > 0)) return 1;
+  const gapSpeed = parseFloat(r[header.gap]);
+  if (!Number.isFinite(gapSpeed) || gapSpeed <= 0) return 1;
+  const raw = dist / (secs / 3600);
+  const ratio = gapSpeed / raw;
+  if (!Number.isFinite(ratio) || ratio < 0.5 || ratio > 2) return 1;
+  return ratio;
 }
 
 // --- aggregate the chosen sports into one row per calendar day ----------------
 function buildData({ header, rows }, sportIds, fileName) {
   const per = new Map();
-  let runCount = 0;
+  let runCount = 0, gapCount = 0;   // gapCount: activities with a usable GAP reading
   for (const r of rows) {
     if (!sportIds.has(r[header.sportid])) continue;
     const t = Number(r[header.time]);
@@ -667,9 +699,12 @@ function buildData({ header, rows }, sportIds, fileName) {
     const key = new Date(t * 1000).toISOString().slice(0, 10);
     const dist = parseFloat(r[header.distance]) || 0;
     const secs = header.s != null ? (parseFloat(r[header.s]) || 0) : 0;
-    const g = per.get(key) || { sum: 0, max: 0, n: 0, sec: 0, laps: [] };
-    g.sum += dist; g.max = Math.max(g.max, dist); g.n++; g.sec += secs;
-    if (header.splits != null && r[header.splits]) g.laps.push(...parseSplits(r[header.splits]));
+    const ratio = gapRatioOf(header, r, dist, secs);
+    if (ratio !== 1) gapCount++;
+    const g = per.get(key) || { sum: 0, max: 0, n: 0, sec: 0, gsec: 0, laps: [] };
+    g.sum += dist; g.max = Math.max(g.max, dist); g.n++;
+    g.sec += secs; g.gsec += secs / ratio;
+    if (header.splits != null && r[header.splits]) g.laps.push(...parseSplits(r[header.splits], ratio));
     per.set(key, g);
     runCount++;
   }
@@ -678,15 +713,15 @@ function buildData({ header, rows }, sportIds, fileName) {
   const start = keys[0], end = keys[keys.length - 1];
   const day = 86400000, t0 = Date.parse(start + 'T00:00:00Z');
   const days = Math.round((Date.parse(end + 'T00:00:00Z') - t0) / day) + 1;
-  const values = [], maxRun = [], nRuns = [], sec = [], laps = [];
+  const values = [], maxRun = [], nRuns = [], sec = [], gsec = [], laps = [];
   const r3 = v => Math.round(v * 1000) / 1000;
   for (let i = 0; i < days; i++) {
     const g = per.get(new Date(t0 + i * day).toISOString().slice(0, 10));
     values.push(g ? r3(g.sum) : 0); maxRun.push(g ? r3(g.max) : 0); nRuns.push(g ? g.n : 0);
-    sec.push(g ? g.sec : 0); laps.push(g ? g.laps : []);
+    sec.push(g ? g.sec : 0); gsec.push(g ? Math.round(g.gsec) : 0); laps.push(g ? g.laps : []);
   }
-  return { schema: SCHEMA, start, values, maxRun, nRuns, sec, laps, runCount, fileName,
-           sports: [...sportIds], loadedAt: new Date().toISOString().slice(0, 10) };
+  return { schema: SCHEMA, start, values, maxRun, nRuns, sec, gsec, laps, runCount, gapCount,
+           fileName, sports: [...sportIds], loadedAt: new Date().toISOString().slice(0, 10) };
 }
 
 // --- a re-openable reference to the file, where the browser supports it -------
@@ -870,6 +905,7 @@ const PREF_DEFAULTS = {
   windowMult: 4,     // each next window is this many times the one before, 2-8
   windowVdot: 350,   // 50 weeks
   minLapM: 1500,     // laps shorter than this can't be trusted for VDOT on their own
+  useGap: false,     // read paces off Runalyze's grade-adjusted pace instead of the raw one
   stableBand: 0.01,
   longNeedsSingleRun: true,
   colourNormal: true,
@@ -902,7 +938,7 @@ function loadPrefs() {
   if (num(raw.minLapM, 100, 5000)) p.minLapM = Math.round(raw.minLapM / 100) * 100;
   if (num(raw.stableBand, 0, 0.05)) p.stableBand = raw.stableBand;
   if (num(raw.zoneBars, 1, 20)) p.zoneBars = Math.round(raw.zoneBars);
-  for (const k of ['longNeedsSingleRun', 'colourNormal', 'colourLong', 'maxBehind', 'fadeWindows']) {
+  for (const k of ['longNeedsSingleRun', 'colourNormal', 'colourLong', 'maxBehind', 'fadeWindows', 'useGap']) {
     if (typeof raw[k] === 'boolean') p[k] = raw[k];
   }
   if (raw.panels && typeof raw.panels === 'object') {
@@ -930,6 +966,7 @@ function savePrefs() {
     windowMult,
     windowVdot: WINDOW_VDOT,
     minLapM: MIN_LAP_M,
+    useGap,
     stableBand,
     longNeedsSingleRun,
     maxBehind,
@@ -1002,7 +1039,8 @@ const daily = DATA.values;
 const maxRun = DATA.maxRun;   // longest single run that day
 const nRuns  = DATA.nRuns;    // how many separate runs that day
 const daySec = DATA.sec || [];    // total elapsed seconds that day, across all its runs
-const dayLaps = DATA.laps || [];  // that day's parsed lap splits ({km, sec}[]), oldest export missing this
+const dayGsec = DATA.gsec || [];  // the same, grade-adjusted (see `useGap` below)
+const dayLaps = DATA.laps || [];  // that day's parsed lap splits ({km, sec, gsec}[]), oldest export missing this
 const N = daily.length;
 const start = new Date(DATA.start + "T00:00:00");
 const dateAt = i => new Date(start.getTime() + i * 86400000);
@@ -1123,20 +1161,38 @@ function impliedVdot(km, sec) {
 // the two wins — a long tempo run IS its own best evidence when it beats every
 // individual lap (e.g. an evenly-paced race with no lap data at all).
 let MIN_LAP_M = prefs.minLapM;
+// Grade-adjusted pace. Off by default, because the raw pace is what was actually
+// run and this is a second opinion on it, not a correction. On, every time that
+// feeds a pace — the VDOT search below and the pace-zone histogram — reads the
+// activity's equivalent flat time instead of its real one, so a hilly run stops
+// being read as an easy day and the zones stop filling up with "recovery" that
+// was actually a climb. Distances, volume, frequency and the targets are all
+// untouched: kilometres run are kilometres run.
+//
+// Every read goes through `lapSec`/`dayTime`, which fall back to the raw time
+// whenever there is no adjusted one to use — an export with no `gap` column at
+// all (`gapOn()` false, and the control disabled), or the older activities
+// inside one that has it. So the toggle can never blank a day, only re-time it.
+let useGap = prefs.useGap;
+const gapOn = () => useGap && DATA.gapCount > 0;
+const lapSec = lap => gapOn() && lap.gsec > 0 ? lap.gsec : lap.sec;
+const dayTime = i => gapOn() && dayGsec[i] > 0 ? dayGsec[i] : daySec[i];
 const dayVdot = new Array(N);
-const dayVdotSource = new Array(N);   // {km, sec, kind:'lap'|'day'} behind dayVdot[i], or null
+const dayVdotSource = new Array(N);   // {km, sec, kind:'lap'|'day', adj} behind dayVdot[i], or null
 function recomputeDayVdot() {
   const minLapKm = MIN_LAP_M / 1000;
   for (let i = 0; i < N; i++) {
     let best = 0, bestSrc = null;
-    if (daily[i] > 0 && daySec[i] > 0) {
-      best = impliedVdot(daily[i], daySec[i]);
-      bestSrc = { km: daily[i], sec: daySec[i], kind: 'day' };
+    const dsec = dayTime(i);
+    if (daily[i] > 0 && dsec > 0) {
+      best = impliedVdot(daily[i], dsec);
+      bestSrc = { km: daily[i], sec: dsec, kind: 'day', adj: dsec !== daySec[i] };
     }
     for (const lap of (dayLaps[i] || [])) {
       if (lap.km < minLapKm) continue;
-      const v = impliedVdot(lap.km, lap.sec);
-      if (v > best) { best = v; bestSrc = { km: lap.km, sec: lap.sec, kind: 'lap' }; }
+      const lsec = lapSec(lap);
+      const v = impliedVdot(lap.km, lsec);
+      if (v > best) { best = v; bestSrc = { km: lap.km, sec: lsec, kind: 'lap', adj: lsec !== lap.sec }; }
     }
     dayVdot[i] = best;
     dayVdotSource[i] = bestSrc;
@@ -1441,13 +1497,17 @@ function paceHistogramFor(i) {
   const v = vdot[i];
   if (!(v > 0)) return null;
   const laps = (dayLaps[i] && dayLaps[i].length) ? dayLaps[i]
-    : (daily[i] > 0 && daySec[i] > 0 ? [{ km: daily[i], sec: daySec[i] }] : []);
+    : (daily[i] > 0 && dayTime(i) > 0 ? [{ km: daily[i], sec: dayTime(i) }] : []);
   if (!laps.length) return null;
   const bins = new Array(ZONE_BIN_OFFSET + 5 * ZONE_BARS).fill(0);
   const floor = easyFloorPct(v);
   for (const lap of laps) {
-    const vel = lap.km * 1000 / (lap.sec / 60);
-    const mins = lap.sec / 60;
+    // With grade adjustment on, a lap is binned by its equivalent flat pace and
+    // counted for that many minutes — the adjusted duration, not the real one,
+    // so a bin's height stays the time implied by the pace it is drawn at.
+    const sec = lapSec(lap);
+    const vel = lap.km * 1000 / (sec / 60);
+    const mins = sec / 60;
     if (vel < STANDING_MAX_VEL) { bins[STANDING_BIN] += mins; continue; }
     if (vel < WALKING_MAX_VEL) { bins[WALKING_BIN] += mins; continue; }
     const pct = vo2FromVelocity(vel) / v;
@@ -1584,8 +1644,15 @@ const ctx4 = cv4.getContext('2d');
 const cv5  = document.getElementById('chart5');
 const ctx5 = cv5.getContext('2d');
 
-let span = N;             // days visible
-let center = N / 2;       // index at the horizontal centre
+// The default view is the longest window's worth of days, ending on the most
+// recent one, rather than the whole history: zoomed all the way out, years of
+// bars are a few pixels each and the short windows are a solid band of noise.
+// One long window is the widest span where the panels still say something, and
+// it is also exactly the span every line on screen is computed over. Scrolling
+// out to the full history is of course still there.
+const defaultSpan = () => Math.max(5, Math.min(N, WINDOWS[N_WINDOWS - 1].days));
+let span = defaultSpan();              // days visible
+let center = N - span / 2;             // index at the horizontal centre
 let tSpan = span, tCenter = center;   // animation targets
 let hover = null;
 let selected = null;    // the pinned day, if any — see refreshReadout
@@ -1611,6 +1678,10 @@ function animate() {
   raf = requestAnimationFrame(animate);
 }
 const kick = () => { clampTarget(); if (!raf) raf = requestAnimationFrame(animate); };
+// Back to the default view — the longest window ending on the most recent day,
+// the same thing the page opens at. Shared by the double-click and the Reset
+// button, so "reset the zoom" means one thing everywhere.
+const resetView = () => { tSpan = defaultSpan(); tCenter = N - tSpan / 2; kick(); };
 
 // ---- shared geometry -----------------------------------------------------
 // Both panels share the left/right padding and the same x mapping, so a day sits
@@ -1693,6 +1764,78 @@ const visibleRange = () => [
   Math.max(0, Math.floor(left()) - 1),
   Math.min(N - 1, Math.ceil(left() + span) + 1),
 ];
+
+// ---- window-start marks --------------------------------------------------
+// Every line on every panel is an average over a window *ending* on the marked
+// day. Where that window starts was a number in the legend and nothing on the
+// chart, so "the 16-week line here" meant trusting the label. Marking the first
+// day inside each window — a dot in that window's own colour, plus a faint
+// dashed line down through the plot — turns each line's reach into something
+// you can see against the bars it covers.
+//
+// The dot sits **on its own line**, at that line's value on the start day
+// (`m.yAt`), so it reads as a point of that line rather than as a tick floating
+// above it — and the pairing of colour to line needs no working out. Panels
+// with no line of their own to sit on fall back to a row just under the top
+// inset (`MARK_Y`): the bars, where a window is not a series at all, and any
+// day the VDOT line is undefined for.
+//
+// Both marked days get a set, the same way both already get a bar outline and a
+// line dot: hover's dots are filled and its dashed lines the stronger of the
+// two, the pin's are a hollow ring and fainter. For one window the two sets can
+// never collide — a window start is one fixed distance back from its day, so
+// two different days have two different starts — which is what makes drawing
+// both readable rather than eight lines in a heap.
+//
+// A window reaching back past the left edge of the plot has no start to mark
+// there, so it gets a chevron at that edge instead — the window is still in
+// play, its beginning is just out of view (or, for the long windows early in
+// the history, before the first day there is). Chevrons keep one slot each
+// (`m.slot`, the window's own index, so a hidden or on-screen window leaves a
+// gap rather than shifting the rest) and stack rightwards, so several
+// off-screen windows stay countable. When both days have that window
+// off-screen the hover chevron wins the slot, since "off to the left" is the
+// whole message and both would be saying it.
+//
+// Follows the per-line show/hide toggles: those exist to declutter these exact
+// lines, and a mark for a line that isn't drawn is clutter of the same kind.
+// `yAt` is per panel, so each caller hands over its own y mapping.
+const winMarks = yAt => WINDOWS
+  .map((w, k) => ({ days: w.days, css: w.css, slot: k, yAt: yAt && yAt(k) }))
+  .filter(m => visLines[WINDOWS[m.slot].key]);
+const MARK_Y = 4;          // px below the panel's top inset: the fallback dot row
+function markWindowStarts(c, insetTop, plotH, i0, i1, marks) {
+  const onScreen = i => i !== null && i >= i0 && i <= i1;
+  // Pin first, so a live hover draws over it rather than under it.
+  const days = [];
+  if (onScreen(selected) && selected !== hover) days.push([selected, true]);
+  if (onScreen(hover)) days.push([hover, false]);
+  if (!days.length) return;
+  for (const m of marks) {
+    const col = C(m.css);
+    let chevron = null;              // null, or true for the pin's / false for hover's
+    for (const [day, hollow] of days) {
+      const st = day - m.days + 1;
+      if (st < i0) { if (chevron === null || !hollow) chevron = hollow; continue; }
+      const x = Math.round(xOf(st) + barW() / 2) + 0.5;
+      const onLine = m.yAt ? m.yAt(st) : null;
+      const y = onLine == null ? insetTop + MARK_Y : onLine;
+      c.strokeStyle = col; c.lineWidth = 1; c.globalAlpha = hollow ? 0.22 : 0.4;
+      c.setLineDash([2, 3]);
+      c.beginPath(); c.moveTo(x, insetTop); c.lineTo(x, insetTop + plotH); c.stroke();
+      c.setLineDash([]); c.globalAlpha = 1;
+      c.beginPath(); c.arc(x, y, 3.5, 0, Math.PI * 2);
+      c.fillStyle = hollow ? C('--surface-1') : col; c.fill();
+      c.strokeStyle = col; c.lineWidth = hollow ? 1.5 : 1; c.stroke();
+    }
+    if (chevron === null) continue;
+    const x = PAD.l + 6 + m.slot * 10, y = insetTop + MARK_Y;
+    c.strokeStyle = col; c.globalAlpha = chevron ? 0.55 : 1;
+    c.lineWidth = chevron ? 1.5 : 2; c.lineCap = 'round'; c.lineJoin = 'round';
+    c.beginPath(); c.moveTo(x + 2.5, y - 4); c.lineTo(x - 2.5, y); c.lineTo(x + 2.5, y + 4);
+    c.stroke(); c.globalAlpha = 1;
+  }
+}
 
 // ---- panel 1: that day's own distance, on a log scale --------------------
 // Log rather than linear so equal ratios are equal heights: 5->10 km is the same
@@ -1791,6 +1934,9 @@ function drawBars() {
   const inView = i => i !== null && i >= i0 && i <= i1;
   if (inView(selected) && selected !== hover) outline(selected, true);
   if (inView(hover)) outline(hover, false);
+  // No yAt on this panel: a window is not a series here, so its dot stays in
+  // the row under the top inset rather than pretending to sit on something.
+  markWindowStarts(ctx, BARS.t, plotH, i0, i1, winMarks());
   ctx.restore();
   if (isBottom) drawXAxisLabels(ctx, w, BARS.t, plotH, i0, i1);
 }
@@ -1908,6 +2054,8 @@ function drawWindowPanel(canvas, c, set, insets, panelKey, axisLabel, opts = {})
   const seen = i => i !== null && i >= i0 && i <= i1;
   if (seen(selected) && selected !== hover) dot(selected, true);
   if (seen(hover)) dot(hover, false);
+  // Each window's dot rides its own line here, so `yAt` is that series' y.
+  markWindowStarts(c, insets.t, plotH, i0, i1, winMarks(k => st => yOf(set[k][st])));
   c.restore();
   if (isBottom) drawXAxisLabels(c, w, insets.t, plotH, i0, i1);
 }
@@ -2031,6 +2179,10 @@ function drawVdot() {
   const seen = i => i !== null && i >= i0 && i <= i1;
   if (seen(selected) && selected !== hover) dot(selected, true);
   if (seen(hover)) dot(hover, false);
+  // This panel's window is its own, so it gets one mark, in its own colour,
+  // rather than the four the volume/frequency panels share.
+  markWindowStarts(c, VDOTI.t, plotH, i0, i1, [{ days: WINDOW_VDOT, css: '--vdot', slot: 0,
+    yAt: st => vdot[st] == null ? null : yOf(vdot[st]) }]);
   c.restore();
 
   drawXAxisLabels(c, w, VDOTI.t, plotH, i0, i1);
@@ -2054,7 +2206,11 @@ function vdotBasisText(i) {
   const src = dayVdotSource[i];
   if (!src) return daily[i] > 0 ? 'no timing data' : 'no run';
   const pace = paceStr(src.sec / 60 / src.km);
-  return `${src.kind === 'lap' ? 'best lap' : 'full activity'} ${km(src.km)}km in ${durStr(src.sec)} (${pace}/km) &rarr; ${dayVdot[i].toFixed(1)}`;
+  // With grade adjustment on, the time and pace quoted here are the equivalent
+  // flat ones, not what the watch said — worth saying so rather than having the
+  // readout quietly disagree with Runalyze.
+  const how = src.adj ? ' grade-adj.' : '';
+  return `${src.kind === 'lap' ? 'best lap' : 'full activity'} ${km(src.km)}km in ${durStr(src.sec)}${how} (${pace}/km) &rarr; ${dayVdot[i].toFixed(1)}`;
 }
 
 // ---- readout -------------------------------------------------------------
@@ -2404,7 +2560,7 @@ for (const el of [cv, cv2, cv3, cv4, cv5]) {
     renderZonePanel();
     drawAll();
   });
-  el.addEventListener('dblclick', () => { tSpan = N; tCenter = N / 2; kick(); });
+  el.addEventListener('dblclick', () => resetView());
   el.addEventListener('touchstart', onTouchStart, { passive: true });
   el.addEventListener('touchmove', onTouchMove, { passive: false });
   el.addEventListener('touchend', () => { pinch = null; });
@@ -2414,15 +2570,27 @@ window.addEventListener('mouseup', () => {
   drag = null;
   for (const el of [cv, cv2, cv3, cv4, cv5]) el.style.cursor = 'crosshair';
 });
+// Keys, for the two things worth doing without aiming at anything: `r` puts the
+// view back to its default span (the double-click, minus the aiming) and `t`
+// releases the pinned day (Esc does the same — `t` is just next door to `r`,
+// which is what makes the pair usable one-handed while the other hand is on the
+// mouse). Modified presses are left alone so ⌘R still reloads the page, and so
+// is anything typed into a settings input, where a plain `r` is a keystroke
+// rather than a shortcut.
+const unpin = () => { selected = null; refreshReadout(); renderZonePanel(); drawAll(); };
 window.addEventListener('keydown', e => {
-  if (e.key !== 'Escape' || selected === null) return;
-  selected = null; refreshReadout(); renderZonePanel(); drawAll();
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  const t = e.target;
+  if (t && (t.isContentEditable || /^(INPUT|SELECT|TEXTAREA)$/.test(t.tagName))) return;
+  const k = e.key.toLowerCase();
+  if (k === 'r') { resetView(); return; }
+  if ((k === 'escape' || k === 't') && selected !== null) unpin();
 });
 
 // Reset, scoped to the chart: the settings in this controls row back to their
-// defaults, plus the view zoomed back out. It deliberately leaves the what-if
+// defaults, plus the view back to its default span. It deliberately leaves the what-if
 // target alone — that box has its own reset, and the two are separate concerns.
-// (Double-click on a panel still resets only the zoom, which is view state and
+// (Double-click on a panel still resets only the view, which is view state and
 // deliberately not remembered.)
 // savePrefs() then drops the stored entry if nothing is off-default any more, or
 // keeps it holding just the what-if if that is still edited — so neither reset has
@@ -2433,6 +2601,7 @@ document.getElementById('reset').onclick = () => {
   rebuildWindows();
   WINDOW_VDOT = PREF_DEFAULTS.windowVdot;
   MIN_LAP_M = PREF_DEFAULTS.minLapM;
+  useGap = PREF_DEFAULTS.useGap;
   stableBand = PREF_DEFAULTS.stableBand;
   longNeedsSingleRun = PREF_DEFAULTS.longNeedsSingleRun;
   maxBehind = PREF_DEFAULTS.maxBehind;
@@ -2448,7 +2617,7 @@ document.getElementById('reset').onclick = () => {
   recomputeVdot();
   applyWindow();         // recompute + relabels + rebuilds the tiles + redraws
   renderZonePanel();
-  tSpan = N; tCenter = N / 2; kick();
+  resetView();
 };
 function syncLabels() {
   const pct = +(stableBand * 100).toFixed(1);
@@ -2508,6 +2677,18 @@ function syncControls() {
   winMultInput.value = windowMult;
   winVdotInput.value = WINDOW_VDOT / 7;
   minLapInput.value = MIN_LAP_M;
+  // An export with no usable `gap` column has nothing to switch to, so the box
+  // is disabled and shown unticked — but the remembered setting is left alone,
+  // so loading such a file and then going back to one with GAP doesn't silently
+  // forget that the toggle was on.
+  const gapUsable = DATA.gapCount > 0;
+  useGapChk.checked = useGap && gapUsable;
+  useGapChk.disabled = !gapUsable;
+  document.getElementById('useGapLabel').classList.toggle('off', !gapUsable);
+  if (!gapUsable) {
+    document.getElementById('useGapLabel').title =
+      'This export has no grade-adjusted pace to read — no usable `gap` column.';
+  }
   zoneBarsInput.value = ZONE_BARS;
   bandInput.value = +(stableBand * 100).toFixed(1);
   longSingleBox.checked = longNeedsSingleRun;
@@ -2608,6 +2789,19 @@ minLapInput.onchange = minLapInput.oninput = () => {
   const v = Math.round(Number(minLapInput.value) / 100) * 100;
   if (!Number.isFinite(v) || v < 100 || v > 5000) return;   // ignore half-typed values
   MIN_LAP_M = v;
+  savePrefs();
+  recomputeDayVdot();
+  recomputeVdot();
+  refreshReadout();
+  renderZonePanel();
+  drawAll();
+};
+// Same redraw set as the min-lap input: every pace in the page is derived, so
+// the day VDOTs, the rolling max, the readout and the histogram all have to be
+// rebuilt. Nothing in the volume/frequency half of the page depends on it.
+const useGapChk = document.getElementById('useGap');
+useGapChk.onchange = () => {
+  useGap = useGapChk.checked;
   savePrefs();
   recomputeDayVdot();
   recomputeVdot();
