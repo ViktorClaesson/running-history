@@ -15,38 +15,42 @@
     --grid:           #e1e0d9;
     --baseline:       #c3c2b7;
     --border:         rgba(11,11,11,0.10);
-    /* Each scheme is a complementary pair: normal runs blue↔orange, long runs
-       violet↔olive. Within a scheme (the pair that carries the meaning) both
-       validate strongly — normal CVD ΔE 20.9 / normal-vision 25.8, long 24.0 / 26.3.
-       Across schemes colour cannot separate (violet's complement lands in the
-       yellow-green that collides with orange under red-green CVD), so the 45°
-       hatch marks long runs and stays on even when their colouring is off.
-       "Stable" is the weakest step of the scheme's productive ramp. */
-    --n-un-weak:      #e3a97f;
-    --n-un:           #d4722f;
-    --n-pr-weak:      #8fb0d9;
-    --n-pr:           #4f83c2;
-    --l-un-weak:      #b9c48a;
-    --l-un:           #7f8f2a;
-    --l-pr-weak:      #a99ad0;
-    --l-pr:           #6f5aa8;
-    --hatch:          rgba(11,11,11,0.30);
+    /* ONE four-colour scheme, used for two things that are really the same thing:
+       the four rolling window lines (slot 0 to slot 3) and the four verdicts
+       (highly productive, productive, steady, unproductive). A verdict IS "which
+       window slot is on top from here out", so slot k's line and verdict k get
+       the same colour — a purple bar says the purple line is the highest one,
+       with no legend lookup in between. Purple, green, blue, orange.
+       Flat, not ramped: a verdict is a comparison that either holds or it
+       doesn't, so there is no "how far past the target" left to ramp along.
+       ALL-PAIRS CVD validated, which both uses need for their own reason (four
+       series crossing each other in one plot; and any two verdicts can end up as
+       neighbouring bars): light worst ΔE 9.3 (protan) / 15.6 normal-vision,
+       dark 10.9 / 21.5.
+       Light's blue was originally a much paler #5fa4e6 (contrast 2.6:1). That
+       was fine as a bar and too faint as a LINE, which the same colours now also
+       have to be — so it was pulled down to L 0.57 for 4.26:1, which costs
+       nothing on CVD (9.3 either way; the binding pair is green/orange, not
+       purple/blue). Light's orange is the one WARN left at 2.6:1, and it stays:
+       every darker option in that hue is a brown. Dark's purple and green sit at
+       2.8 and 3.0:1, which measures low but reads strongly as a saturated hue on
+       near-black. The legend, the hover readout and the table all label every
+       line and name every verdict in words, which is the relief those warnings
+       ask for.
+       --wmax is the per-day max across the four — the line that's meant to be
+       read first, so it's plain ink rather than a fifth hue. */
+    --v-hp:           #6b3fa0;
+    --v-pr:           #2c8a52;
+    --v-st:           #2880b0;
+    --v-un:           #e08a1e;
+    --wmax:           #0b0b0b;
+    /* Page chrome, not data: the primary button, the focus underline and the
+       gate's error line. Kept separate from the verdict hues so those stay
+       purely semantic. */
+    --accent:         #4f83c2;
+    --bad:            #d4722f;
     --nocolour:       #b5b3aa;   /* a run whose scheme has colouring switched off */
     --rest:           #e7e5dd;   /* no run at all */
-    /* The four rolling windows, one colour each, shared by the three
-       volume/frequency panels so a colour means the same window everywhere.
-       All-pairs CVD validated (these are four series in ONE plot, so every pair
-       has to separate, not just neighbours): light worst ΔE 12.8 (deutan) /
-       23.4 normal-vision, dark 10.2 / 20.2. --w4's light step warns at 2.85:1
-       contrast against the near-white surface; the legend and the hover readout
-       label every line, which is the relief that warning asks for.
-       --wmax is the per-day max across the four — the line that's meant to be
-       read first, so it's plain ink rather than a hue. */
-    --w1:             #0060a6;
-    --w4:             #00ab86;
-    --w16:            #d57700;
-    --w64:            #a3215a;
-    --wmax:           #0b0b0b;
     --vdot:           #7444b4;
     /* Pace-zone histogram: easy/marathon/threshold/interval/repetition, ordered
        fast→slow around the visible spectrum. Adjacent-pair CVD ΔE validated (not
@@ -98,22 +102,15 @@
       --baseline:       #383835;
       --border:         rgba(255,255,255,0.10);
       --ghost:          rgba(255,255,255,0.06);
-      --n-un-weak:      #8f5527;
-      --n-un:           #e8871f;
-      --n-pr-weak:      #3a5f8f;
-      --n-pr:           #5c90cf;
-      --l-un-weak:      #56612a;
-      --l-un:           #a8b84a;
-      --l-pr-weak:      #4a3f77;
-      --l-pr:           #9b86dd;
-      --hatch:          rgba(255,255,255,0.28);
+      --v-hp:           #7f41b7;
+      --v-pr:           #007440;
+      --v-st:           #3e96ea;
+      --v-un:           #d97900;
+      --wmax:           #ffffff;
+      --accent:         #5c90cf;
+      --bad:            #e8871f;
       --nocolour:       #5c5a54;
       --rest:           #333230;
-      --w1:             #0074c8;
-      --w4:             #00ac86;
-      --w16:            #d97900;
-      --w64:            #bb3a6d;
-      --wmax:           #ffffff;
       --vdot:           #a97cf0;
       --z-easy-weak:        #20507b;
       --z-easy:             #008ae9;
@@ -138,22 +135,15 @@
     --baseline:       #383835;
     --border:         rgba(255,255,255,0.10);
     --ghost:          rgba(255,255,255,0.06);
-    --n-un-weak:      #8f5527;
-    --n-un:           #e8871f;
-    --n-pr-weak:      #3a5f8f;
-    --n-pr:           #5c90cf;
-    --l-un-weak:      #56612a;
-    --l-un:           #a8b84a;
-    --l-pr-weak:      #4a3f77;
-    --l-pr:           #9b86dd;
-    --hatch:          rgba(255,255,255,0.28);
+    --v-hp:           #7f41b7;
+    --v-pr:           #007440;
+    --v-st:           #3e96ea;
+    --v-un:           #d97900;
+    --wmax:           #ffffff;
+    --accent:         #5c90cf;
+    --bad:            #e8871f;
     --nocolour:       #5c5a54;
     --rest:           #333230;
-    --w1:             #0074c8;
-    --w4:             #00ac86;
-    --w16:            #d97900;
-    --w64:            #bb3a6d;
-    --wmax:           #ffffff;
     --vdot:           #a97cf0;
     --z-easy-weak:        #20507b;
     --z-easy:             #008ae9;
@@ -207,10 +197,10 @@
     text-align: right; color: var(--text-primary); background: transparent;
     border: 0; border-bottom: 1px solid var(--border); padding: 0 2px;
     font-variant-numeric: tabular-nums; }
-  .tile.combo .plan input:focus { outline: none; border-bottom-color: var(--n-pr); }
+  .tile.combo .plan input:focus { outline: none; border-bottom-color: var(--accent); }
   .tile.combo .plan .op { color: var(--muted); margin: 0 2px; }
   .tile.combo .plan button { font-size: 11px; padding: 1px 7px; margin-left: 4px; }
-  .whatif { font-size: 10px; font-weight: 600; color: var(--n-pr); border: 1px solid currentColor;
+  .whatif { font-size: 10px; font-weight: 600; color: var(--accent); border: 1px solid currentColor;
     border-radius: 999px; padding: 0 5px; margin-left: 5px; letter-spacing: 0; text-transform: none; }
   .tile.combo .cell { display: flex; align-items: baseline; gap: 3px; }
   .tile.combo .cell .v { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
@@ -288,8 +278,6 @@
   .legend .item input { margin: 0; }
   .legend-dim { color: var(--muted); font-weight: 400; }
   .swatch { position: relative; overflow: hidden; }
-  .swatch.hatched::after { content: ''; position: absolute; inset: 0;
-    background: repeating-linear-gradient(45deg, var(--hatch) 0 1.5px, transparent 1.5px 4px); }
   .ctrls { display: flex; flex-direction: column; align-items: stretch; gap: 10px; }
   /* Grouped by what each setting moves. A rule between groups rather than more
      whitespace, so the sidebar doesn't get much taller for the sake of it. */
@@ -361,11 +349,11 @@
   .gate-lead { color: var(--text-secondary); font-size: 13px; margin: 0 0 10px; }
   .gate-quiet { color: var(--muted); }
   .gate-card code { font-size: 12px; background: var(--ghost); padding: 1px 4px; border-radius: 3px; }
-  button.primary { border-color: transparent; background: var(--n-pr); color: #fff; font-weight: 600;
+  button.primary { border-color: transparent; background: var(--accent); color: #fff; font-weight: 600;
     padding: 7px 14px; }
-  button.primary:hover { filter: brightness(1.08); background: var(--n-pr); }
+  button.primary:hover { filter: brightness(1.08); background: var(--accent); }
   .gate-msg { font-size: 12px; color: var(--text-secondary); margin-top: 12px; }
-  .gate-msg.bad { color: var(--n-un); }
+  .gate-msg.bad { color: var(--bad); }
   .sport-list { display: flex; flex-direction: column; gap: 2px; margin: 10px 0 14px;
     max-height: 260px; overflow: auto; }
   label.sport { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: baseline;
@@ -390,17 +378,17 @@
        about" is the question being asked when someone comes looking. Each
        group keeps its own legend next to its own controls: the window-line
        swatches belong with the volume/frequency panels they colour, the
-       run-verdict ramps belong with the target settings that produce them. -->
+       verdict swatches belong with the verdict settings. -->
   <section class="setgroup">
     <h2 class="setgroup-title">Volume &amp; frequency panels</h2>
     <div class="legend">
       <div class="legend-row" id="row-windows" title="Hiding a line takes it off the three panels and takes its window-start dot off every panel — it stays in the hover readout and still counts towards MAX."><span class="legend-tag">Lines</span>
         <label class="item"><input type="checkbox" id="line-max" checked><span class="swatch line" style="background:var(--wmax)"></span>MAX</label>
-        <label class="item"><input type="checkbox" id="line-s0" checked><span class="swatch line" style="background:var(--w1)"></span><span class="winLabel0">1w</span></label>
-        <label class="item"><input type="checkbox" id="line-s1" checked><span class="swatch line" style="background:var(--w4)"></span><span class="winLabel1">4w</span></label>
-        <label class="item"><input type="checkbox" id="line-s2" checked><span class="swatch line" style="background:var(--w16)"></span><span class="winLabel2">16w</span></label>
-        <label class="item"><input type="checkbox" id="line-s3" checked><span class="swatch line" style="background:var(--w64)"></span><span class="winLabel3">64w</span></label>
-        <span class="legend-dim"><span class="winsN">1 / 4 / 16 / 64</span>-week rolling averages, and the highest of the four on the day. Untick one to take it, and its window-start dot, off the panels; it stays in the readout and still counts towards MAX.</span>
+        <label class="item"><input type="checkbox" id="line-s0" checked><span class="swatch line" style="background:var(--v-hp)"></span><span class="winLabel0">1w</span></label>
+        <label class="item"><input type="checkbox" id="line-s1" checked><span class="swatch line" style="background:var(--v-pr)"></span><span class="winLabel1">4w</span></label>
+        <label class="item"><input type="checkbox" id="line-s2" checked><span class="swatch line" style="background:var(--v-st)"></span><span class="winLabel2">16w</span></label>
+        <label class="item"><input type="checkbox" id="line-s3" checked><span class="swatch line" style="background:var(--v-un)"></span><span class="winLabel3">64w</span></label>
+        <span class="legend-dim"><span class="winsN">1 / 4 / 16 / 64</span>-week rolling averages, and the highest of the four on the day. Each line's colour is also its verdict colour below — whichever line is on top is what the bars are coloured by. Untick one to take it, and its window-start dot, off the panels; it stays in the readout and still counts towards MAX.</span>
       </div>
     </div>
     <div class="ctrls">
@@ -449,30 +437,25 @@
   </section>
 
   <section class="setgroup">
-    <h2 class="setgroup-title">Targets &amp; verdicts</h2>
+    <h2 class="setgroup-title">Verdicts</h2>
     <div class="legend">
-      <div class="legend-row" id="row-normal"><label class="legend-tag"><input type="checkbox" id="colourNormal" checked> Normal run</label>
-        <span class="item"><span class="swatch ramp" style="background:linear-gradient(90deg,var(--n-un-weak),var(--n-un))"></span>▼ unproductive</span>
-        <span class="item"><span class="swatch" style="background:var(--n-pr-weak)"></span>= stable</span>
-        <span class="item"><span class="swatch ramp" style="background:linear-gradient(90deg,var(--n-pr-weak),var(--n-pr))"></span>▲ productive</span>
-      </div>
-      <div class="legend-row" id="row-long"><label class="legend-tag"><input type="checkbox" id="colourLong" checked> Long run <span class="legend-dim">(&gt;1.5&times; target, hatched; needs &ge;3 runs/wk)</span></label>
-        <span class="item"><span class="swatch ramp hatched" style="background:linear-gradient(90deg,var(--l-un-weak),var(--l-un))"></span>▼ unproductive</span>
-        <span class="item"><span class="swatch hatched" style="background:var(--l-pr-weak)"></span>= stable</span>
-        <span class="item"><span class="swatch ramp hatched" style="background:linear-gradient(90deg,var(--l-pr-weak),var(--l-pr))"></span>▲ productive</span>
+      <div class="legend-row" id="row-verdicts"><label class="legend-tag"><input type="checkbox" id="colourVerdicts" checked> Verdict</label>
+        <span class="item"><span class="swatch" style="background:var(--v-hp)"></span>▲▲ highly productive</span>
+        <span class="item"><span class="swatch" style="background:var(--v-pr)"></span>▲ productive</span>
+        <span class="item"><span class="swatch" style="background:var(--v-st)"></span>= steady</span>
+        <span class="item"><span class="swatch" style="background:var(--v-un)"></span>▼ unproductive</span>
       </div>
       <div class="legend-row"><span class="legend-tag">No run</span>
         <span class="item"><span class="swatch" style="background:var(--rest)"></span>rest day</span>
-        <span class="legend-dim">stable = within &plusmn;<span class="bandN">1</span>% of target; colour ramps to full over the remaining <span class="gradN">49</span>%</span>
+        <span class="legend-dim">Which distance-per-week window is on top that day, shortest first — each one has to
+          beat <em>every</em> longer window, not just the next along.
+          <span class="winLabel0">1w</span> highest is highly productive;
+          else <span class="winLabel1">4w</span> over <span class="winLabel2">16w</span> and <span class="winLabel3">64w</span> is productive;
+          else <span class="winLabel2">16w</span> over <span class="winLabel3">64w</span> is steady;
+          else <span class="winLabel3">64w</span> is the highest and that is unproductive.
+          Same four colours as the window lines above, since that is the same statement.
+          A rest day has no verdict.</span>
       </div>
-    </div>
-    <div class="ctrls">
-      <label class="chk" title="Whether a day has to contain one long run on its own, rather than reaching the distance across several runs.">
-        <input type="checkbox" id="longSingle" checked> Long run needs a single run
-      </label>
-      <label class="chk" title="How close to the target still counts as holding steady.">Stable band &plusmn;
-        <input type="number" id="stableBand" min="0" max="5" step="0.5" value="1">%
-      </label>
     </div>
   </section>
 
@@ -485,10 +468,12 @@
     axis &mdash; 5&rarr;10&nbsp;km is the same step as 10&rarr;20, so one very long run can&rsquo;t
     flatten every short one and short runs stay readable against each other. A day with
     no run gets a tiny grey stub below the axis floor rather than nothing at all, which
-    also keeps it easy to hover and click. The colour compares that day&rsquo;s run against
-    the target for that day &mdash; a week&rsquo;s volume shared over that week&rsquo;s runs,
-    with the long run counted twice. Read against 1&times; for a normal run, 2&times; for a
-    long one. Rolling weekly volume has moved to its own panel just below.
+    also keeps it easy to hover and click. The colour is not about that one run: it
+    says <strong>which rolling distance-per-week window is on top that day</strong> &mdash;
+    the shortest one winning is the strongest reading &mdash; so the answer is
+    &ldquo;is my training trending up&rdquo; rather than &ldquo;was this run long
+    enough&rdquo;. Rolling weekly volume has moved to its own panel just below, in
+    the same four colours.
   </p>
 
   <div class="datarow">
@@ -906,10 +891,7 @@ const PREF_DEFAULTS = {
   windowVdot: 350,   // 50 weeks
   minLapM: 1500,     // laps shorter than this can't be trusted for VDOT on their own
   useGap: false,     // read paces off Runalyze's grade-adjusted pace instead of the raw one
-  stableBand: 0.01,
-  longNeedsSingleRun: true,
-  colourNormal: true,
-  colourLong: true,
+  colourVerdicts: true,   // colour the bars by verdict at all
   zoneBars: 5,       // sub-bands per pace zone in the pace-zone histogram
   panels: { vol: true, freq: true, runs: true, vdot: true, zone: true },   // which optional panels are shown
   // Which of the five lines each volume/frequency panel actually draws. Hiding
@@ -936,9 +918,8 @@ function loadPrefs() {
   if (num(raw.windowMult, 2, 8)) p.windowMult = Math.round(raw.windowMult);
   if (num(raw.windowVdot, 7, 1820)) p.windowVdot = week(raw.windowVdot, 1820);
   if (num(raw.minLapM, 100, 5000)) p.minLapM = Math.round(raw.minLapM / 100) * 100;
-  if (num(raw.stableBand, 0, 0.05)) p.stableBand = raw.stableBand;
   if (num(raw.zoneBars, 1, 20)) p.zoneBars = Math.round(raw.zoneBars);
-  for (const k of ['longNeedsSingleRun', 'colourNormal', 'colourLong', 'maxBehind', 'fadeWindows', 'useGap']) {
+  for (const k of ['colourVerdicts', 'maxBehind', 'fadeWindows', 'useGap']) {
     if (typeof raw[k] === 'boolean') p[k] = raw[k];
   }
   if (raw.panels && typeof raw.panels === 'object') {
@@ -967,12 +948,9 @@ function savePrefs() {
     windowVdot: WINDOW_VDOT,
     minLapM: MIN_LAP_M,
     useGap,
-    stableBand,
-    longNeedsSingleRun,
     maxBehind,
     fadeWindows,
-    colourNormal: colourScheme.normal,
-    colourLong: colourScheme.long,
+    colourVerdicts,
     zoneBars: ZONE_BARS,
     panels: { ...visPanels },
     lines: { ...visLines },
@@ -1001,7 +979,10 @@ function savePrefs() {
 // numbers, not week counts, because a slot keeps its colour and its show/hide
 // setting when the numbers behind it change.
 const N_WINDOWS = 4;
-const WIN_CSS = ['--w1', '--w4', '--w16', '--w64'];
+// Slot k's line colour is verdict k's colour, because they mean the same thing:
+// verdict k is "window slot k is the highest from k out to the longest", so a
+// purple bar says the purple line is on top. See the comment on --v-hp.
+const WIN_CSS = ['--v-hp', '--v-pr', '--v-st', '--v-un'];
 let windowBase = prefs.windowBase;   // weeks, 1-8
 let windowMult = prefs.windowMult;   // 2-8
 const WINDOWS = Array.from({ length: N_WINDOWS }, (_, k) => ({ key: 's' + k, css: WIN_CSS[k] }));
@@ -1010,9 +991,9 @@ const WINDOWS = Array.from({ length: N_WINDOWS }, (_, k) => ({ key: 's' + k, css
 // second and third slots, which at the defaults are the 4 and 16 weeks this
 // used to have as fixed settings: 4 weeks reacts fast enough to a training
 // block, 16 weeks doesn't jitter with every rest day. Slots rather than fixed
-// numbers, so the target is always read off lines that are actually on screen —
-// which does mean changing the two numbers above moves the targets, and with
-// them the bar colours, not just what the line panels draw.
+// numbers, so the target is always read off lines that are actually on screen.
+// (The bar colours move with the two numbers as well, but for a different
+// reason — the verdict compares neighbouring windows directly. See classify.)
 const IV = 1, IF = 2;                 // WINDOWS index: volume / frequency
 let WINDOW_VOL, WINDOW_FREQ;
 // Derives each slot's length from the two numbers. Called before recompute(),
@@ -1240,10 +1221,9 @@ function oklabToCss([L, A, B]) {
                 + linearToSrgb(-0.0041960863*l - 0.7034186147*m + 1.7076147010*s) + ')';
 }
 
-// One ramp per (scheme, direction) per frame, so the OKLab maths runs 4x24 times
-// rather than once per bar.
+// One ramp per pace zone per frame, so the OKLab maths runs a few dozen times
+// rather than once per bar. The verdict colours are flat, so they don't need one.
 const RAMP_STEPS = 24;
-let ramps = null;
 let zoneRamps = null;   // set in buildRamps(); indexed [zone][subBand 0-(ZONE_BARS-1)] -> css colour
 let leadRamps = null;   // set in buildRamps(); { standing, walking, recovery } bar colours
 function buildRamps() {
@@ -1254,10 +1234,6 @@ function buildRamps() {
       out.push(oklabToCss([a[0] + (b[0]-a[0])*t, a[1] + (b[1]-a[1])*t, a[2] + (b[2]-a[2])*t]));
     }
     return out;
-  };
-  ramps = {
-    normal: { un: make(C('--n-un-weak'), C('--n-un')), pr: make(C('--n-pr-weak'), C('--n-pr')) },
-    long:   { un: make(C('--l-un-weak'), C('--l-un')), pr: make(C('--l-pr-weak'), C('--l-pr')) },
   };
   // One ZONE_BARS-step ramp per zone, for the pace histogram's sub-bands: same
   // OKLab interpolation, just sampled at ZONE_BARS points off the 24-step ramp
@@ -1274,41 +1250,21 @@ function buildRamps() {
   const leadIn = make(C('--nocolour'), C('--z-easy-weak'));
   leadRamps = { standing: C('--nocolour'), walking: leadIn[8], recovery: leadIn[16] };
 }
+// One flat colour per verdict. Nothing to interpolate: a verdict is a comparison
+// between two windows that either holds or it doesn't, so there is no "how far
+// past" left to ramp along. barColour paints the bars, fullColour is the same
+// colour used as text in the readout badge and the table — all four are picked
+// to carry text, so the two only differ in what they do with a rest day and
+// with colouring switched off.
+const VERDICT_CSS = { hp: '--v-hp', pr: '--v-pr', st: '--v-st', un: '--v-un' };
 function barColour(c) {
-  if (!ramps) buildRamps();
   if (!c) return C('--rest');
-  if (!colourScheme[c.scheme]) return C('--nocolour');
-  // stable = the bottom of the productive ramp, so "just holding" and "just above"
-  // sit next to each other instead of jumping to an unrelated hue
-  if (c.dir === 'st') return ramps[c.scheme].pr[0];
-  return ramps[c.scheme][c.dir][Math.round(c.t * RAMP_STEPS)];
+  if (!colourVerdicts) return C('--nocolour');
+  return C(VERDICT_CSS[c.dir]);
 }
 function fullColour(c) {
-  if (!ramps) buildRamps();
   if (!c) return C('--rest');
-  // the pale stable step has too little contrast for text, so labels carry it
-  if (c.dir === 'st') return C('--text-secondary');
-  return ramps[c.scheme][c.dir][RAMP_STEPS];
-}
-
-// Long runs also carry a 45° hatch. Hue is doing the productive/stable/unproductive
-// work and can only separate three ways at once, so the scheme rides on a
-// non-colour channel instead of a fourth, fifth and sixth hue.
-let hatchPattern = null, hatchKey = '';
-function hatch() {
-  const ink = C('--hatch');
-  if (hatchPattern && hatchKey === ink) return hatchPattern;
-  const t = document.createElement('canvas');
-  t.width = t.height = 8;
-  const g = t.getContext('2d');
-  g.strokeStyle = ink; g.lineWidth = 1.5;
-  g.beginPath();
-  g.moveTo(-2, 6); g.lineTo(6, -2);
-  g.moveTo(2, 10); g.lineTo(10, 2);
-  g.stroke();
-  hatchPattern = ctx.createPattern(t, 'repeat');
-  hatchKey = ink;
-  return hatchPattern;
+  return C(VERDICT_CSS[c.dir]);
 }
 // What today's run had to be to hold the average steady, judged only on where
 // things stood YESTERDAY — comparing a run against an average it is itself part of
@@ -1353,41 +1309,59 @@ function computeTargets() {
   }
 }
 
-// Two schemes, three meanings each. A run is judged on its ratio to the day's
-// target: normal runs are read against 1x, long runs (past the 1.5x midpoint)
-// against 2x. Within a scheme, landing inside ±stableBand of the centre is
-// "stable"; outside it the colour ramps to full strength over the remaining
-// distance to the halfway mark, so the two schemes tile the whole range:
-//   <50 full un | 50-95 ramp un | 95-105 stable | 105-150 ramp pr   (normal, 1x)
-//   150-195 ramp un | 195-205 stable | 205-250 ramp pr | >250 full pr (long, 2x)
-let stableBand = prefs.stableBand;   // ±fraction of the centre, adjustable 0–5%
-// Each scheme's colouring can be switched off independently; its bars then fall back
-// to a neutral, which stays distinct from the paler rest-day grey.
-const colourScheme = { normal: prefs.colourNormal, long: prefs.colourLong };
-// A day can reach 150% of target either with one big run or by stacking a couple of
-// ordinary ones. With this on, only a single run that clears 150% on its own makes
-// the day a long-run day; stacked days stay in the normal scheme (where their large
-// total still reads as productive).
-let longNeedsSingleRun = prefs.longNeedsSingleRun;
-
-const DIR_LABEL = { un: 'unproductive', st: 'stable', pr: 'productive' };
-const DIR_ARROW = { un: '▼', st: '=', pr: '▲' };
+// The verdict. Judging a run against a target for its own day never really
+// worked: a low-volume day, a long run and an interval session are all
+// deliberately the "wrong" length, so a per-run comparison said more about
+// which kind of day it was than about whether training was going anywhere.
+// So the verdict is now read off the windows themselves — the same
+// distance-per-week series the second panel draws — shortest against next
+// shortest, walking outwards:
+//     w0 >= w1                  -> highly productive   (this week beats the block)
+//     else w1 >= w2             -> productive          (the block beats the quarter)
+//     else w2 >= w3             -> steady              (the quarter beats the year)
+//     else                      -> unproductive        (every span is below the one above it)
+// Each rung is "the shorter span is at least holding the longer one up", so the
+// verdict says how far out training is still growing rather than how long one
+// run was. Which four windows are in play therefore moves the verdicts too —
+// see the note on windowBase/windowMult.
+// A rest day still has no verdict at all: it keeps its pale grey stub, so the
+// colour on the chart always belongs to a run.
+// `at` is the slot that topped the rest, which is also the slot whose colour the
+// bar is painted in, and what the readout and table name behind the word.
+const VERDICT_DIRS = ['hp', 'pr', 'st', 'un'];   // indexed by that slot
+const DIR_LABEL = { hp: 'highly productive', pr: 'productive', st: 'steady', un: 'unproductive' };
+const DIR_ARROW = { hp: '▲▲', pr: '▲', st: '=', un: '▼' };
+// Switching this off drops the bars to a neutral, which stays distinct from the
+// paler rest-day grey.
+let colourVerdicts = prefs.colourVerdicts;
 
 function classify(i) {
   if (daily[i] <= 0) return null;                 // rest day
-  const tg = target[i];
-  if (!(tg > 0)) return { scheme: 'normal', dir: 'pr', t: 1, ratio: null };
-  const ratio = daily[i] / tg;
-  // 150% exactly belongs to the normal scheme; below the frequency floor there is
-  // no long scheme to fall into, so even a huge day is read against 1x
-  const long = longOn[i] && (longNeedsSingleRun ? maxRun[i] : daily[i]) > 1.5 * tg;
-  const d = ratio - (long ? 2 : 1);
-  const S = stableBand, G = 0.5 - S;
-  const scheme = long ? 'long' : 'normal';
-  // epsilon: 1.05 - 1 lands a hair above 0.05 in binary floating point, which would
-  // drop the exact band edges out of "stable"
-  if (Math.abs(d) <= S + 1e-9) return { scheme, dir: 'st', t: 1, ratio };
-  return { scheme, dir: d > 0 ? 'pr' : 'un', t: G > 0 ? Math.min(1, (Math.abs(d) - S) / G) : 1, ratio };
+  // Each rung compares its window against EVERY longer one, not just the next
+  // one along: "1w ≥ 4w" alone would call a week highly productive while it sat
+  // below the quarter and the year, which is not a claim worth making.
+  for (let k = 0; k < N_WINDOWS - 1; k++) {
+    let tops = true;
+    for (let j = k + 1; j < N_WINDOWS; j++) {
+      if (volSeries[j][i] > volSeries[k][i]) { tops = false; break; }
+    }
+    if (tops) return { dir: VERDICT_DIRS[k], at: k };
+  }
+  // Nothing shorter topped its tail, which leaves the longest window — whose own
+  // rung has nothing longer to beat and so always holds. (It really is the
+  // highest of the four whenever it gets here, not just the last one standing:
+  // failing every earlier rung forces each window below it.)
+  return { dir: VERDICT_DIRS[N_WINDOWS - 1], at: N_WINDOWS - 1 };
+}
+// Names the comparison behind the verdict, so the word is never the only thing
+// on offer: "4w ≥ 16w, 64w", or "64w highest" for the longest window, which has
+// nothing longer to be compared against.
+function verdictWhy(c) {
+  if (!c) return '';
+  const longer = WINDOWS.slice(c.at + 1).map(w => w.label);
+  return longer.length
+    ? `${WINDOWS[c.at].label} ≥ ${longer.join(', ')}`
+    : `${WINDOWS[c.at].label} highest`;
 }
 
 // ---- pace zones, from a VDOT value --------------------------------------
@@ -1603,14 +1577,14 @@ function renderTarget() {
     `<div class="plan">` +
       `<input type="number" id="plan-km" min="0" max="700" step="1" value="${plan.km.toFixed(1)}"><span class="u">km/wk</span>` +
       `<span class="op">÷</span>` +
-      `<input type="number" id="plan-days" min="0" max="7" step="0.5" value="${plan.days.toFixed(1)}"><span class="u">runs/wk</span>` +
+      `<input type="number" id="plan-days" min="0" max="7" step="0.5" value="${plan.days.toFixed(1)}"><span class="u">days/wk</span>` +
       (long ? `<span class="op">+1</span>` : '') +
       (planEdited ? `<button id="plan-reset">reset</button>` : '') +
     `</div>` +
     `<div class="grid ${long ? 'three' : 'one'}">${cells}</div>` +
     `<div class="note">${
       long ? `weekly &divide; ${divisor.toFixed(1)} &mdash; the long run counts twice`
-           : `long runs need &ge;${LONG_MIN_RUNS_PER_WEEK} runs/wk, so weekly &divide; ${divisor.toFixed(1)}`
+           : `long runs need &ge;${LONG_MIN_RUNS_PER_WEEK} days/wk, so weekly &divide; ${divisor.toFixed(1)}`
     }${planEdited ? ` &middot; actually now ${km(actual)} km/run` : ''}</div>`;
 
   const kmIn = document.getElementById('plan-km'), daysIn = document.getElementById('plan-days');
@@ -1907,11 +1881,6 @@ function drawBars() {
     const c = classify(i);
     ctx.fillStyle = barColour(c);
     ctx.fillRect(x0, y, bw, hh);
-    // the hatch is what makes long runs readable when their colouring is switched
-    // off, so it is not gated on the toggle
-    if (c && c.scheme === 'long' && bw >= 2) {
-      ctx.fillStyle = hatch(); ctx.fillRect(x0, y, bw, hh);
-    }
   }
 
 
@@ -2253,20 +2222,14 @@ function setReadout(i, tag) {
   ro.innerHTML = `
     <span class="date">${fmtDate.format(dateAt(i))}${tag ? `<span class="pin">${tag}</span>` : ''}</span>
     <span class="pair detail"><span class="k">Distance that day</span><span class="v">${daily[i] > 0 ? km(daily[i]) + ' km' : 'no run'}${nRuns[i] > 1 ? `<span class="sub-v"> in ${nRuns[i]} runs</span>` : ''}</span><span class="v2">${
-      target[i] > 0
-        ? seg(['target ' + km(target[i]) + ' km',
-               'weekly ÷ ' + (rpwPrev[i] + (longOn[i] ? 1 : 0)).toFixed(1),
-               longOn[i] ? '' : 'no long runs',
-               nRuns[i] > 1 ? 'longest ' + km(maxRun[i]) : ''])
-        : 'no target yet'}</span></span>
+      nRuns[i] > 1 ? `<span class="seg">longest ${km(maxRun[i])} km</span>` : ''}</span></span>
     <span class="pair"><span class="k">Distance per week</span>${winGrid(volSeries, i, 1, 'km', (w, v) => longerSpans(v))}</span>
     <span class="pair"><span class="k">Run days per week</span>${winGrid(freqSeries, i, 1, '', w => w === null ? '' : `${runDaysIn[w][i]} of ${WINDOWS[w].days} days`)}</span>
     <span class="pair"><span class="k">Runs per week</span>${winGrid(runSeries, i, 1, '', w => w === null ? '' : `${runsIn[w][i]} runs in ${WINDOWS[w].days} days`)}</span>
     <span class="pair"><span class="k">VDOT (peak, trailing ${Math.round(WINDOW_VDOT/7)}w)</span><span class="v">${vdot[i] != null ? vdot[i].toFixed(1) : '—'}</span><span class="v2">${vdotBasisText(i)}</span></span>
     <span class="badge" style="color:${c ? fullColour(c) : 'var(--text-secondary)'}">${
       !c ? '— rest day'
-         : `${DIR_ARROW[c.dir]} ${c.scheme === 'long' ? 'long run · ' : ''}${DIR_LABEL[c.dir]}${
-             c.ratio === null ? '' : ' · ' + Math.round(c.ratio * 100) + '% of target'}`
+         : `${DIR_ARROW[c.dir]} ${DIR_LABEL[c.dir]} · ${verdictWhy(c)}`
     }</span>`;
 }
 
@@ -2473,7 +2436,7 @@ function renderTable(i0, i1) {
   const rows = [];
   for (let i = Math.min(i1, i0 + 400); i >= i0; i--) {
     rows.push(`<tr><td>${fmtShort.format(dateAt(i))}</td><td>${daily[i] > 0 ? km(daily[i]) : '—'}</td><td>${km(avg[i])}</td><td>${perWeekAt(i).toFixed(1)}</td><td>${perWeekRunsAt(i).toFixed(1)}</td><td>${target[i] > 0 ? km(target[i]) : '—'}</td><td>${(() => { const c = classify(i);
-        return c ? `<span style="color:${fullColour(c)}">${DIR_ARROW[c.dir]} ${c.scheme === 'long' ? 'long · ' : ''}${DIR_LABEL[c.dir]}</span>${c.ratio === null ? '' : ' <span style="color:var(--muted)">' + Math.round(c.ratio * 100) + '%</span>'}`
+        return c ? `<span style="color:${fullColour(c)}">${DIR_ARROW[c.dir]} ${DIR_LABEL[c.dir]}</span> <span style="color:var(--muted)">${verdictWhy(c)}</span>`
                   : '<span style="color:var(--text-secondary)">— no run</span>'; })()}</td></tr>`);
   }
   if (i1 - i0 > 400) rows.push(`<tr><td colspan="7" style="text-align:left;color:var(--muted)">Showing the most recent 400 of ${i1-i0+1} days in view — zoom in for the rest.</td></tr>`);
@@ -2587,7 +2550,7 @@ window.addEventListener('keydown', e => {
   if ((k === 'escape' || k === 't') && selected !== null) unpin();
 });
 
-// Reset, scoped to the chart: the settings in this controls row back to their
+// Reset, scoped to the chart: the settings in this sidebar back to their
 // defaults, plus the view back to its default span. It deliberately leaves the what-if
 // target alone — that box has its own reset, and the two are separate concerns.
 // (Double-click on a panel still resets only the view, which is view state and
@@ -2602,12 +2565,9 @@ document.getElementById('reset').onclick = () => {
   WINDOW_VDOT = PREF_DEFAULTS.windowVdot;
   MIN_LAP_M = PREF_DEFAULTS.minLapM;
   useGap = PREF_DEFAULTS.useGap;
-  stableBand = PREF_DEFAULTS.stableBand;
-  longNeedsSingleRun = PREF_DEFAULTS.longNeedsSingleRun;
   maxBehind = PREF_DEFAULTS.maxBehind;
   fadeWindows = PREF_DEFAULTS.fadeWindows;
-  colourScheme.normal = PREF_DEFAULTS.colourNormal;
-  colourScheme.long = PREF_DEFAULTS.colourLong;
+  colourVerdicts = PREF_DEFAULTS.colourVerdicts;
   ZONE_BARS = PREF_DEFAULTS.zoneBars;
   visPanels = { ...PREF_DEFAULTS.panels };
   visLines = { ...PREF_DEFAULTS.lines };
@@ -2620,13 +2580,11 @@ document.getElementById('reset').onclick = () => {
   resetView();
 };
 function syncLabels() {
-  const pct = +(stableBand * 100).toFixed(1);
-  for (const el of document.querySelectorAll('.bandN')) el.textContent = pct;
-  for (const el of document.querySelectorAll('.gradN')) el.textContent = +(50 - pct).toFixed(1);
   for (const el of document.querySelectorAll('.winVdotN')) el.textContent = WINDOW_VDOT;
   // Everything that spells out which four windows are in play: the panel
-  // titles, the legend note, each legend item's own label, and the data
-  // table's column header for the volume window.
+  // titles, the legend notes (including the verdict legend, which names the
+  // windows it compares), each legend item's own label, and the data table's
+  // column header for the volume window.
   for (const el of document.querySelectorAll('.winsN')) el.textContent = WINDOWS.map(w => w.weeks).join(' / ');
   WINDOWS.forEach((w, k) => {
     for (const el of document.querySelectorAll('.winLabel' + k)) el.textContent = w.label;
@@ -2690,14 +2648,10 @@ function syncControls() {
       'This export has no grade-adjusted pace to read — no usable `gap` column.';
   }
   zoneBarsInput.value = ZONE_BARS;
-  bandInput.value = +(stableBand * 100).toFixed(1);
-  longSingleBox.checked = longNeedsSingleRun;
   maxBehindBox.checked = maxBehind;
   fadeWindowsBox.checked = fadeWindows;
-  for (const [scheme, id] of [['normal', 'colourNormal'], ['long', 'colourLong']]) {
-    document.getElementById(id).checked = colourScheme[scheme];
-    document.getElementById('row-' + scheme).classList.toggle('off', !colourScheme[scheme]);
-  }
+  colourVerdictsBox.checked = colourVerdicts;
+  document.getElementById('row-verdicts').classList.toggle('off', !colourVerdicts);
   syncPanelVisibility();
   syncLineVisibility();
 }
@@ -2710,22 +2664,12 @@ function applyWindow() {
   drawAll();
 }
 
-for (const [scheme, id] of [['normal', 'colourNormal'], ['long', 'colourLong']]) {
-  const box = document.getElementById(id);
-  box.onchange = () => {
-    colourScheme[scheme] = box.checked;
-    document.getElementById('row-' + scheme).classList.toggle('off', !box.checked);
-    savePrefs();
-    drawAll();
-  };
-}
-const longSingleBox = document.getElementById('longSingle');
-longSingleBox.onchange = () => {
-  longNeedsSingleRun = longSingleBox.checked;
+const colourVerdictsBox = document.getElementById('colourVerdicts');
+colourVerdictsBox.onchange = () => {
+  colourVerdicts = colourVerdictsBox.checked;
+  document.getElementById('row-verdicts').classList.toggle('off', !colourVerdicts);
   savePrefs();
-  refreshReadout();
-  tableKey = '';
-  drawAll();
+  drawAll();   // a drawing choice only — the verdicts themselves don't change
 };
 const fadeWindowsBox = document.getElementById('fadeWindows');
 fadeWindowsBox.onchange = () => {
@@ -2739,21 +2683,11 @@ maxBehindBox.onchange = () => {
   savePrefs();
   drawAll();   // z-order only — nothing to recompute
 };
-const bandInput = document.getElementById('stableBand');
-bandInput.onchange = bandInput.oninput = () => {
-  const v = Number(bandInput.value);
-  if (!Number.isFinite(v) || v < 0 || v > 5) return;
-  stableBand = v / 100;
-  savePrefs();
-  syncLabels();
-  refreshReadout();
-  tableKey = '';
-  drawAll();
-};
-// The two numbers behind all four windows. Both move the whole set, and
-// because the target reads slots 1 and 2 they move the bars' colours too —
-// hence the full applyWindow() (recompute + relabel + tiles + readout + redraw)
-// rather than just a redraw.
+// The two numbers behind all four windows. Both move the whole set, and since
+// the verdict is a comparison between neighbouring windows (and the target
+// reads slots 1 and 2), they move the bars' colours too — hence the full
+// applyWindow() (recompute + relabel + tiles + readout + redraw) rather than
+// just a redraw.
 const winBaseInput = document.getElementById('windowBase');
 winBaseInput.onchange = winBaseInput.oninput = () => {
   const v = Math.round(Number(winBaseInput.value));
