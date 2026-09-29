@@ -171,7 +171,10 @@ All of it is derived in-browser from one array of daily distances.
   **max across the four windows** — the upper envelope, not a running all-time
   best. It answers "at whatever timescale flatters me most, where am I".
   Drawn last, in plain ink (`--wmax`) at full strength, over the four windows at
-  `WIN_ALPHA` 0.55. **All five are the same weight** (`LINE_WIDTH`) — the max
+  `WIN_ALPHA` 0.55, and with **no area fill** — the single-line panels this grew
+  out of each had one, and the VDOT panel still does, but with five lines
+  crossing each other a shaded region under the max only reads as the max line
+  having a shadow. **All five are the same weight** (`LINE_WIDTH`) — the max
   was briefly drawn thicker as well as darker, which read as heavy-handed and
   wasn't carrying any of the work: full-strength ink against four
   semi-transparent hues separates it at any width. Hiding a window line (below)

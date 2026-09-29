@@ -1781,17 +1781,9 @@ function drawWindowPanel(canvas, c, set, insets, panelKey, axisLabel, opts = {})
   const yOf = v => insets.t + plotH * (1 - v / yMax);
   const px = i => xOf(i) + barW() / 2;
 
-  // Fill under the max, which is also the fill under all four — a body for the
-  // panel without a second thing to read.
-  c.save();
-  c.beginPath(); c.rect(PAD.l, insets.t - 4, plotW(), plotH + 8); c.clip();
-  c.beginPath();
-  c.moveTo(px(i0), insets.t + plotH);
-  for (let i = i0; i <= i1; i++) c.lineTo(px(i), yOf(mx[i]));
-  c.lineTo(px(i1), insets.t + plotH);
-  c.closePath();
-  c.fillStyle = C('--wmax'); c.globalAlpha = showMax ? 0.06 : 0; c.fill(); c.globalAlpha = 1;
-  c.restore();
+  // No area fill under any of these. The single-line panels this grew out of
+  // each had one, but with five lines crossing each other a shaded region only
+  // reads as "the max line has a shadow" — it says nothing the line doesn't.
 
   c.font = '11px system-ui, -apple-system, sans-serif';
   c.textAlign = 'right'; c.textBaseline = 'middle';
