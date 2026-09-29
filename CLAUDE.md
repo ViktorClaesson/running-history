@@ -128,24 +128,40 @@ pinning whatever it happened to finish over.
 **Window-start marks.** Every line on every panel is an average over a window
 *ending* on the marked day, and where that window starts used to be a number in
 the legend and nothing on the chart. `markWindowStarts()` marks the first day
-inside each window — a filled dot at the top of the panel in that window's own
-colour, plus a faint dashed line down through the plot — so each line's reach is
+inside each window — a dot at the top of the panel in that window's own colour,
+plus a faint dashed line down through the plot — so each line's reach is
 something you can see against the bars it covers. Every panel gets them: the
 bars and the three window panels mark the four windows (`winMarks()`), and the
 VDOT panel marks its own `WINDOW_VDOT` in `--vdot`, since that window is its own
 thing.
 
-Only **one** day is marked — `markedDay()` is hover, else the pin, never both:
-the marks belong to the day being read, and two sets at once would put eight
-dashed lines across every panel. (Deliberately *not* `shownDay()`, which also
-falls back to the most recent run — marks with no marked day under them would be
-on screen permanently.) Hover's dots are filled and the pin's hollow, the same
-language as the bars' solid/dashed outline and the panels' filled/ring dot. A
-window whose start is off the left edge, or before the history begins, has
-nothing to mark and simply isn't drawn. They follow `visLines`, unlike the
-readout: those toggles exist to declutter exactly these lines, and a mark for a
-line that isn't drawn is clutter of the same kind — which is also why hiding
-`1w` takes its dot off the *bars* panel too, where there is no line to hide.
+**Both** marked days get a set, the same way both already get a bar outline and
+a line dot: hover's dots are filled and its dashed lines the stronger of the
+two, the pin's are a hollow ring and fainter — the same solid/dashed, filled/ring
+language as the day markers themselves. For any one window the two sets can
+never land on the same day: a window start is one fixed distance back from its
+day, so two different days have two different starts. That is what makes drawing
+both readable rather than eight dashed lines in a heap, and it is why the marks
+key off `hover` and `selected` directly rather than through `shownDay()` — which
+also falls back to the most recent run, and would leave marks on screen
+permanently with no marked day under them.
+
+A window reaching back past the left edge of the plot has no start to mark
+there, so it gets a **chevron** at that edge instead, in its own colour: the
+window is still in play, its beginning is just out of view — or, for the long
+windows early in the history, before the first day there is (which is the honest
+reading, since everything is divided by its full window either way). The
+chevrons stack rightwards in window order, one slot per window, so several
+off-screen windows stay countable; a window whose start *is* on screen leaves its
+slot empty rather than shifting the others. When both days have the same window
+off-screen the hover chevron takes the slot, since "off to the left" is the whole
+message and both would be saying it; the pin's own chevron is drawn thinner and
+at half alpha, matching its dots.
+
+The marks follow `visLines`, unlike the readout: those toggles exist to declutter
+exactly these lines, and a mark for a line that isn't drawn is clutter of the
+same kind — which is also why hiding `1w` takes its dot off the *bars* panel too,
+where there is no line to hide.
 
 **The default view** is the longest window's worth of days
 (`defaultSpan()` = `WINDOWS[N_WINDOWS - 1].days`, 448 at the defaults) ending on

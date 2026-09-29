@@ -510,7 +510,7 @@
     </div>
     <div class="hint">Scroll or pinch to zoom — the day under the cursor stays put while both sides scale around it. Drag to pan. Double-click to go back to the default view, the longest window ending on the most recent day.
       Click a day to pin its numbers in the readout above; click it again, or press Esc, to release.
-      The coloured dots along the top of each panel mark where each window reaches back to from the day under the pointer.</div>
+      The coloured dots along the top of each panel mark where each window reaches back to — filled from the day under the pointer, hollow from the pinned one, and a chevron at the left edge for a window that reaches back past what's drawn.</div>
   </div>
 
   <div class="chartcard" id="zonecard" hidden>
@@ -1707,41 +1707,61 @@ const visibleRange = () => [
 ];
 
 // ---- window-start marks --------------------------------------------------
-// Every line on every panel is an average over a window *ending* on the day
-// under the marker. Where that window starts was a number in the legend and
-// nothing on the chart, so "the 16-week line here" meant trusting the label.
-// Marking the first day inside each window — a dot at the top of the panel in
-// that window's own colour, plus a faint dashed line down through the plot —
-// turns each line's reach into something you can see against the bars it
-// covers.
+// Every line on every panel is an average over a window *ending* on the marked
+// day. Where that window starts was a number in the legend and nothing on the
+// chart, so "the 16-week line here" meant trusting the label. Marking the first
+// day inside each window — a dot at the top of the panel in that window's own
+// colour, plus a faint dashed line down through the plot — turns each line's
+// reach into something you can see against the bars it covers.
 //
-// Only one day is marked, `hover` if there is one and the pin otherwise: the
-// marks belong to the day being read, and doing both at once would put eight
-// dashed lines across every panel. Hover's are filled and the pin's hollow,
-// the same language as the bars' solid/dashed outline and the panels'
-// filled/ring dot. A window whose start is off the left edge (or before the
-// history begins) has nothing to mark, so it simply isn't drawn.
-const markedDay = () => hover !== null ? hover : selected;
+// Both marked days get a set, the same way both get a bar outline and a line
+// dot: hover's dots are filled and its dashed lines the stronger of the two,
+// the pin's are a hollow ring and fainter. For one window the two sets can
+// never collide — a window start is one fixed distance back from its day, so
+// two different days have two different starts — which is what makes drawing
+// both readable rather than eight lines in a heap.
+//
+// A window reaching back past the left edge of the plot has no start to mark
+// there, so it gets a chevron at that edge instead — the window is still in
+// play, its beginning is just out of view (or, for the long windows early in
+// the history, before the first day there is). The chevrons stack rightwards in
+// window order so several off-screen windows stay countable, one slot per
+// window: when both days have that window off-screen the hover chevron wins the
+// slot, since "off to the left" is the whole message and both would be saying
+// it.
 // Follows the per-line show/hide toggles: those exist to declutter these exact
 // lines, and a mark for a line that isn't drawn is clutter of the same kind.
 const winMarks = () => WINDOWS.filter(w => visLines[w.key]);
+const MARK_Y = 4;          // px below the panel's top inset: the dot/chevron row
 function markWindowStarts(c, insetTop, plotH, i0, i1, marks) {
-  const md = markedDay();
-  if (md === null || md < i0 || md > i1) return;
-  const hollow = hover === null;   // it's the pin, not a live hover
-  for (const m of marks) {
-    const s = md - m.days + 1;
-    if (s < i0 || s > md) continue;
-    const x = Math.round(xOf(s) + barW() / 2) + 0.5;
+  const onScreen = i => i !== null && i >= i0 && i <= i1;
+  // Pin first, so a live hover draws over it rather than under it.
+  const days = [];
+  if (onScreen(selected) && selected !== hover) days.push([selected, true]);
+  if (onScreen(hover)) days.push([hover, false]);
+  if (!days.length) return;
+  marks.forEach((m, k) => {
     const col = C(m.css);
-    c.strokeStyle = col; c.lineWidth = 1; c.globalAlpha = hollow ? 0.22 : 0.4;
-    c.setLineDash([2, 3]);
-    c.beginPath(); c.moveTo(x, insetTop); c.lineTo(x, insetTop + plotH); c.stroke();
-    c.setLineDash([]); c.globalAlpha = 1;
-    c.beginPath(); c.arc(x, insetTop + 4, 3.5, 0, Math.PI * 2);
-    c.fillStyle = hollow ? C('--surface-1') : col; c.fill();
-    c.strokeStyle = col; c.lineWidth = hollow ? 1.5 : 1; c.stroke();
-  }
+    let chevron = null;              // null, or true for the pin's / false for hover's
+    for (const [day, hollow] of days) {
+      const st = day - m.days + 1;
+      if (st < i0) { if (chevron === null || !hollow) chevron = hollow; continue; }
+      const x = Math.round(xOf(st) + barW() / 2) + 0.5;
+      c.strokeStyle = col; c.lineWidth = 1; c.globalAlpha = hollow ? 0.22 : 0.4;
+      c.setLineDash([2, 3]);
+      c.beginPath(); c.moveTo(x, insetTop); c.lineTo(x, insetTop + plotH); c.stroke();
+      c.setLineDash([]); c.globalAlpha = 1;
+      c.beginPath(); c.arc(x, insetTop + MARK_Y, 3.5, 0, Math.PI * 2);
+      c.fillStyle = hollow ? C('--surface-1') : col; c.fill();
+      c.strokeStyle = col; c.lineWidth = hollow ? 1.5 : 1; c.stroke();
+    }
+    if (chevron === null) return;
+    const x = PAD.l + 6 + k * 10, y = insetTop + MARK_Y;
+    c.strokeStyle = col; c.globalAlpha = chevron ? 0.55 : 1;
+    c.lineWidth = chevron ? 1.5 : 2; c.lineCap = 'round'; c.lineJoin = 'round';
+    c.beginPath(); c.moveTo(x + 2.5, y - 4); c.lineTo(x - 2.5, y); c.lineTo(x + 2.5, y + 4);
+    c.stroke(); c.globalAlpha = 1;
+  });
 }
 
 // ---- panel 1: that day's own distance, on a log scale --------------------
