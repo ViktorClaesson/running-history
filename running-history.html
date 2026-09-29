@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Running history — 70-day rolling average</title>
+<title>Running history — rolling averages over four windows</title>
 <style>
   :root {
     color-scheme: light;
@@ -33,9 +33,20 @@
     --hatch:          rgba(11,11,11,0.30);
     --nocolour:       #b5b3aa;   /* a run whose scheme has colouring switched off */
     --rest:           #e7e5dd;   /* no run at all */
-    --vol:            #e5405c;
-    --freq:           #52514e;
-    --freq2:          #2f8f7a;
+    /* The four rolling windows, one colour each, shared by the three
+       volume/frequency panels so a colour means the same window everywhere.
+       All-pairs CVD validated (these are four series in ONE plot, so every pair
+       has to separate, not just neighbours): light worst ΔE 12.8 (deutan) /
+       23.4 normal-vision, dark 10.2 / 20.2. --w4's light step warns at 2.85:1
+       contrast against the near-white surface; the legend and the hover readout
+       label every line, which is the relief that warning asks for.
+       --wmax is the per-day max across the four — the line that's meant to be
+       read first, so it's plain ink rather than a hue. */
+    --w1:             #0060a6;
+    --w4:             #00ab86;
+    --w16:            #d57700;
+    --w64:            #a3215a;
+    --wmax:           #0b0b0b;
     --vdot:           #7444b4;
     /* Pace-zone histogram: easy/marathon/threshold/interval/repetition, ordered
        fast→slow around the visible spectrum. Adjacent-pair CVD ΔE validated (not
@@ -98,9 +109,11 @@
       --hatch:          rgba(255,255,255,0.28);
       --nocolour:       #5c5a54;
       --rest:           #333230;
-      --vol:            #e8637d;
-      --freq:           #c3c2b7;
-      --freq2:          #5fc9ae;
+      --w1:             #0074c8;
+      --w4:             #00ac86;
+      --w16:            #d97900;
+      --w64:            #bb3a6d;
+      --wmax:           #ffffff;
       --vdot:           #a97cf0;
       --z-easy-weak:        #20507b;
       --z-easy:             #008ae9;
@@ -136,9 +149,11 @@
     --hatch:          rgba(255,255,255,0.28);
     --nocolour:       #5c5a54;
     --rest:           #333230;
-    --vol:            #e8637d;
-    --freq:           #c3c2b7;
-    --freq2:          #5fc9ae;
+    --w1:             #0074c8;
+    --w4:             #00ac86;
+    --w16:            #d97900;
+    --w64:            #bb3a6d;
+    --wmax:           #ffffff;
     --vdot:           #a97cf0;
     --z-easy-weak:        #20507b;
     --z-easy:             #008ae9;
@@ -219,6 +234,21 @@
   .readout .pair .sub-v { font-size: 12px; font-weight: 400; color: var(--text-secondary); }
   .readout .pair .v2 { font-size: 11px; font-weight: 400; color: var(--muted);
     font-variant-numeric: tabular-nums; margin-top: 1px; min-height: 33px; min-height: 2lh; }
+  /* The four windows plus their max, as one small table per measure. Every row
+     is always present (five windows, run or no run), so unlike the free-text
+     detail lines this can't change the sidebar's height from day to day. */
+  .readout .wingrid { display: grid; grid-template-columns: auto auto auto 1fr; gap: 1px 5px;
+    align-items: baseline; margin-top: 3px; font-variant-numeric: tabular-nums; font-size: 12px; }
+  .readout .wingrid .sw { width: 10px; height: 3px; border-radius: 2px; align-self: center; }
+  .readout .wingrid .wl { color: var(--text-secondary); }
+  .readout .wingrid .wv { text-align: right; font-weight: 600; }
+  /* The dim note is the first thing to give when a row runs out of room, and it
+     does: a 100+ km week makes the distance rows' "470 km/mo · 5,638 km/yr" the
+     widest thing in the sidebar. Smaller than the rest of the row so those
+     weeks stop wrapping — sized against a 280px sidebar, which is what this is
+     actually used at. */
+  .readout .wingrid .wx { color: var(--muted); font-size: 10px; }
+  .readout .wingrid .wl.r-max, .readout .wingrid .wv.r-max { font-weight: 700; color: var(--text-primary); }
   /* so a wrapped detail line breaks at the · separators, never mid-phrase
      ("no / long runs", "564 / km/yr") */
   .readout .seg { white-space: nowrap; }
@@ -252,16 +282,29 @@
   .legend-tag { color: var(--text-secondary); font-weight: 600; min-width: 82px;
     display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
   .legend-row.off .item { opacity: 0.35; }
+  /* a single legend item switched off — the window lines toggle one at a time,
+     unlike the two colour schemes, which toggle a whole row */
+  .legend .item.off { opacity: 0.4; }
+  .legend .item input { margin: 0; }
   .legend-dim { color: var(--muted); font-weight: 400; }
   .swatch { position: relative; overflow: hidden; }
   .swatch.hatched::after { content: ''; position: absolute; inset: 0;
     background: repeating-linear-gradient(45deg, var(--hatch) 0 1.5px, transparent 1.5px 4px); }
   .ctrls { display: flex; flex-direction: column; align-items: stretch; gap: 10px; }
+  /* Grouped by what each setting moves. A rule between groups rather than more
+     whitespace, so the sidebar doesn't get much taller for the sake of it. */
+  .setgroup { display: flex; flex-direction: column; gap: 10px; }
+  .setgroup + .setgroup { padding-top: 14px; border-top: 1px solid var(--border); }
+  .setgroup-title { margin: 0; font-size: 11px; font-weight: 600; letter-spacing: .06em;
+    text-transform: uppercase; color: var(--muted); }
+  #settingsSidebar > #reset { margin-top: 2px; }
   .legend .item { display: inline-flex; align-items: center; gap: 6px; }
   .swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
   .swatch.ramp { width: 26px; }
   .spacer { flex: 1 1 auto; }
   .legend-note { color: var(--muted); font-size: 11px; }
+  /* the window lines are lines, not fills, so their legend swatch is a bar */
+  .legend .swatch.line { width: 16px; height: 3px; border-radius: 2px; }
   button, label.chk {
     font: inherit; font-size: 12px; color: var(--text-secondary);
     background: transparent; border: 1px solid var(--border); border-radius: 6px;
@@ -337,51 +380,94 @@
 <body>
 <div class="page">
 <aside class="sidebar settings-sidebar" id="settingsSidebar">
-  <div class="legend">
-    <div class="legend-row" id="row-normal"><label class="legend-tag"><input type="checkbox" id="colourNormal" checked> Normal run</label>
-      <span class="item"><span class="swatch ramp" style="background:linear-gradient(90deg,var(--n-un-weak),var(--n-un))"></span>▼ unproductive</span>
-      <span class="item"><span class="swatch" style="background:var(--n-pr-weak)"></span>= stable</span>
-      <span class="item"><span class="swatch ramp" style="background:linear-gradient(90deg,var(--n-pr-weak),var(--n-pr))"></span>▲ productive</span>
+  <!-- Grouped by what each setting actually moves, since "which panel is this
+       about" is the question being asked when someone comes looking. Each
+       group keeps its own legend next to its own controls: the window-line
+       swatches belong with the volume/frequency panels they colour, the
+       run-verdict ramps belong with the target settings that produce them. -->
+  <section class="setgroup">
+    <h2 class="setgroup-title">Volume &amp; frequency panels</h2>
+    <div class="legend">
+      <div class="legend-row" id="row-windows" title="Hiding a line only takes it off the three panels — it stays in the hover readout and still counts towards MAX."><span class="legend-tag">Lines</span>
+        <label class="item"><input type="checkbox" id="line-max" checked><span class="swatch line" style="background:var(--wmax)"></span>MAX</label>
+        <label class="item"><input type="checkbox" id="line-s0" checked><span class="swatch line" style="background:var(--w1)"></span><span class="winLabel0">1w</span></label>
+        <label class="item"><input type="checkbox" id="line-s1" checked><span class="swatch line" style="background:var(--w4)"></span><span class="winLabel1">4w</span></label>
+        <label class="item"><input type="checkbox" id="line-s2" checked><span class="swatch line" style="background:var(--w16)"></span><span class="winLabel2">16w</span></label>
+        <label class="item"><input type="checkbox" id="line-s3" checked><span class="swatch line" style="background:var(--w64)"></span><span class="winLabel3">64w</span></label>
+        <span class="legend-dim"><span class="winsN">1 / 4 / 16 / 64</span>-week rolling averages, and the highest of the four on the day. Untick one to take it off the panels; it stays in the readout and still counts towards MAX.</span>
+      </div>
     </div>
-    <div class="legend-row" id="row-long"><label class="legend-tag"><input type="checkbox" id="colourLong" checked> Long run <span class="legend-dim">(&gt;1.5&times; target, hatched; needs &ge;3 runs/wk)</span></label>
-      <span class="item"><span class="swatch ramp hatched" style="background:linear-gradient(90deg,var(--l-un-weak),var(--l-un))"></span>▼ unproductive</span>
-      <span class="item"><span class="swatch hatched" style="background:var(--l-pr-weak)"></span>= stable</span>
-      <span class="item"><span class="swatch ramp hatched" style="background:linear-gradient(90deg,var(--l-pr-weak),var(--l-pr))"></span>▲ productive</span>
+    <div class="ctrls">
+      <label class="chk"><input type="checkbox" id="showVol" checked> Distance/week panel</label>
+      <label class="chk"><input type="checkbox" id="showFreq" checked> Run days/week panel</label>
+      <label class="chk"><input type="checkbox" id="showRuns" checked> Runs/week panel</label>
+      <label class="chk" title="Weeks in the shortest of the four rolling windows. The other three follow from the multiple below.">Shortest window
+        <input type="number" id="windowBase" min="1" max="8" step="1" value="1"> weeks
+      </label>
+      <label class="chk" title="Each window is this many times the one before it, so the four are base, base x m, base x m squared, base x m cubed. The second and third of the four are also what the per-day target is computed from, so changing these moves the bar colours too.">Next window &times;
+        <input type="number" id="windowMult" min="2" max="8" step="1" value="4">
+      </label>
+      <label class="chk" title="The four window lines are drawn semi-transparent by default, which is what makes the max read as the primary line without being any thicker. Turn this off to compare two windows against each other at full strength, at the cost of a busier panel.">
+        <input type="checkbox" id="fadeWindows" checked> Fade the window lines
+      </label>
+      <label class="chk" title="The max line sits on top of the four windows by default, which is what makes it the one read first. Put it underneath and the shortest window stays visible along the stretches where it IS the max, so the max shows only where it pulls away.">
+        <input type="checkbox" id="maxBehind"> Draw MAX behind the windows
+      </label>
     </div>
-    <div class="legend-row"><span class="legend-tag">No run</span>
-      <span class="item"><span class="swatch" style="background:var(--rest)"></span>rest day</span>
-      <span class="legend-dim">stable = within &plusmn;<span class="bandN">1</span>% of target; colour ramps to full over the remaining <span class="gradN">49</span>%</span>
+  </section>
+
+  <section class="setgroup">
+    <h2 class="setgroup-title">VDOT panel</h2>
+    <div class="ctrls">
+      <label class="chk"><input type="checkbox" id="showVdot" checked> VDOT panel</label>
+      <label class="chk">VDOT window
+        <input type="number" id="windowVdotWeeks" min="1" max="260" step="1" value="50"> weeks
+      </label>
+      <label class="chk" title="A lap shorter than this can't be trusted on its own for VDOT — too short and fast a rep overstates it wildly. The whole workout is always checked too, and the higher of the two wins. It feeds the pace-zone histogram as well, since that is read against the day's VDOT.">Min lap for VDOT
+        <input type="number" id="minLapM" min="100" max="5000" step="100" value="1500"> m
+      </label>
     </div>
-  </div>
-  <div class="ctrls">
-  <label class="chk"><input type="checkbox" id="showVol" checked> Distance/week panel</label>
-  <label class="chk"><input type="checkbox" id="showFreq" checked> Run days/week panel</label>
-  <label class="chk"><input type="checkbox" id="showRuns" checked> Runs/week panel</label>
-  <label class="chk"><input type="checkbox" id="showVdot" checked> VDOT panel</label>
-  <label class="chk"><input type="checkbox" id="showZone" checked> Pace-zone histogram</label>
-  <label class="chk">Volume window
-    <input type="number" id="windowVolWeeks" min="1" max="52" step="1" value="4"> weeks
-  </label>
-  <label class="chk">Frequency window
-    <input type="number" id="windowFreqWeeks" min="1" max="52" step="1" value="16"> weeks
-  </label>
-  <label class="chk">VDOT window
-    <input type="number" id="windowVdotWeeks" min="1" max="260" step="1" value="50"> weeks
-  </label>
-  <label class="chk" title="A lap shorter than this can't be trusted on its own for VDOT — too short and fast a rep overstates it wildly. The whole workout is always checked too, and the higher of the two wins.">Min lap for VDOT
-    <input type="number" id="minLapM" min="100" max="5000" step="100" value="1500"> m
-  </label>
-  <label class="chk" title="How many sub-bands each of the five pace zones splits into in the pace-zone histogram.">Pace-zone bars
-    <input type="number" id="zoneBars" min="1" max="20" step="1" value="5"> per zone
-  </label>
-  <label class="chk" title="Whether a day has to contain one long run on its own, rather than reaching the distance across several runs.">
-    <input type="checkbox" id="longSingle" checked> Long run needs a single run
-  </label>
-  <label class="chk" title="How close to the target still counts as holding steady.">Stable band &plusmn;
-    <input type="number" id="stableBand" min="0" max="5" step="0.5" value="1">%
-  </label>
-  <button id="reset" title="Put the windows, min lap distance, stable band, colour toggles and long-run rule back to their defaults, and zoom back out. Leaves the what-if target alone — that has its own reset.">Reset</button>
-  </div>
+  </section>
+
+  <section class="setgroup">
+    <h2 class="setgroup-title">Pace zones</h2>
+    <div class="ctrls">
+      <label class="chk"><input type="checkbox" id="showZone" checked> Pace-zone histogram</label>
+      <label class="chk" title="How many sub-bands each of the five pace zones splits into in the pace-zone histogram.">Pace-zone bars
+        <input type="number" id="zoneBars" min="1" max="20" step="1" value="5"> per zone
+      </label>
+    </div>
+  </section>
+
+  <section class="setgroup">
+    <h2 class="setgroup-title">Targets &amp; verdicts</h2>
+    <div class="legend">
+      <div class="legend-row" id="row-normal"><label class="legend-tag"><input type="checkbox" id="colourNormal" checked> Normal run</label>
+        <span class="item"><span class="swatch ramp" style="background:linear-gradient(90deg,var(--n-un-weak),var(--n-un))"></span>▼ unproductive</span>
+        <span class="item"><span class="swatch" style="background:var(--n-pr-weak)"></span>= stable</span>
+        <span class="item"><span class="swatch ramp" style="background:linear-gradient(90deg,var(--n-pr-weak),var(--n-pr))"></span>▲ productive</span>
+      </div>
+      <div class="legend-row" id="row-long"><label class="legend-tag"><input type="checkbox" id="colourLong" checked> Long run <span class="legend-dim">(&gt;1.5&times; target, hatched; needs &ge;3 runs/wk)</span></label>
+        <span class="item"><span class="swatch ramp hatched" style="background:linear-gradient(90deg,var(--l-un-weak),var(--l-un))"></span>▼ unproductive</span>
+        <span class="item"><span class="swatch hatched" style="background:var(--l-pr-weak)"></span>= stable</span>
+        <span class="item"><span class="swatch ramp hatched" style="background:linear-gradient(90deg,var(--l-pr-weak),var(--l-pr))"></span>▲ productive</span>
+      </div>
+      <div class="legend-row"><span class="legend-tag">No run</span>
+        <span class="item"><span class="swatch" style="background:var(--rest)"></span>rest day</span>
+        <span class="legend-dim">stable = within &plusmn;<span class="bandN">1</span>% of target; colour ramps to full over the remaining <span class="gradN">49</span>%</span>
+      </div>
+    </div>
+    <div class="ctrls">
+      <label class="chk" title="Whether a day has to contain one long run on its own, rather than reaching the distance across several runs.">
+        <input type="checkbox" id="longSingle" checked> Long run needs a single run
+      </label>
+      <label class="chk" title="How close to the target still counts as holding steady.">Stable band &plusmn;
+        <input type="number" id="stableBand" min="0" max="5" step="0.5" value="1">%
+      </label>
+    </div>
+  </section>
+
+  <button id="reset" title="Put every setting in this sidebar back to its default and zoom back out. Leaves the what-if target alone — that has its own reset.">Reset</button>
 </aside>
 <div class="wrap">
   <h1>Running history &mdash; every run, on a log scale</h1>
@@ -407,15 +493,15 @@
   <div class="chartcard">
     <canvas id="chart"></canvas>
     <div class="chart-panel" id="panel-vol">
-      <div class="panel-title">Average distance per week, over the trailing <span class="winN">70</span> days</div>
+      <div class="panel-title">Distance per week &mdash; <span class="winsN">1 / 4 / 16 / 64</span>-week rolling averages, and their max</div>
       <canvas id="chart5"></canvas>
     </div>
     <div class="chart-panel" id="panel-freq">
-      <div class="panel-title">Average run days per week, over the trailing <span class="winFreqN">70</span> days</div>
+      <div class="panel-title">Run days per week &mdash; <span class="winsN">1 / 4 / 16 / 64</span>-week rolling averages, and their max</div>
       <canvas id="chart2"></canvas>
     </div>
     <div class="chart-panel" id="panel-runs">
-      <div class="panel-title">Average runs per week, over the trailing <span class="winFreqN">70</span> days</div>
+      <div class="panel-title">Runs per week &mdash; <span class="winsN">1 / 4 / 16 / 64</span>-week rolling averages, and their max</div>
       <canvas id="chart3"></canvas>
     </div>
     <div class="chart-panel" id="panel-vdot">
@@ -435,7 +521,7 @@
     <summary>Data table (days currently in view)</summary>
     <div class="tablewrap">
       <table>
-        <thead><tr><th>Date</th><th>Distance (km)</th><th><span class="winN">70</span>-day avg (km/day)</th><th>Run days / week</th><th>Runs / week</th><th>Target (km)</th><th>Verdict</th></tr></thead>
+        <thead><tr><th>Date</th><th>Distance (km)</th><th><span class="winVolN">4</span>-week avg (km/day)</th><th>Run days / week</th><th>Runs / week</th><th>Target (km)</th><th>Verdict</th></tr></thead>
         <tbody id="tbody"></tbody>
       </table>
     </div>
@@ -777,11 +863,11 @@ if (DATA) {
 // ---- remembered settings -------------------------------------------------
 // Everything the controls row and the what-if box can be set to, so the page
 // opens the way it was left. Read here, at the very top, because recompute()
-// runs at load and reads WINDOW_VOL/WINDOW_FREQ — see the declaration-order gotcha.
+// runs at load and reads WINDOW_VDOT's neighbours — see the declaration-order gotcha.
 const LS_PREFS = 'runviz.prefs.v1';
 const PREF_DEFAULTS = {
-  windowVol: 28,
-  windowFreq: 112,
+  windowBase: 1,     // weeks in the shortest of the four rolling windows, 1-8
+  windowMult: 4,     // each next window is this many times the one before, 2-8
   windowVdot: 350,   // 50 weeks
   minLapM: 1500,     // laps shorter than this can't be trusted for VDOT on their own
   stableBand: 0.01,
@@ -790,29 +876,43 @@ const PREF_DEFAULTS = {
   colourLong: true,
   zoneBars: 5,       // sub-bands per pace zone in the pace-zone histogram
   panels: { vol: true, freq: true, runs: true, vdot: true, zone: true },   // which optional panels are shown
+  // Which of the five lines each volume/frequency panel actually draws. Hiding
+  // one is purely a decluttering move: it still appears in the hover readout and
+  // still counts towards MAX. All shown by default.
+  lines: { max: true, s0: true, s1: true, s2: true, s3: true },
+  maxBehind: false,   // draw the max line under the four windows rather than over them
+  fadeWindows: true,  // the four window lines semi-transparent, so the max reads first
   plan: null,        // null = the what-if box follows real history; {km, days} = edited
 };
+// Slot keys, not week counts — a slot keeps its colour and its show/hide
+// setting when windowBase/windowMult change what it actually measures.
+const LINE_KEYS = ['max', 's0', 's1', 's2', 's3'];
 function loadPrefs() {
-  const p = { ...PREF_DEFAULTS, panels: { ...PREF_DEFAULTS.panels } };
+  const p = { ...PREF_DEFAULTS, panels: { ...PREF_DEFAULTS.panels }, lines: { ...PREF_DEFAULTS.lines } };
   const raw = lsGet(LS_PREFS);
   if (!raw || typeof raw !== 'object') return p;
   // Validated field by field, against the same limits as the controls, so a
   // stale or hand-edited entry can only ever produce a state the UI can reach.
-  // Both windows are set in whole weeks, so a stray value is rounded to one.
+  // The VDOT window is set in whole weeks, so a stray value is rounded to one.
   const num = (v, lo, hi) => Number.isFinite(v) && v >= lo && v <= hi;
   const week = (v, maxDays) => Math.min(maxDays, Math.max(7, Math.round(v / 7) * 7));
-  if (num(raw.windowVol, 7, 364)) p.windowVol = week(raw.windowVol, 364);
-  if (num(raw.windowFreq, 7, 364)) p.windowFreq = week(raw.windowFreq, 364);
+  if (num(raw.windowBase, 1, 8)) p.windowBase = Math.round(raw.windowBase);
+  if (num(raw.windowMult, 2, 8)) p.windowMult = Math.round(raw.windowMult);
   if (num(raw.windowVdot, 7, 1820)) p.windowVdot = week(raw.windowVdot, 1820);
   if (num(raw.minLapM, 100, 5000)) p.minLapM = Math.round(raw.minLapM / 100) * 100;
   if (num(raw.stableBand, 0, 0.05)) p.stableBand = raw.stableBand;
   if (num(raw.zoneBars, 1, 20)) p.zoneBars = Math.round(raw.zoneBars);
-  for (const k of ['longNeedsSingleRun', 'colourNormal', 'colourLong']) {
+  for (const k of ['longNeedsSingleRun', 'colourNormal', 'colourLong', 'maxBehind', 'fadeWindows']) {
     if (typeof raw[k] === 'boolean') p[k] = raw[k];
   }
   if (raw.panels && typeof raw.panels === 'object') {
     for (const k of ['vol', 'freq', 'runs', 'vdot', 'zone']) {
       if (typeof raw.panels[k] === 'boolean') p.panels[k] = raw.panels[k];
+    }
+  }
+  if (raw.lines && typeof raw.lines === 'object') {
+    for (const k of LINE_KEYS) {
+      if (typeof raw.lines[k] === 'boolean') p.lines[k] = raw.lines[k];
     }
   }
   if (raw.plan && num(raw.plan.km, 0, 700) && num(raw.plan.days, 0, 7)) {
@@ -826,37 +926,75 @@ const prefs = loadPrefs();
 // never been touched leaves nothing behind, and Reset really does forget.
 function savePrefs() {
   const cur = {
-    windowVol: WINDOW_VOL,
-    windowFreq: WINDOW_FREQ,
+    windowBase,
+    windowMult,
     windowVdot: WINDOW_VDOT,
     minLapM: MIN_LAP_M,
     stableBand,
     longNeedsSingleRun,
+    maxBehind,
+    fadeWindows,
     colourNormal: colourScheme.normal,
     colourLong: colourScheme.long,
     zoneBars: ZONE_BARS,
     panels: { ...visPanels },
+    lines: { ...visLines },
     plan: planEdited ? { km: plan.km, days: plan.days } : null,
   };
   const changed = Object.keys(PREF_DEFAULTS)
     .some(k => {
       if (k === 'plan') return cur.plan !== null;
       if (k === 'panels') return Object.keys(PREF_DEFAULTS.panels).some(pk => cur.panels[pk] !== PREF_DEFAULTS.panels[pk]);
+      if (k === 'lines') return LINE_KEYS.some(lk => cur.lines[lk] !== PREF_DEFAULTS.lines[lk]);
       return cur[k] !== PREF_DEFAULTS[k];
     });
   if (changed) lsSet(LS_PREFS, cur); else lsDel(LS_PREFS);
 }
 
-// Two independent rolling windows, both in days but set in whole weeks from the
-// controls row: WINDOW_VOL drives the volume panel (bars, target, verdict) and
-// WINDOW_FREQ drives the two per-week panels below it. Kept separate because
-// "is my volume trending up" and "how often am I running" are different
-// questions with naturally different useful windows.
-let WINDOW_VOL = prefs.windowVol;
-let WINDOW_FREQ = prefs.windowFreq;
-// A third, independent window: how far back to look for the fittest workout.
-// Kept separate from WINDOW_FREQ because "what's my current fitness ceiling"
-// wants years, not the weeks that make sense for "how often am I running".
+// The volume and frequency panels no longer pick ONE window — they draw all four
+// at once, so "is this week big or is the block big" is one glance rather than a
+// setting to go and change. Fixed rather than configurable: the point of four
+// lines is that they're the same four every time, and a colour means the same
+// window in every panel. Roughly a week, a month, a quarter and a year.
+// There are always exactly four of them — four is what the colour scheme and
+// the readout tables are built for — but *which* four is set by two numbers:
+// the shortest window in weeks, and the multiple between one window and the
+// next. Defaults 1 and 4 give the 1 / 4 / 16 / 64 weeks this was designed
+// around (week-ish, month-ish, quarter-ish, year-ish). The keys are slot
+// numbers, not week counts, because a slot keeps its colour and its show/hide
+// setting when the numbers behind it change.
+const N_WINDOWS = 4;
+const WIN_CSS = ['--w1', '--w4', '--w16', '--w64'];
+let windowBase = prefs.windowBase;   // weeks, 1-8
+let windowMult = prefs.windowMult;   // 2-8
+const WINDOWS = Array.from({ length: N_WINDOWS }, (_, k) => ({ key: 's' + k, css: WIN_CSS[k] }));
+// The target/verdict maths needs exactly one volume window and one frequency
+// window — a run can only be judged against a single number. They are the
+// second and third slots, which at the defaults are the 4 and 16 weeks this
+// used to have as fixed settings: 4 weeks reacts fast enough to a training
+// block, 16 weeks doesn't jitter with every rest day. Slots rather than fixed
+// numbers, so the target is always read off lines that are actually on screen —
+// which does mean changing the two numbers above moves the targets, and with
+// them the bar colours, not just what the line panels draw.
+const IV = 1, IF = 2;                 // WINDOWS index: volume / frequency
+let WINDOW_VOL, WINDOW_FREQ;
+// Derives each slot's length from the two numbers. Called before recompute(),
+// and again whenever either setting changes.
+function rebuildWindows() {
+  let weeks = windowBase;
+  for (const w of WINDOWS) {
+    w.weeks = weeks;
+    w.days = weeks * 7;
+    w.label = weeks + 'w';
+    weeks *= windowMult;
+  }
+  WINDOW_VOL = WINDOWS[IV].days;
+  WINDOW_FREQ = WINDOWS[IF].days;
+}
+rebuildWindows();
+// The VDOT window is still adjustable, and still its own thing: "what's my
+// current fitness ceiling" wants years, not the weeks that make sense for
+// "how often am I running".
 let WINDOW_VDOT = prefs.windowVdot;
 
 // ---- derive series -------------------------------------------------------
@@ -877,38 +1015,72 @@ for (let i = N - 1; i >= 0; i--) { if (daily[i] > 0) { lastRunIdx = i; break; } 
 // Trailing-window means. The first window's worth of days has no full window behind
 // it and is still divided by the full window, so each series ramps up from zero
 // rather than reading a single 5 km run on day one as a 5 km/day "average".
-const avg = new Array(N);       // WINDOW_VOL-day mean km/day
-const runs = new Array(N);      // how many of the trailing WINDOW_FREQ days had a run on them
-const totalRuns = new Array(N); // how many separate runs happened in the trailing WINDOW_FREQ days
+// One set of series per window, plus a per-day max across the four. Everything
+// is a *rate* (km per week, run days per week, runs per week) so four windows of
+// very different lengths are directly comparable on one axis.
+//   volSeries  km per week
+//   freqSeries run days per week   (a two-run day still counts once)
+//   runSeries  runs per week       (a two-run day counts twice)
+// MAXI is the index of the extra "max of the four" series appended to each set;
+// it is the upper envelope of the four, not a running all-time best.
+const MAXI = WINDOWS.length;
+const blank = () => Array.from({ length: WINDOWS.length + 1 }, () => new Array(N));
+const volSeries = blank();
+const freqSeries = blank();
+const runSeries = blank();
+// Run-day and run counts per window, kept raw ("12 of 112 days") for the readout.
+const runDaysIn = Array.from({ length: WINDOWS.length }, () => new Array(N));
+const runsIn    = Array.from({ length: WINDOWS.length }, () => new Array(N));
+
 const target = new Array(N); // what each day's run had to be to hold the average (see computeTargets)
 const longOn = new Array(N); // was the long-run scheme in play that day at all?
 const rpwPrev = new Array(N); // run days per week as of the day before
 const weeklyPrev = new Array(N); // km per week as of the day before
-// Weekly rates are always taken over the full window, exactly like the average:
-// one run inside a 70-day window is 0.1 run days per week, not "7 a week" off a
-// single elapsed day.
-const perWeekAt = i => runs[i] * 7 / WINDOW_FREQ;
-// Same idea as perWeekAt, but counting every run rather than run-having days, so a
-// double-run day shows up as 2 rather than being clumped into 1.
-const perWeekRunsAt = i => totalRuns[i] * 7 / WINDOW_FREQ;
+// The single-window views the target maths, the tiles, the table and the readout's
+// distance figures still need. avg is km/day over the volume window; perWeekAt and
+// perWeekRunsAt read the frequency window's rates straight off the series above.
+const avg = new Array(N);
+const perWeekAt = i => freqSeries[IF][i];
+const perWeekRunsAt = i => runSeries[IF][i];
 const LONG_MIN_RUNS_PER_WEEK = 3.0;
 function recompute() {
-  let running = 0;
-  for (let i = 0; i < N; i++) {
-    running += daily[i];
-    if (i >= WINDOW_VOL) running -= daily[i - WINDOW_VOL];
-    avg[i] = running / WINDOW_VOL;
-  }
-  let ran = 0, ranTotal = 0;
-  for (let i = 0; i < N; i++) {
-    if (daily[i] > 0) ran++;
-    ranTotal += nRuns[i];
-    if (i >= WINDOW_FREQ) {
-      if (daily[i - WINDOW_FREQ] > 0) ran--;
-      ranTotal -= nRuns[i - WINDOW_FREQ];
+  // Rates are always divided by the FULL window, never by days elapsed, so each
+  // window's own first stretch ramps in from zero: one run inside the 64-week
+  // window is 0.11 run days per week, not "7 a week" off a single elapsed day.
+  WINDOWS.forEach((win, w) => {
+    const d = win.days;
+    let km = 0, ran = 0, ranTotal = 0;
+    for (let i = 0; i < N; i++) {
+      km += daily[i];
+      if (daily[i] > 0) ran++;
+      ranTotal += nRuns[i];
+      if (i >= d) {
+        km -= daily[i - d];
+        if (daily[i - d] > 0) ran--;
+        ranTotal -= nRuns[i - d];
+        // A sliding sum that adds and subtracts the same values in a different
+        // order doesn't land back on exactly 0 — it lands on float dust, often
+        // NEGATIVE dust, which then formats as "-0.0 km" across a stretch with
+        // no runs in it. Distances are rounded to 1e-3 km when the data is
+        // built, so anything this small is dust by definition. Snapped here
+        // rather than at every format call, so every reader of the series (the
+        // panels, the readout, the tiles, the table) gets a clean zero.
+        if (km < 1e-9) km = 0;
+      }
+      volSeries[w][i]  = km * 7 / d;
+      freqSeries[w][i] = ran * 7 / d;
+      runSeries[w][i]  = ranTotal * 7 / d;
+      runDaysIn[w][i] = ran;
+      runsIn[w][i] = ranTotal;
+      if (w === IV) avg[i] = km / d;
     }
-    runs[i] = ran;
-    totalRuns[i] = ranTotal;
+  });
+  for (let i = 0; i < N; i++) {
+    for (const set of [volSeries, freqSeries, runSeries]) {
+      let m = set[0][i];
+      for (let w = 1; w < WINDOWS.length; w++) if (set[w][i] > m) m = set[w][i];
+      set[MAXI][i] = m;
+    }
   }
   computeTargets();
 }
@@ -1117,6 +1289,7 @@ function computeTargets() {
     sum += daily[i-1];
     const dropped = i - 1 - WINDOW_VOL;
     if (dropped >= 0) sum -= daily[dropped];
+    if (sum < 1e-9) sum = 0;   // same float-dust snap as recompute() — see there
     const weekly = sum * 7 / WINDOW_VOL;
     weeklyPrev[i] = weekly;
     const divisor = rpwPrev[i] + (longOn[i] ? 1 : 0);
@@ -1191,6 +1364,19 @@ let ZONE_BARS = prefs.zoneBars;
 // Independent show/hide for the three optional line panels and the pace-zone
 // histogram — the distance bars (panel 1) always stay up as the anchor chart.
 let visPanels = { ...prefs.panels };
+// Which of the five lines the three window panels draw. Purely a view filter:
+// a hidden line is still in the readout and still counts towards MAX — see the
+// comment on PREF_DEFAULTS.lines.
+let visLines = { ...prefs.lines };
+// Whether the max is drawn under the four windows instead of over them. Only a
+// z-order: it changes nothing about what is computed or which lines are drawn.
+let maxBehind = prefs.maxBehind;
+// Whether the four window lines are drawn semi-transparent. On by default: it
+// is what makes the max read as the primary line without being any thicker.
+// Off is for comparing two windows against each other rather than against the
+// max — at full strength every crossing is legible, at the cost of a busier
+// panel. Like maxBehind, purely a drawing choice.
+let fadeWindows = prefs.fadeWindows;
 const ZONE_ANCHOR_PCT = [0.657, 0.818, 0.880, 0.976, 1.062];
 const ZONE_BOUND_PCT = [null,   // easy's floor is per-day now — see easyFloorPct()
   (ZONE_ANCHOR_PCT[0] + ZONE_ANCHOR_PCT[1]) / 2,
@@ -1297,9 +1483,6 @@ const perMonthKm = v => v * 365 / 12;
 const perYearKm  = v => v * 365;
 // Joined with · but each piece unbreakable, so a wrap lands between them.
 const seg = parts => parts.filter(Boolean).map(t => `<span class="seg">${t}</span>`).join(' · ');
-const rateSummary = v => seg([`${nf1.format(perWeekKm(v))} km/wk`,
-                              `${nf0.format(perMonthKm(v))} km/mo`,
-                              `${nf0.format(perYearKm(v))} km/yr`]);
 
 // ---- stat tiles ----------------------------------------------------------
 const total = daily.reduce((a,b)=>a+b,0);
@@ -1324,7 +1507,7 @@ function renderTiles() {
   ].map(([v,u]) => `<div class="cell"><span class="v">${v}</span><span class="u">${u}</span></div>`).join('');
 
   document.getElementById('tiles').innerHTML = totals +
-    `<div class="tile combo"><div class="k">Current ${WINDOW_VOL}-day average</div><div class="grid">${cells}</div></div>` +
+    `<div class="tile combo"><div class="k">Current ${WINDOWS[IV].label} average</div><div class="grid">${cells}</div></div>` +
     `<div class="tile combo target" id="target-tile"></div>`;
   renderTarget();
 }
@@ -1612,35 +1795,55 @@ function drawBars() {
   if (isBottom) drawXAxisLabels(ctx, w, BARS.t, plotH, i0, i1);
 }
 
-// ---- panel 1b: rolling distance per week over the volume window ----------
-// The measure the bars used to carry, now a line of its own: the trailing
-// WINDOW_VOL average expressed per week (avg km/day x 7) so it reads in the same
-// unit as a training plan. Same shape as the two frequency panels below it.
-function drawVol() {
-  const { w, h } = fitCanvas(cv5, ctx5);
-  const isBottom = bottomPanel() === 'vol';
-  VOLI.b = isBottom ? VDOTI.b : 12;
-  const plotH = h - VOLI.t - VOLI.b;
+// ---- panels 1b/2/3: the same measure over all four rolling windows -------
+// One shared drawer, because the three panels differ only in which series set
+// they read, their axis and their label. Four window lines, deliberately thin
+// and semi-transparent so they read as context, plus the per-day max of the
+// four in plain ink at full strength — that's the line meant to be read first.
+// A colour means the same window in every panel (see the --w* custom properties).
+// All five are drawn at the same weight. The max used to be thicker as well as
+// darker; that read as heavy-handed, and it wasn't carrying any of the work —
+// full-strength plain ink against four semi-transparent hues already separates
+// it, at any width.
+const WIN_ALPHA = 0.55;     // the four window lines: present, but recessive
+const LINE_WIDTH = 1.6;
+function drawWindowPanel(canvas, c, set, insets, panelKey, axisLabel, opts = {}) {
+  const { w, h } = fitCanvas(canvas, c);
+  const isBottom = bottomPanel() === panelKey;
+  insets.b = isBottom ? VDOTI.b : 12;
+  const plotH = h - insets.t - insets.b;
   const [i0, i1] = visibleRange();
-  const perWeek = i => avg[i] * 7;
-  let yMax = 0;
-  for (let i = i0; i <= i1; i++) if (perWeek(i) > yMax) yMax = perWeek(i);
-  const ticks = niceTicks(Math.max(yMax * 1.12, 1));
-  yMax = ticks[ticks.length - 1];
-  const dec = ticks.step < 1 ? 1 : 0;
-  const yOf = v => VOLI.t + plotH * (1 - v / yMax);
-  const c = ctx5;
+  const mx = set[MAXI];
+  // Series indices to draw, in the panel's own order. A line can be switched off
+  // for legibility; it stays in the readout and still feeds MAX either way. With
+  // everything off there is nothing to scale to, so MAX comes back as the floor.
+  const showMax = visLines.max;
+  const drawn = WINDOWS.map((w, k) => visLines[w.key] ? k : -1).filter(k => k >= 0);
+  if (showMax) drawn.push(MAXI);
+  if (!drawn.length) drawn.push(MAXI);
 
-  const pxAt = i => xOf(i) + barW() / 2;
-  c.save();
-  c.beginPath(); c.rect(PAD.l, VOLI.t - 4, plotW(), plotH + 8); c.clip();
-  c.beginPath();
-  c.moveTo(pxAt(i0), VOLI.t + plotH);
-  for (let i = i0; i <= i1; i++) c.lineTo(pxAt(i), yOf(perWeek(i)));
-  c.lineTo(pxAt(i1), VOLI.t + plotH);
-  c.closePath();
-  c.fillStyle = C('--vol'); c.globalAlpha = 0.10; c.fill(); c.globalAlpha = 1;
-  c.restore();
+  // Scaled to the highest line actually *drawn*, not to MAX, so hiding the
+  // spiky short windows really does open the panel up for the ones left — that
+  // is the whole point of the per-line toggles. Run days per week keeps its
+  // fixed 0–7 axis (there is no eighth day to run on) instead.
+  let ticks, yMax;
+  if (opts.fixed7) {
+    yMax = 7;
+    ticks = [0, 1, 2, 3, 4, 5, 6, 7];
+    ticks.step = 1;
+  } else {
+    let peak = 0;
+    for (const k of drawn) for (let i = i0; i <= i1; i++) if (set[k][i] > peak) peak = set[k][i];
+    ticks = niceTicks(Math.max(peak * 1.12, 1));
+    yMax = ticks[ticks.length - 1];
+  }
+  const dec = ticks.step < 1 ? 1 : 0;
+  const yOf = v => insets.t + plotH * (1 - v / yMax);
+  const px = i => xOf(i) + barW() / 2;
+
+  // No area fill under any of these. The single-line panels this grew out of
+  // each had one, but with five lines crossing each other a shaded region only
+  // reads as "the max line has a shadow" — it says nothing the line doesn't.
 
   c.font = '11px system-ui, -apple-system, sans-serif';
   c.textAlign = 'right'; c.textBaseline = 'middle';
@@ -1653,186 +1856,70 @@ function drawVol() {
     c.fillText(t.toFixed(dec), PAD.l - 8, y);
   }
   c.save();
-  c.translate(13, VOLI.t + plotH/2); c.rotate(-Math.PI/2);
+  c.translate(13, insets.t + plotH/2); c.rotate(-Math.PI/2);
   c.textAlign = 'center'; c.fillStyle = C('--muted');
-  c.fillText('km / week', 0, 0);
+  c.fillText(axisLabel, 0, 0);
   c.restore();
 
   c.save();
-  c.beginPath(); c.rect(PAD.l, VOLI.t - 4, plotW(), plotH + 8); c.clip();
-  const px = i => xOf(i) + barW() / 2;
-
-  c.beginPath();
-  for (let i = i0; i <= i1; i++) {
-    const x = px(i), y = yOf(perWeek(i));
-    if (i === i0) c.moveTo(x, y); else c.lineTo(x, y);
-  }
-  c.strokeStyle = C('--vol'); c.lineWidth = 2;
+  c.beginPath(); c.rect(PAD.l, insets.t - 4, plotW(), plotH + 8); c.clip();
   c.lineJoin = 'round'; c.lineCap = 'round';
-  c.stroke();
+  const stroke = (series, css, alpha) => {
+    c.beginPath();
+    for (let i = i0; i <= i1; i++) {
+      const x = px(i), y = yOf(series[i]);
+      if (i === i0) c.moveTo(x, y); else c.lineTo(x, y);
+    }
+    c.strokeStyle = C(css); c.lineWidth = LINE_WIDTH; c.globalAlpha = alpha;
+    c.stroke(); c.globalAlpha = 1;
+  };
+  // Longest window first, so the spikiest line (the shortest window) ends up on
+  // top of the smooth ones rather than buried under them.
+  const winAlpha = fadeWindows ? WIN_ALPHA : 1;
+  const strokeWindows = () => {
+    for (let k = WINDOWS.length - 1; k >= 0; k--) {
+      if (visLines[WINDOWS[k].key]) stroke(set[k], WINDOWS[k].css, winAlpha);
+    }
+  };
+  // MAX is the upper envelope, so wherever it equals a window line the two sit
+  // exactly on top of each other and whichever is drawn second wins. Last by
+  // default, which is what makes it the line read first; `maxBehind` puts it
+  // underneath instead, so the shortest window stays visible along the stretches
+  // where it *is* the max and MAX shows only where it pulls away.
+  const strokeMax = () => { if (showMax) stroke(mx, '--wmax', 1); };
+  if (maxBehind) { strokeMax(); strokeWindows(); } else { strokeWindows(); strokeMax(); }
 
-  // Same split as the bars: the pinned day is a hollow ring, the hovered one solid.
+  // Only one line carries a marker: the crosshair already says which day, and
+  // five dots in a column would be five things to read instead of one. It sits
+  // on MAX, or — if MAX is switched off — on the shortest window still drawn,
+  // which is the one running highest. Same split as the bars: the pinned day is
+  // a hollow ring, the hovered one solid.
+  const anchor = showMax ? MAXI : drawn[0];
+  const anchorCss = anchor === MAXI ? '--wmax' : WINDOWS[anchor].css;
   const dot = (i, hollow) => {
-    const x = Math.round(px(i)) + 0.5, y = yOf(perWeek(i));
+    const x = Math.round(px(i)) + 0.5, y = yOf(set[anchor][i]);
     c.strokeStyle = C('--text-primary'); c.lineWidth = 1; c.globalAlpha = hollow ? 0.16 : 0.25;
-    c.beginPath(); c.moveTo(x, VOLI.t); c.lineTo(x, VOLI.t + plotH); c.stroke();
+    c.beginPath(); c.moveTo(x, insets.t); c.lineTo(x, insets.t + plotH); c.stroke();
     c.globalAlpha = 1;
     c.beginPath(); c.arc(x, y, 4.5, 0, Math.PI * 2);
-    c.fillStyle = hollow ? C('--surface-1') : C('--vol'); c.fill();
-    c.strokeStyle = hollow ? C('--vol') : C('--surface-1'); c.lineWidth = 2; c.stroke();
+    c.fillStyle = hollow ? C('--surface-1') : C(anchorCss); c.fill();
+    c.strokeStyle = hollow ? C(anchorCss) : C('--surface-1'); c.lineWidth = 2; c.stroke();
   };
   const seen = i => i !== null && i >= i0 && i <= i1;
   if (seen(selected) && selected !== hover) dot(selected, true);
   if (seen(hover)) dot(hover, false);
   c.restore();
-  if (isBottom) drawXAxisLabels(c, w, VOLI.t, plotH, i0, i1);
+  if (isBottom) drawXAxisLabels(c, w, insets.t, plotH, i0, i1);
 }
 
-// ---- panel 2: run days per week over the trailing window -----------------
-function drawFreq() {
-  const { w, h } = fitCanvas(cv2, ctx2);
-  const isBottom = bottomPanel() === 'freq';
-  FREQ.b = isBottom ? VDOTI.b : 12;
-  const plotH = h - FREQ.t - FREQ.b;
-  const [i0, i1] = visibleRange();
-  // The window is a rate now: run days per week, so windows of different lengths
-  // are directly comparable and the scale is a fixed 0–7.
-  const perWeek = perWeekAt;
-  const yMax = 7;
-  const yOf = v => FREQ.t + plotH * (1 - v / yMax);
-  const c = ctx2;
-
-  // Fill first, reference lines second: the whole point of the integer lines is to
-  // read a level off them, so they must stay legible where the area covers them.
-  const pxAt = i => xOf(i) + barW() / 2;
-  c.save();
-  c.beginPath(); c.rect(PAD.l, FREQ.t - 4, plotW(), plotH + 8); c.clip();
-  c.beginPath();
-  c.moveTo(pxAt(i0), FREQ.t + plotH);
-  for (let i = i0; i <= i1; i++) c.lineTo(pxAt(i), yOf(perWeek(i)));
-  c.lineTo(pxAt(i1), FREQ.t + plotH);
-  c.closePath();
-  c.fillStyle = C('--freq'); c.globalAlpha = 0.10; c.fill(); c.globalAlpha = 1;
-  c.restore();
-
-  c.font = '11px system-ui, -apple-system, sans-serif';
-  c.textAlign = 'right'; c.textBaseline = 'middle';
-  // one reference line per whole run-day-per-week
-  for (let t = 0; t <= 7; t++) {
-    const y = Math.round(yOf(t)) + 0.5;
-    c.strokeStyle = t === 0 ? C('--baseline') : C('--grid');
-    c.lineWidth = 1;
-    c.beginPath(); c.moveTo(PAD.l, y); c.lineTo(w - PAD.r, y); c.stroke();
-    c.fillStyle = C('--muted');
-    c.fillText(String(t), PAD.l - 8, y);
-  }
-  c.save();
-  c.translate(13, FREQ.t + plotH/2); c.rotate(-Math.PI/2);
-  c.textAlign = 'center'; c.fillStyle = C('--muted');
-  c.fillText('run days / week', 0, 0);
-  c.restore();
-
-  c.save();
-  c.beginPath(); c.rect(PAD.l, FREQ.t - 4, plotW(), plotH + 8); c.clip();
-  const px = i => xOf(i) + barW() / 2;
-
-  c.beginPath();
-  for (let i = i0; i <= i1; i++) {
-    const x = px(i), y = yOf(perWeek(i));
-    if (i === i0) c.moveTo(x, y); else c.lineTo(x, y);
-  }
-  c.strokeStyle = C('--freq'); c.lineWidth = 2;
-  c.lineJoin = 'round'; c.lineCap = 'round';
-  c.stroke();
-
-  // Same split as the bars: the pinned day is a hollow ring, the hovered one solid.
-  const dot = (i, hollow) => {
-    const x = Math.round(px(i)) + 0.5, y = yOf(perWeek(i));
-    c.strokeStyle = C('--text-primary'); c.lineWidth = 1; c.globalAlpha = hollow ? 0.16 : 0.25;
-    c.beginPath(); c.moveTo(x, FREQ.t); c.lineTo(x, FREQ.t + plotH); c.stroke();
-    c.globalAlpha = 1;
-    c.beginPath(); c.arc(x, y, 4.5, 0, Math.PI * 2);
-    c.fillStyle = hollow ? C('--surface-1') : C('--freq'); c.fill();
-    c.strokeStyle = hollow ? C('--freq') : C('--surface-1'); c.lineWidth = 2; c.stroke();
-  };
-  const seen = i => i !== null && i >= i0 && i <= i1;
-  if (seen(selected) && selected !== hover) dot(selected, true);
-  if (seen(hover)) dot(hover, false);
-  c.restore();
-  if (isBottom) drawXAxisLabels(c, w, FREQ.t, plotH, i0, i1);
-}
-
-// ---- panel 3: runs per week, without clumping same-day runs into one -----
-// Same shape as drawFreq, but counts every run rather than run-having days, so
-// a double-run day shows as 2 instead of being folded into the 7-day ceiling.
-// The axis is therefore not fixed at 0–7 the way run-days/week is.
-function drawRuns() {
-  const { w, h } = fitCanvas(cv3, ctx3);
-  const isBottom = bottomPanel() === 'runs';
-  FREQ2.b = isBottom ? VDOTI.b : 12;
-  const plotH = h - FREQ2.t - FREQ2.b;
-  const [i0, i1] = visibleRange();
-  const perWeek = perWeekRunsAt;
-  let yMax = 0;
-  for (let i = i0; i <= i1; i++) if (perWeek(i) > yMax) yMax = perWeek(i);
-  const ticks = niceTicks(Math.max(yMax * 1.12, 1));
-  yMax = ticks[ticks.length - 1];
-  const dec = ticks.step < 1 ? 1 : 0;
-  const yOf = v => FREQ2.t + plotH * (1 - v / yMax);
-  const c = ctx3;
-
-  const pxAt = i => xOf(i) + barW() / 2;
-  c.save();
-  c.beginPath(); c.rect(PAD.l, FREQ2.t - 4, plotW(), plotH + 8); c.clip();
-  c.beginPath();
-  c.moveTo(pxAt(i0), FREQ2.t + plotH);
-  for (let i = i0; i <= i1; i++) c.lineTo(pxAt(i), yOf(perWeek(i)));
-  c.lineTo(pxAt(i1), FREQ2.t + plotH);
-  c.closePath();
-  c.fillStyle = C('--freq2'); c.globalAlpha = 0.10; c.fill(); c.globalAlpha = 1;
-  c.restore();
-
-  c.font = '11px system-ui, -apple-system, sans-serif';
-  c.textAlign = 'right'; c.textBaseline = 'middle';
-  for (const t of ticks) {
-    const y = Math.round(yOf(t)) + 0.5;
-    c.strokeStyle = t === 0 ? C('--baseline') : C('--grid');
-    c.lineWidth = 1;
-    c.beginPath(); c.moveTo(PAD.l, y); c.lineTo(w - PAD.r, y); c.stroke();
-    c.fillStyle = C('--muted');
-    c.fillText(t.toFixed(dec), PAD.l - 8, y);
-  }
-  c.save();
-  c.translate(13, FREQ2.t + plotH/2); c.rotate(-Math.PI/2);
-  c.textAlign = 'center'; c.fillStyle = C('--muted');
-  c.fillText('runs / week', 0, 0);
-  c.restore();
-
-  c.save();
-  c.beginPath(); c.rect(PAD.l, FREQ2.t - 4, plotW(), plotH + 8); c.clip();
-  const px = i => xOf(i) + barW() / 2;
-
-  c.beginPath();
-  for (let i = i0; i <= i1; i++) {
-    const x = px(i), y = yOf(perWeek(i));
-    if (i === i0) c.moveTo(x, y); else c.lineTo(x, y);
-  }
-  c.strokeStyle = C('--freq2'); c.lineWidth = 2;
-  c.lineJoin = 'round'; c.lineCap = 'round';
-  c.stroke();
-
-  if (hover !== null && hover >= i0 && hover <= i1) {
-    const x = Math.round(px(hover)) + 0.5, y = yOf(perWeek(hover));
-    c.strokeStyle = C('--text-primary'); c.lineWidth = 1; c.globalAlpha = 0.25;
-    c.beginPath(); c.moveTo(x, FREQ2.t); c.lineTo(x, FREQ2.t + plotH); c.stroke();
-    c.globalAlpha = 1;
-    c.beginPath(); c.arc(x, y, 4.5, 0, Math.PI * 2);
-    c.fillStyle = C('--freq2'); c.fill();
-    c.strokeStyle = C('--surface-1'); c.lineWidth = 2; c.stroke();
-  }
-  c.restore();
-  if (isBottom) drawXAxisLabels(c, w, FREQ2.t, plotH, i0, i1);
-}
+// Rolling distance per week: the measure the bars used to carry, now a line per
+// window so a big week and a big block are told apart at a glance.
+const drawVol = () => drawWindowPanel(cv5, ctx5, volSeries, VOLI, 'vol', 'km / week');
+// Run days per week — a day with two runs still counts once, hence the fixed 0–7.
+const drawFreq = () => drawWindowPanel(cv2, ctx2, freqSeries, FREQ, 'freq', 'run days / week', { fixed7: true });
+// Runs per week — every run counts, so a double-run day shows as 2 and the axis
+// is not capped at 7 the way run-days/week is.
+const drawRuns = () => drawWindowPanel(cv3, ctx3, runSeries, FREQ2, 'runs', 'runs / week');
 
 // x-axis labels live on the bottom panel only; every panel shares the x mapping,
 // so whichever one is drawn last just calls this with its own insets.
@@ -1971,6 +2058,30 @@ function vdotBasisText(i) {
 }
 
 // ---- readout -------------------------------------------------------------
+// One measure, all four windows plus their max, ordered max-first and then
+// shortest window to longest — the same order the eye has to use on the panel,
+// where the max is the line drawn on top. Every line is listed whether or not
+// it is currently drawn: the toggles are a decluttering move on the chart, not
+// a filter on the numbers. `extra(w, v)` is an optional dim note per row — the
+// raw counts behind a rate, or the same rate over a longer span — with `w` the
+// window index, or null on the max row, which isn't a window and so has no
+// counts of its own.
+function winGrid(set, i, dp, unit, extra) {
+  const row = (cls, css, label, v, w) =>
+    `<span class="sw ${cls}" style="background:var(${css})"></span>` +
+    `<span class="wl ${cls}">${label}</span>` +
+    `<span class="wv ${cls}">${v.toFixed(dp)}${unit ? ' ' + unit : ''}</span>` +
+    `<span class="wx ${cls}">${extra ? extra(w, v) : ''}</span>`;
+  return `<span class="wingrid">` +
+    row('r-max', '--wmax', 'MAX', set[MAXI][i], null) +
+    WINDOWS.map((win, w) => row('', win.css, win.label, set[w][i], w)).join('') +
+    `</span>`;
+}
+// A km/week figure restated over the two longer spans, one per row of the
+// distance table. The km/wk part is left out — that's the value it sits next to.
+const longerSpans = v => seg([`${nf0.format(perMonthKm(v / 7))} km/mo`,
+                              `${nf0.format(perYearKm(v / 7))} km/yr`]);
+
 const ro = document.getElementById('readout');
 function setReadout(i, tag) {
   if (i === null) {
@@ -1992,8 +2103,9 @@ function setReadout(i, tag) {
                longOn[i] ? '' : 'no long runs',
                nRuns[i] > 1 ? 'longest ' + km(maxRun[i]) : ''])
         : 'no target yet'}</span></span>
-    <span class="pair rate"><span class="k">${WINDOW_VOL}-day average${i < WINDOW_VOL - 1 ? ' (partial)' : ''}</span><span class="v">${km(avg[i])} km/day</span><span class="v2">${rateSummary(avg[i])}</span></span>
-    <span class="pair"><span class="k">Runs per week</span><span class="v">${perWeekAt(i).toFixed(1)} - ${runs[i]} of ${WINDOW_FREQ} days</span><span class="v2">${perWeekRunsAt(i).toFixed(1)} - ${totalRuns[i]} runs in ${WINDOW_FREQ} days</span></span>
+    <span class="pair"><span class="k">Distance per week</span>${winGrid(volSeries, i, 1, 'km', (w, v) => longerSpans(v))}</span>
+    <span class="pair"><span class="k">Run days per week</span>${winGrid(freqSeries, i, 1, '', w => w === null ? '' : `${runDaysIn[w][i]} of ${WINDOWS[w].days} days`)}</span>
+    <span class="pair"><span class="k">Runs per week</span>${winGrid(runSeries, i, 1, '', w => w === null ? '' : `${runsIn[w][i]} runs in ${WINDOWS[w].days} days`)}</span>
     <span class="pair"><span class="k">VDOT (peak, trailing ${Math.round(WINDOW_VDOT/7)}w)</span><span class="v">${vdot[i] != null ? vdot[i].toFixed(1) : '—'}</span><span class="v2">${vdotBasisText(i)}</span></span>
     <span class="badge" style="color:${c ? fullColour(c) : 'var(--text-secondary)'}">${
       !c ? '— rest day'
@@ -2199,7 +2311,7 @@ function renderZonePanel() {
 const tbody = document.getElementById('tbody');
 let tableKey = '';
 function renderTable(i0, i1) {
-  const key = i0 + ':' + i1 + ':' + WINDOW_VOL + ':' + WINDOW_FREQ;
+  const key = i0 + ':' + i1;
   if (key === tableKey) return;
   tableKey = key;
   const rows = [];
@@ -2316,16 +2428,20 @@ window.addEventListener('keydown', e => {
 // keeps it holding just the what-if if that is still edited — so neither reset has
 // to know what the other one owns.
 document.getElementById('reset').onclick = () => {
-  WINDOW_VOL = PREF_DEFAULTS.windowVol;
-  WINDOW_FREQ = PREF_DEFAULTS.windowFreq;
+  windowBase = PREF_DEFAULTS.windowBase;
+  windowMult = PREF_DEFAULTS.windowMult;
+  rebuildWindows();
   WINDOW_VDOT = PREF_DEFAULTS.windowVdot;
   MIN_LAP_M = PREF_DEFAULTS.minLapM;
   stableBand = PREF_DEFAULTS.stableBand;
   longNeedsSingleRun = PREF_DEFAULTS.longNeedsSingleRun;
+  maxBehind = PREF_DEFAULTS.maxBehind;
+  fadeWindows = PREF_DEFAULTS.fadeWindows;
   colourScheme.normal = PREF_DEFAULTS.colourNormal;
   colourScheme.long = PREF_DEFAULTS.colourLong;
   ZONE_BARS = PREF_DEFAULTS.zoneBars;
   visPanels = { ...PREF_DEFAULTS.panels };
+  visLines = { ...PREF_DEFAULTS.lines };
   savePrefs();
   syncControls();
   recomputeDayVdot();
@@ -2338,10 +2454,15 @@ function syncLabels() {
   const pct = +(stableBand * 100).toFixed(1);
   for (const el of document.querySelectorAll('.bandN')) el.textContent = pct;
   for (const el of document.querySelectorAll('.gradN')) el.textContent = +(50 - pct).toFixed(1);
-  for (const el of document.querySelectorAll('.winN')) el.textContent = WINDOW_VOL;
-  for (const el of document.querySelectorAll('.winFreqN')) el.textContent = WINDOW_FREQ;
   for (const el of document.querySelectorAll('.winVdotN')) el.textContent = WINDOW_VDOT;
-  document.title = `Running history — ${WINDOW_VOL}-day rolling average`;
+  // Everything that spells out which four windows are in play: the panel
+  // titles, the legend note, each legend item's own label, and the data
+  // table's column header for the volume window.
+  for (const el of document.querySelectorAll('.winsN')) el.textContent = WINDOWS.map(w => w.weeks).join(' / ');
+  WINDOWS.forEach((w, k) => {
+    for (const el of document.querySelectorAll('.winLabel' + k)) el.textContent = w.label;
+  });
+  for (const el of document.querySelectorAll('.winVolN')) el.textContent = WINDOWS[IV].weeks;
   renderTiles();
 }
 
@@ -2362,19 +2483,42 @@ function syncPanelVisibility() {
   }
 }
 
+// Same idea as syncPanelVisibility, one level down: the legend's own checkboxes
+// are the control for which lines the panels draw, so state has to be pushed
+// back into them at boot and on Reset. The dimmed legend item is the only other
+// place this state shows.
+function syncLineVisibility() {
+  for (const k of LINE_KEYS) {
+    const box = document.getElementById('line-' + k);
+    box.checked = visLines[k];
+    box.closest('.item').classList.toggle('off', !visLines[k]);
+  }
+}
+for (const k of LINE_KEYS) {
+  document.getElementById('line-' + k).onchange = e => {
+    visLines[k] = e.target.checked;
+    savePrefs();
+    syncLineVisibility();
+    drawAll();
+  };
+}
+
 function syncControls() {
-  winVolInput.value = WINDOW_VOL / 7;
-  winFreqInput.value = WINDOW_FREQ / 7;
+  winBaseInput.value = windowBase;
+  winMultInput.value = windowMult;
   winVdotInput.value = WINDOW_VDOT / 7;
   minLapInput.value = MIN_LAP_M;
   zoneBarsInput.value = ZONE_BARS;
   bandInput.value = +(stableBand * 100).toFixed(1);
   longSingleBox.checked = longNeedsSingleRun;
+  maxBehindBox.checked = maxBehind;
+  fadeWindowsBox.checked = fadeWindows;
   for (const [scheme, id] of [['normal', 'colourNormal'], ['long', 'colourLong']]) {
     document.getElementById(id).checked = colourScheme[scheme];
     document.getElementById('row-' + scheme).classList.toggle('off', !colourScheme[scheme]);
   }
   syncPanelVisibility();
+  syncLineVisibility();
 }
 
 function applyWindow() {
@@ -2402,6 +2546,18 @@ longSingleBox.onchange = () => {
   tableKey = '';
   drawAll();
 };
+const fadeWindowsBox = document.getElementById('fadeWindows');
+fadeWindowsBox.onchange = () => {
+  fadeWindows = fadeWindowsBox.checked;
+  savePrefs();
+  drawAll();   // a drawing choice only — nothing to recompute
+};
+const maxBehindBox = document.getElementById('maxBehind');
+maxBehindBox.onchange = () => {
+  maxBehind = maxBehindBox.checked;
+  savePrefs();
+  drawAll();   // z-order only — nothing to recompute
+};
 const bandInput = document.getElementById('stableBand');
 bandInput.onchange = bandInput.oninput = () => {
   const v = Number(bandInput.value);
@@ -2413,19 +2569,25 @@ bandInput.onchange = bandInput.oninput = () => {
   tableKey = '';
   drawAll();
 };
-const winVolInput = document.getElementById('windowVolWeeks');
-winVolInput.onchange = winVolInput.oninput = () => {
-  const v = Math.round(Number(winVolInput.value));
-  if (!Number.isFinite(v) || v < 1 || v > 52) return;   // ignore half-typed values
-  WINDOW_VOL = v * 7;
+// The two numbers behind all four windows. Both move the whole set, and
+// because the target reads slots 1 and 2 they move the bars' colours too —
+// hence the full applyWindow() (recompute + relabel + tiles + readout + redraw)
+// rather than just a redraw.
+const winBaseInput = document.getElementById('windowBase');
+winBaseInput.onchange = winBaseInput.oninput = () => {
+  const v = Math.round(Number(winBaseInput.value));
+  if (!Number.isFinite(v) || v < 1 || v > 8) return;   // ignore half-typed values
+  windowBase = v;
+  rebuildWindows();
   savePrefs();
   applyWindow();
 };
-const winFreqInput = document.getElementById('windowFreqWeeks');
-winFreqInput.onchange = winFreqInput.oninput = () => {
-  const v = Math.round(Number(winFreqInput.value));
-  if (!Number.isFinite(v) || v < 1 || v > 52) return;   // ignore half-typed values
-  WINDOW_FREQ = v * 7;
+const winMultInput = document.getElementById('windowMult');
+winMultInput.onchange = winMultInput.oninput = () => {
+  const v = Math.round(Number(winMultInput.value));
+  if (!Number.isFinite(v) || v < 2 || v > 8) return;   // ignore half-typed values
+  windowMult = v;
+  rebuildWindows();
   savePrefs();
   applyWindow();
 };

@@ -28,16 +28,15 @@ Five stacked panels sharing one x-axis, one bar/point per calendar day:
    therefore can't squash every ordinary run onto the baseline, and the gap
    between a 4 and a 6 km day stays readable. See "The bar panel's log axis"
    below for how the floor and the rest-day stubs work.
-2. **Line** — rolling **distance per week** over the trailing *volume* window
-   (default 4 weeks): `avg[i] * 7`, i.e. the measure the bars used to carry,
+2. **Lines** — rolling **distance per week**, one line per window (see "The four
+   windows" below) plus their per-day max: the measure the bars used to carry,
    moved out into a panel of its own so the bars could become per-run distance.
-   Colour `--vol`.
-3. **Line** — average run days per week over the trailing *frequency* window
-   (default 16 weeks, set independently), on a fixed 0–7 axis with a
-   reference line per whole day. A day with two runs still counts as one day here.
-4. **Line** — average runs per week over the same frequency window: every run
-   counts, so a double-run day shows as 2. Axis is not fixed at 0–7 like the panel
-   above it, since it can run higher.
+3. **Lines** — average run days per week over each window, on a fixed 0–7 axis
+   with a reference line per whole day. A day with two runs still counts as one
+   day here, so 7 is a real ceiling.
+4. **Lines** — average runs per week over each window: every run counts, so a
+   double-run day shows as 2. Axis is not fixed at 0–7 like the panel above it,
+   since it can run higher.
 5. **Line** — highest VDOT achieved by any workout in the trailing *VDOT* window
    (default 50 weeks, set independently — see "VDOT and pace zones" below).
    Undefined (a gap, not a zero) before the first-ever logged run.
@@ -74,9 +73,19 @@ data rather than at zero:
   not a zero line** — there isn't one on this axis, so unlike the linear panels
   no gridline is drawn in `--baseline` and none is labelled 0.
 
-Hovering a day fills the readout sidebar: exact distance, the rolling average
-(also as km/wk, km/mo, km/yr), runs per week — as two lines, run days/week on top
-and every-run-counted below it — the day's peak VDOT (plus what that day's own
+Hovering a day fills the readout sidebar: exact distance, then one small table
+per measure (distance/week, run days/week, runs/week) giving MAX first and then
+each window from 1w to 64w — the same order the panels are read in, since MAX is
+the line drawn on top. Every line is listed whether or not it is currently
+*drawn*: the per-line toggles declutter the chart, they don't filter the numbers.
+Each row carries a dim note to the right of its value — the raw counts behind the
+rate ("78 of 112 days", "87 runs in 112 days"), or for the distance table that
+same rate restated as km/mo and km/yr. (The km/wk part is left out there, since
+that is the value it sits next to.) That note is **10px, a step down from the
+rest of the row** — it is the widest thing in the sidebar once a week goes over
+99 km ("508 km/mo · 6,098 km/yr") and was wrapping on 16 days of a real
+history at 11px; at 10px nothing wraps across all 1339. Sized against a 280px
+sidebar, which is the width this is actually used at. Then the day's peak VDOT (plus what that day's own
 reading is actually based on: full activity or best lap, with its distance, time
 and pace — see `vdotBasisText()`), the day's target, and the verdict. **Clicking
 a day pins it** there — see below.
@@ -140,16 +149,73 @@ and never mid-phrase ("no / long runs", "564 / km/yr").
 
 All of it is derived in-browser from one array of daily distances.
 
-- **Rolling windows** — two independent ones, each set in whole weeks in the
-  controls (1–52) and stored internally in days. `WINDOW_VOL`, default 4 weeks,
-  drives the volume panel: the average and the weekly-volume half of the target.
-  `WINDOW_FREQ`, default 16 weeks, drives the two per-week panels (run days/week,
-  runs/week) *and* the run-frequency half of the target and the long-run gate below
-  — how often counts as a frequency question wherever it appears, even inside the
-  volume panel's own target. They're split because "is my volume trending up" and
-  "how often am I running" are useful over different spans; a shorter volume window
-  reacts fast to a training block, a longer frequency window doesn't jitter with
-  every rest day.
+- **The four windows** — `WINDOWS`. There are always exactly **four**
+  (`N_WINDOWS`): four is what the colour scheme and the readout tables are built
+  for, and a fifth would mean finding a fifth hue that separates from the other
+  four. *Which* four is set by two numbers in the sidebar, and
+  `rebuildWindows()` derives the rest — each slot is the one before it times the
+  multiple:
+  - `windowBase` — weeks in the shortest window, **1–8**, default **1**
+  - `windowMult` — the multiple between one window and the next, **2–8**,
+    default **4**
+
+  The defaults give the 1 / 4 / 16 / 64 weeks this was designed around
+  (week-ish, month-ish, quarter-ish, year-ish), stored internally in days
+  (7 / 28 / 112 / 448). A slot's **key is its index** (`s0`…`s3`), not its week
+  count, so it keeps its colour and its show/hide setting when the numbers behind
+  it change. Nothing stops the long end running past the length of the history
+  (8 × 8 gives 4096 weeks); those lines just sit near zero, which is the honest
+  reading given everything is divided by its full window.
+
+  Three sets of series are derived, one value per
+  window per day, all expressed as rates so windows of very different lengths
+  share an axis: `volSeries` (km/week), `freqSeries` (run days/week) and
+  `runSeries` (runs/week).
+- **MAX** — an extra series appended to each set at index `MAXI`, the per-day
+  **max across the four windows** — the upper envelope, not a running all-time
+  best. It answers "at whatever timescale flatters me most, where am I".
+  Drawn last, in plain ink (`--wmax`) at full strength, over the four windows at
+  `WIN_ALPHA` 0.55 — **`fadeWindows`** turns that transparency off, which is
+  what you want when comparing two windows against *each other* rather than
+  against the max: every crossing is legible at full strength, at the cost of a
+  busier panel. It's what makes the max read as the primary line without being
+  any thicker, so it's on by default. No area fill either — the single-line panels this grew
+  out of each had one, and the VDOT panel still does, but with five lines
+  crossing each other a shaded region under the max only reads as the max line
+  having a shadow. **`maxBehind`** flips the z-order: MAX is the upper envelope,
+  so wherever it equals a window line the two sit exactly on top of each other
+  and whichever is drawn second wins. Last by default, which is what makes it
+  the line read first; behind instead, the shortest window stays visible along
+  the stretches where it *is* the max and MAX shows only where it pulls away.
+  Purely a draw order — nothing computed changes, so the toggle only redraws.
+  **All five are the same weight** (`LINE_WIDTH`) — the max
+  was briefly drawn thicker as well as darker, which read as heavy-handed and
+  wasn't carrying any of the work: full-strength ink against four
+  semi-transparent hues separates it at any width. Hiding a window line (below)
+  does **not** take it out of MAX — MAX is always the max of all four. In practice it tracks the 1-week line most of the
+  time and pulls away from it exactly when a short window collapses (a taper, an
+  injury, a holiday) while a longer one is still high — which is the case worth
+  seeing.
+- **Per-line show/hide** — `visLines`, five booleans (`max` plus each window's
+  key), persisted in `runviz.prefs.v1` as `lines`. The control is the legend's
+  own "Windows" row, whose swatches are checkboxes; an unticked one dims via
+  `.legend .item.off`. This is a view filter and nothing more: a hidden line is
+  still in the hover readout and still counts towards MAX. Two things do follow
+  it, because both exist to make the remaining lines readable — the y-axis
+  scales to the highest line actually **drawn** rather than to MAX (except the
+  fixed 0–7 run-days axis), and the hover/pin marker moves to MAX, or to the
+  shortest window still drawn when MAX is off.
+- **The two windows the maths still needs** — a run can only be judged against a
+  single number, so the target keeps exactly one volume window and one frequency
+  window: `IV`/`IF`, **slots 1 and 2**, i.e. `WINDOW_VOL` and `WINDOW_FREQ`,
+  which at the defaults are the 4 and 16 weeks that used to be settings of their
+  own. Slots rather than free numbers, so the target is always read against a
+  line that is actually on screen — which does mean **`windowBase`/`windowMult`
+  move the targets, and with them the bar colours and verdicts**, not only what
+  the line panels draw. Deliberate, but worth knowing before wondering why a
+  whole history changed colour. `avg`,
+  `perWeekAt()` and `perWeekRunsAt()` are the single-window views the tiles, the
+  table and the target maths read.
 - **Target** — what a run that day had to be to hold the average steady:
   **weekly volume ÷ (run days per week + 1)** when long runs are active, otherwise
   ÷ run days per week (which is just mean km per *running* day). Weekly volume comes
@@ -175,11 +241,13 @@ All of it is derived in-browser from one array of daily distances.
   With a ±5% band the whole range tiles as: `<50 full un | 50–95 ramp | 95–105
   stable | 105–150 ramp pr` (normal, centre 1×) then `150–195 ramp un | 195–205
   stable | 205–250 ramp pr | >250 full pr` (long, centre 2×).
-- **Everything is divided by its full window, always** — the average and weekly
-  volume by `WINDOW_VOL`, run days/week, runs/week and the long-run gate by
-  `WINDOW_FREQ`. Each window's own first stretch of days therefore ramps in from
-  zero rather than being extrapolated: one run on day one is 0.1 run days/week over
-  a 16-week window, not "7 a week" off a single elapsed day. A "days elapsed"
+- **Everything is divided by its full window, always** — every one of the four
+  windows' series, and the target's two. Each window's own first stretch of days
+  therefore ramps in from zero rather than being extrapolated: one run on day one
+  is 0.11 run days/week over the 64-week window, not "7 a week" off a single
+  elapsed day. This is also why the four lines fan out from zero at different
+  rates over the first year or so of history, and why MAX there is essentially
+  always the 1-week line. A "days elapsed"
   ramp-in mode existed and was removed: it made the readout say "1 of 1 days" while
   the rate was computed against a 7-day floor, which was both inconsistent and not
   what the chart is for.
@@ -211,9 +279,9 @@ rest lap that happens to clear it still never wins the search on its own. Checki
 the whole day too (not just as a fallback for days with no lap data) is what makes
 an evenly-paced tempo run or race its own best evidence when it beats every
 individual lap. The **VDOT panel** is the rolling max of that across the trailing *VDOT*
-window (`WINDOW_VDOT`, default 50 weeks — the only one of the three windows that
-wants years, not weeks, because "what's my fitness ceiling" and "how often am I
-running" are different-timescale questions). It's a plain sliding-window max
+window (`WINDOW_VDOT`, default 50 weeks — the only window still adjustable, and
+the only one that wants years rather than weeks, because "what's my fitness
+ceiling" and "how often am I running" are different-timescale questions). It's a plain sliding-window max
 (monotonic deque, O(N)), not a target, so — unlike the volume/frequency target math
 — there's no circularity to avoid in including the day itself.
 
@@ -403,24 +471,29 @@ for a yellow that passes, because none does.
 ## Remembered settings
 
 `runviz.prefs.v1` holds everything the settings sidebar and the what-if box can be
-set to, so the page opens the way it was left: `windowVol`, `windowFreq`,
-`windowVdot`, `minLapM`, `stableBand`, `longNeedsSingleRun`, `colourNormal`,
-`colourLong`, `zoneBars`, `panels` (`{vol, freq, runs, vdot, zone}`, each independently
-show/hide — see below), and `plan` (`null` = the what-if box follows real
+set to, so the page opens the way it was left: `windowBase`, `windowMult`,
+`windowVdot`, `minLapM`,
+`stableBand`, `longNeedsSingleRun`, `colourNormal`,
+`colourLong`, `zoneBars`, `maxBehind`, `fadeWindows`, `panels` (`{vol, freq, runs, vdot, zone}`, each independently
+show/hide — see below), `lines` (`{max, s0, s1, s2, s3}` — slot keys, which of
+the five lines the three window panels draw), and `plan` (`null` = the what-if box follows real
 history, `{km, days}` = edited). Three rules:
 
-- **Read at the very top of the `if (DATA)` block**, above `let WINDOW_VOL` /
-  `let WINDOW_FREQ` / `let WINDOW_VDOT`, because `recompute()` runs at load and
-  reads the first two — the declaration-order gotcha below. (`WINDOW_VDOT` isn't
-  read by `recompute()`, but is declared alongside the other two for the same
-  reason. `MIN_LAP_M` is declared further down, right next to `recomputeDayVdot()`
+- **Read at the very top of the `if (DATA)` block**, above `WINDOWS` and
+  `let WINDOW_VDOT`, because `recompute()` runs at load and reads `WINDOWS` — the
+  declaration-order gotcha below. (`WINDOW_VDOT` isn't read by `recompute()`, but
+  is declared alongside for the same reason. `MIN_LAP_M` is declared further down, right next to `recomputeDayVdot()`
   — nothing earlier touches it, so it doesn't need to move. `ZONE_BARS` is declared
   right next to the `ZONES` constant, for the same reason.)
 - **Validated field by field on load** (`loadPrefs`), against the same limits as the
   inputs, so a stale or hand-edited entry can only produce a state the UI can reach.
-  All three windows are additionally rounded to the nearest whole week, since
-  that's the only unit the controls can produce — `windowVdot`'s range is 1–260
-  weeks, wider than the other two's 1–52, since it wants years rather than weeks.
+  `windowBase` (1–8) and `windowMult` (2–8) are rounded to whole numbers, and
+  `windowVdot` to the nearest whole week, since those are the only units their
+  controls can produce; `windowVdot`'s range is 1–260 weeks — it wants years
+  rather than weeks. (`windowVol`/`windowFreq` used to live here as day counts;
+  the four windows are derived from base and multiple now. A stale entry still
+  carrying the old fields is simply ignored and dropped on the next save, as is
+  one carrying the old week-count `lines` keys.)
   `minLapM` is rounded to the nearest 100m, range 100–5000. `zoneBars` is rounded
   to the nearest whole number, range 1–20. Anything that fails falls back to
   `PREF_DEFAULTS` for that field alone.
@@ -428,15 +501,21 @@ history, `{km, days}` = edited). Three rules:
   *removed* the moment everything is back to default. A page whose settings have
   never been touched leaves nothing behind.
 
-`syncControls()` is the one place state is pushed *into* the DOM — the markup carries
+`syncControls()` (with `syncPanelVisibility()` and `syncLineVisibility()` under
+it) is the one place state is pushed *into* the DOM — the markup carries
 the defaults, and a remembered setting has to overwrite them at boot.
+`syncLabels()` owns the text that *spells out* which four windows are in play:
+`.winsN` (the three panel titles and the legend note), `.winLabel0`–`.winLabel3`
+(each legend item's own "4w") and `.winVolN` (the data table's column header).
 
 **There are two resets, and each owns only what sits next to it.**
 
-- **Reset** in the settings sidebar: all three windows, the min-lap distance,
-  stable band, the pace-zone bar count, the long-run rule, both colour toggles and
-  the five panel show/hide toggles back to their defaults (all shown), plus the
-  view zoomed back out. It does *not* touch the what-if.
+- **Reset** in the settings sidebar: the window base and multiple, the VDOT
+  window, the min-lap distance,
+  stable band, the pace-zone bar count, the long-run rule, the MAX draw order,
+  the window-line fade, both colour toggles, the five panel show/hide toggles and the five line
+  show/hide toggles back to their defaults (all shown), plus the view zoomed
+  back out. It does *not* touch the what-if.
 - **reset** in the Today's target tile: clears the what-if back to following real
   history, and nothing else.
 
@@ -449,14 +528,34 @@ Double-clicking a panel still resets only the zoom, which is view state and
 deliberately *not* remembered — persisting it would fight the Reset button and open
 the page mid-history.
 
-**The settings sidebar** (legend + all the controls above, formerly a header row
-across the top of the chartcard) is the third sidebar-shaped thing on the page,
-on the opposite side from the readout — `<aside id="settingsSidebar">`, always
-visible rather than following `selected`/`hover` like the other two (a gear-button
-toggle for it was tried and dropped — always-on won). Being a vertical list rather
-than a horizontal bar-controls row meant `.ctrls` lost its `margin-left: auto`
-(nothing to push right against in a column) and gained
+**The settings sidebar** is the third sidebar-shaped thing on the page, on the
+opposite side from the readout — `<aside id="settingsSidebar">`, always visible
+rather than following `selected`/`hover` like the other two (a gear-button
+toggle for it was tried and dropped — always-on won). Being a vertical list
+rather than the horizontal chartcard header row it replaced meant `.ctrls` lost
+its `margin-left: auto` (nothing to push right against in a column) and gained
 `flex-direction: column; align-items: stretch` instead.
+
+It is split into four `.setgroup` sections, **grouped by what each setting
+moves** rather than by what kind of control it is — "which panel is this about"
+is the question being asked when someone comes looking for a setting. A 1px
+rule separates them rather than more whitespace, so the grouping doesn't cost
+much height:
+
+| Group | Holds |
+|---|---|
+| Volume & frequency panels | the five line show/hide swatches, the three panel show/hide boxes, `windowBase`/`windowMult`, `fadeWindows`, `maxBehind` |
+| VDOT panel | its show/hide, `windowVdot`, `minLapM` |
+| Pace zones | its show/hide, `zoneBars` |
+| Targets & verdicts | the normal/long/rest colour legend, `longNeedsSingleRun`, `stableBand` |
+
+Two placements are worth naming. **The legend is split across two groups**, not
+kept as one block: the window-line swatches are the show/hide control for those
+lines, so they belong beside the panels they colour, while the verdict ramps
+belong beside the target settings that produce them. And **`minLapM` sits under
+VDOT** even though it also moves the pace-zone histogram — it is a VDOT input,
+and the histogram is read against the day's VDOT, so that is where it comes
+from. Reset sits outside all four, since it owns the lot.
 
 ## Colour system
 
@@ -473,17 +572,26 @@ Rest days are a pale neutral `--rest` (this is also what the bar panel's rest-da
 stubs are drawn in); a run whose scheme has colouring switched off is a mid neutral
 `--nocolour`.
 
-The four line panels each have one hue of their own: `--vol` rose, `--freq` near-
-neutral grey, `--freq2` teal, `--vdot` violet. `--vol` was added with the
-`dataviz` validator against the other three, on the **adjacent** basis — the
-volume panel sits directly above the frequency panel, so `--vol` ↔ `--freq` is
-the pair that matters. Light `#e5405c` clears it at CVD ΔE 8.7 (and 8.6 worst
-all-pairs against the whole set); dark `#e8637d` at 13.4. The validator also
-reports two **pre-existing** complaints that have nothing to do with this
-addition and were not "fixed": `--freq` sits below the chroma floor because it
-is meant to read as a neutral, and in dark mode `--freq` ↔ `--freq2` is ΔE 1.4.
-Neither matters here — these are four separate single-series panels, each with
-its own title and its own labelled y-axis, never one plot with four series in it.
+The three volume/frequency panels share **one** four-colour scheme, one colour
+per rolling window, so a colour means the same window everywhere: `--w1` blue,
+`--w4` green, `--w16` orange, `--w64` crimson, plus `--wmax` for the max line —
+plain ink (`#0b0b0b` light, `#ffffff` dark) rather than a hue, because it is the
+line meant to be read first and it should not compete as a fifth category. The
+VDOT panel keeps its own `--vdot` violet; it is a single-series panel and not
+part of this scheme.
+
+These four were validated on the **all-pairs** basis, not the adjacent one the
+rest of this file uses — they really are four series in one plot, crossing each
+other constantly, so every pair has to separate, not just neighbours. Light
+(`#0060a6`, `#00ab86`, `#d57700`, `#a3215a`) clears it at worst ΔE 12.8 (deutan)
+/ 23.4 normal-vision; dark (`#0074c8`, `#00ac86`, `#d97900`, `#bb3a6d`) at
+10.2 / 20.2. One WARN was accepted rather than chased: `--w4`'s light step sits
+at 2.85:1 contrast against the near-white surface. The relief the validator asks
+for is present — the legend and the hover readout label and swatch every line —
+and pushing it darker cost more on the CVD pairs than the contrast gained.
+The earlier per-panel hues (`--vol` rose, `--freq` grey, `--freq2` teal) are
+gone; they encoded which *panel* you were in, which the panel title already says,
+and there is no longer one line per panel to colour.
 
 **The important constraint:** six mutually distinguishable hues do not exist. Within
 a scheme the pair carries the meaning and is validated strongly (normal CVD ΔE 20.9 /
@@ -545,18 +653,19 @@ One file, in this order: CSS custom properties → styles → markup → load-ga
 → bootstrap script (CSV parsing, storage, sport picker, boot) → app script, whose
 entire body is wrapped in `if (DATA) { … }` so nothing runs until data exists.
 
-Roughly: `recompute` (avg + run counts + `computeTargets`) → `classify` (verdict per
-day) → `buildRamps`/`barColour` → `drawBars`/`drawVol`/`drawFreq`/`drawAll` →
-`setReadout`/`renderTable`/`renderTiles`/`syncLabels`.
+Roughly: `recompute` (the four windows' series + their max + `computeTargets`) →
+`classify` (verdict per day) → `buildRamps`/`barColour` → `drawBars` /
+`drawWindowPanel` (shared by `drawVol`/`drawFreq`/`drawRuns`) / `drawVdot` /
+`drawAll` → `setReadout`/`winGrid`/`renderTable`/`renderTiles`/`syncLabels`.
 
 ## Gotchas that have bitten before
 
 - **Declaration order.** `recompute()` runs at load. Anything it touches
-  (`WINDOW_VOL`, `WINDOW_FREQ`, `compareMode`, `LONG_MIN_RUNS_PER_WEEK`, the series
+  (`WINDOWS`, `IV`/`IF`, `MAXI`, `LONG_MIN_RUNS_PER_WEEK`, the series
   arrays) must be declared
   *above* that call or the whole script dies on a `const`/`let` TDZ error, which
   surfaces confusingly as "Cannot access 'C' before initialization". `loadPrefs()`
-  therefore sits above `let WINDOW_VOL`/`let WINDOW_FREQ`; `savePrefs()` may
+  therefore sits above `WINDOWS`; `savePrefs()` may
   *reference* things declared later (`stableBand`, `plan`) because it is only ever
   *called* later.
 - **`[hidden]` vs `display`.** An author `display:` rule beats the UA stylesheet
@@ -575,6 +684,15 @@ day) → `buildRamps`/`barColour` → `drawBars`/`drawVol`/`drawFreq`/`drawAll` 
   so all three match by construction. See the readout section above before touching
   its flex properties.
 - Floating point: `1.05 - 1 > 0.05`, so band edges need the epsilon in `classify`.
+- **Negative zero.** A sliding-window sum adds and subtracts the same distances
+  in a different order, so it doesn't land back on exactly 0 over a stretch with
+  no runs — it lands on dust, often *negative* dust, which `toFixed`/`Intl`
+  render as "-0.0 km". On a real export that was 171 dusty values showing up as
+  a minus zero on 158 days of the readout. `recompute()` and `computeTargets()`
+  therefore snap their running sums to 0 below `1e-9` (distances are rounded to
+  1e-3 km when the data is built, so anything smaller is dust by definition).
+  Snapped at the source, not at each format call, so every reader of the series
+  gets a clean zero.
 
 ## How to verify a change
 
