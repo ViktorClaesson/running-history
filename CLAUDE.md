@@ -649,7 +649,18 @@ its open ceiling off `ZONE_BOUND_PCT`'s practical 120% bound (see the comment on
 that constant) rather than a real boundary, so it's reported as open-ended
 ("faster than") instead of a two-sided range. Standing, Walking and Recovery
 aren't %VDOT bins at all, so their hover text reports their own fixed or per-day
-pace bounds directly rather than going through `paceRangeFor()`.
+pace bounds directly rather than going through `paceRangeFor()`. Every bin's
+hover text ends with **both** measures, "3.2 min · 0.60 km", whichever one the
+bars are drawn at.
+
+**Bar height** (`zoneAxis`, "Bar height" under Pace zones, `'time'` by default)
+picks whether the bars are the minutes or the kilometres spent in each bin.
+`paceHistogramFor()` returns both — `{ mins, km }`, two arrays of the same
+shape — so the setting is draw-time only and its handler just re-renders the
+panel. The km are raw lap distances, never grade-adjusted (kilometres run are
+kilometres run); a day's km bins sum to its lap distances exactly (probe on a
+real export: max error 1.4e-14 over 604 run days). The y-axis ticks keep one
+decimal when `niceTicks` lands on a 2.5 step, which short distances can.
 
 **Colour**: five hues (blue/green/yellow/orange/red) validated with the `dataviz`
 skill's palette checker using **adjacent** pairs, not all-pairs — this is an
@@ -746,7 +757,7 @@ for a yellow that passes, because none does.
 `runviz.prefs.v1` holds everything the settings sidebar and the what-if box can be
 set to, so the page opens the way it was left: `windowBase`, `windowMult`,
 `windowVdot`, `minLapM`, `gapVdot`, `gapPace`, `vdotNearDots`, `vdotNearPct`,
-`colourVerdicts`, `zoneBars`, `maxBehind`, `fadeWindows`, `panels` (`{vol, freq, runs, vdot, zone}`, each independently
+`colourVerdicts`, `zoneBars`, `zoneAxis`, `maxBehind`, `fadeWindows`, `panels` (`{vol, freq, runs, vdot, zone}`, each independently
 show/hide — see below), `lines` (`{max, s0, s1, s2, s3}` — slot keys, which of
 the five lines the three window panels draw), and `plan` (`null` = the what-if box follows real
 history, `{km, days}` = edited). Three rules:
@@ -772,7 +783,8 @@ history, `{km, days}` = edited). Three rules:
   that set the peak), so "off" is `vdotNearDots`, not 0. `gapVdot`/`gapPace` are plain
   booleans (a legacy `useGap` seeds both), and are kept even when the loaded export has no `gap` column to use it
   on — see "Grade-adjusted pace" above. `zoneBars` is rounded
-  to the nearest whole number, range 1–20. Anything that fails falls back to
+  to the nearest whole number, range 1–20. `zoneAxis` must be `'time'` or
+  `'dist'`. Anything that fails falls back to
   `PREF_DEFAULTS` for that field alone.
 - **Written only when something is off-default** (`savePrefs`), and the entry is
   *removed* the moment everything is back to default. A page whose settings have
@@ -790,7 +802,7 @@ the defaults, and a remembered setting has to overwrite them at boot.
 - **Reset** in the settings sidebar: the window base and multiple, the VDOT
   window, the min-lap distance, both grade-adjusted-pace toggles, the near-max dots
   and their percentage, the pace-zone bar
-  count, the MAX draw order, the window-line fade, the verdict colour toggle, the
+  count and bar height, the MAX draw order, the window-line fade, the verdict colour toggle, the
   five panel show/hide toggles and the five line show/hide toggles back to their
   defaults (all shown), plus the view back to its default span. It does *not*
   touch the what-if.
@@ -832,7 +844,7 @@ much height:
 |---|---|
 | Volume & frequency panels | the five line show/hide swatches, the three panel show/hide boxes, `windowBase`/`windowMult`, `fadeWindows`, `maxBehind` |
 | VDOT panel | its show/hide, `windowVdot`, `minLapM`, `gapVdot`, `vdotNearDots`/`vdotNearPct` |
-| Pace zones | its show/hide, `zoneBars`, `gapPace` |
+| Pace zones | its show/hide, `zoneBars`, `zoneAxis`, `gapPace` |
 | Verdicts | the four-verdict/rest colour legend and `colourVerdicts` |
 
 Two placements are worth naming. **The legend is split across two groups**, not
