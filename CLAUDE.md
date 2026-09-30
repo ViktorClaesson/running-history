@@ -41,7 +41,8 @@ Five stacked panels sharing one x-axis, one bar/point per calendar day:
    since it can run higher.
 5. **Line** — highest VDOT achieved by any workout in the trailing *VDOT* window
    (default 50 weeks, set independently — see "VDOT and pace zones" below).
-   Undefined (a gap, not a zero) before the first-ever logged run.
+   Undefined (a gap, not a zero) before the first-ever logged run. Plus **dots**
+   for the days that went after that ceiling — see "Near-max days" below.
 
 Panels 2–5 and the pace-zone histogram each have their own show/hide checkbox in
 the settings sidebar (`visPanels`, persisted in `runviz.prefs.v1` as `panels`) —
@@ -89,8 +90,31 @@ rest of the row** — it is the widest thing in the sidebar once a week goes ove
 history at 11px; at 10px nothing wraps across all 1339. Sized against a 280px
 sidebar, which is the width this is actually used at. Then the day's peak VDOT (plus what that day's own
 reading is actually based on: full activity or best lap, with its distance, time
-and pace — see `vdotBasisText()`) and the verdict. **Clicking
+and pace, and how far that reading fell short of the peak — see
+`vdotBasisText()`) and the verdict. **Clicking
 a day pins it** there — see below.
+
+The VDOT detail line **always breaks at the arrow**: what the reading is on line
+1, what it came to on line 2 ("→ 45.4 grade-adj. · 10.2% off the peak"). A hard
+`<br>`, not a wrap — flicking from day to day used to move that number between
+line 1 and line 2 depending on how the width happened to run out. Two things had
+to be checked to make the break safe, since a third line would nudge the
+sidebar's height on every hover:
+
+- **Both halves have to fit on one line.** Measured across a real 1339-day
+  history with GAP on and off: line 1 tops out at **220px** and line 2 at
+  **205px**, against **246px** of usable sidebar. Line 2 is a single `.seg` —
+  it can't wrap, and at that width never needs to.
+- **" grade-adj." moved from line 1 to line 2**, next to the figure it
+  qualifies. On line 1 it is what pushed the line over: the widest day comes to
+  **278px** there, and no shorter wording of it clears 246px with any room to
+  spare (" adj." lands at 242px, which is 4px of margin and not worth trusting).
+  Line 1 is now the same text whether or not GAP is on, so toggling it doesn't
+  move the layout either.
+
+The result is exactly two line boxes on every one of the 603 run days and one on
+the 736 rest days ("no run"), so `.v2`'s two-line reserve holds by construction
+rather than by luck.
 
 The distance row's own sub-line used to spell out the day's target ("target 8.59
 km · weekly ÷ 6.0 · no long runs"). It is gone: the verdict stopped being read
@@ -382,29 +406,108 @@ a genuinely hard lap implies close to the runner's real ceiling. Verified agains
 vdoto2.com's own worked example — VDOT 51.8 round-trips to its quoted easy/marathon/
 threshold/interval/repetition paces (5:14/4:23/4:08/3:48/3:33 min/km) within rounding.
 
-A day's own VDOT is the higher of **the whole day treated as one effort**, and the
-**max implied VDOT over its laps that are at least `MIN_LAP_M` long** (default
-1500m, adjustable 100–5000m). The length floor exists because `pctVo2max()` is
+A day's own VDOT is the **max implied VDOT over every effort that day**: each
+**activity treated whole**, plus each of its **laps that are at least `MIN_LAP_M`
+long** (default 1500m, adjustable 100–5000m).
+
+**An effort is an activity, never a day.** This used to treat the whole day as
+one effort, which on a day with two runs glued them into a single continuous
+one — and that *inflates* VDOT, because `pctVo2max()` falls with duration, so
+the same pace held for twice as long implies a much higher ceiling. On a real
+export it hit **33 of 57 multi-run days, by up to 2.05 VDOT**. It barely touched
+the rolling-max *line* (2 days of 1339, at most 0.44 — the all-time peaks were
+set by single-run days anyway), but the day readings in the readout and the
+height of the near-max dots were wrong on every one of those days. `acts` in the
+data pipeline exists for this: the day's runs are kept apart rather than summed.
+
+The length floor exists because `pctVo2max()` is
 calibrated against race durations — roughly 3.5 minutes and up — and a very short,
 very fast lap (a sprint, the last few strides of a rep) computes a VO2 cost far
 beyond what's actually reached in that time, wildly overstating VDOT: a real
 export surfaced a day reading VDOT 70+ against a true ceiling around 52, traced to
 a short fast lap. No *tag* filtering beyond the length floor — a slow warmup or
 rest lap that happens to clear it still never wins the search on its own. Checking
-the whole day too (not just as a fallback for days with no lap data) is what makes
-an evenly-paced tempo run or race its own best evidence when it beats every
-individual lap. The **VDOT panel** is the rolling max of that across the trailing *VDOT*
+each activity whole too (not just as a fallback for ones with no lap data) is
+what makes an evenly-paced tempo run or race its own best evidence when it beats
+every individual lap. The **VDOT panel** is the rolling max of that across the trailing *VDOT*
 window (`WINDOW_VDOT`, default 50 weeks — the only window still adjustable, and
 the only one that wants years rather than weeks, because "what's my fitness
 ceiling" and "how often am I running" are different-timescale questions). It's a plain sliding-window max
 (monotonic deque, O(N)), not a target, so — unlike the volume/frequency target math
 — there's no circularity to avoid in including the day itself.
 
+**Near-max days.** The panel's line is a rolling *max*, so a session that came
+close to the ceiling without beating it leaves no mark on it at all: the line
+carries on flat, and a day worth noticing looks exactly like a rest week. The
+dots put those days back. One per run day whose own reading (`dayVdot[i]`) is
+within `vdotNearPct` (default 10%) of the peak in force *that day* (`vdot[i]`),
+drawn at **the day's own value**, not on the line — so a near miss sits just
+under the line and a day that set, or re-equalled, the peak sits on it.
+
+**Both ends of the range are real modes**, which is why it runs 0–100 rather than
+around the default. **0%** is exactly `dayVdot[i] === vdot[i]` — only the days
+that actually set the peak, which on a real export is 12 dots sitting on the
+line's own step-ups (no epsilon needed: the day that set the peak *is* where the
+rolling max read it from, so the ratio is exactly 1). **100%** is every run day
+with a reading, which turns the panel into a scatter of every run's own VDOT
+under the ceiling line. The counts on a real 1339-day export, over 603 run days:
+0% → 12, 10% → 63, 25% → 460, and 50% upwards is saturated at ~all of them.
+
+Two things the wide range forces:
+
+- **The dot radius follows the crowding**, not the zoom: 2.75px down to 1.2px,
+  from the mean spacing between the dots *actually drawn* (`plotW() / n * 0.3`,
+  clamped). At the 10% default a few dozen dots want to look aimable; at 100%
+  a fat dot would be a solid band. The surface-coloured ring is dropped below
+  r 2.2, where there is no room for it inside the dot and it only reads as a
+  paler dot.
+- **The y-axis opens up to fit the slowest day in view**, which squashes the
+  line towards the top — at 25% the floor drops from 40 to 20 on a real export.
+  That is the honest range of the data, not a bug, and it is the cost of asking
+  for the wide view; the floor is deliberately not capped, since clamping the
+  dots would make them lie about their value.
+
+**The cut-off itself is drawn**, as a dashed line at `vdot[i] * (1 -
+vdotNearPct/100)` — the peak line scaled down by the threshold, so "within 10%"
+is a place on the panel rather than a number in the title, and every dot is
+visibly above it. Not drawn at 0%, where it would land exactly on the peak line
+and have nothing to say. Deliberately **not** folded into the y-extent the way
+the dots are: at 100% the cut-off is zero, and letting that set the floor would
+flatten the panel. It clips instead, which reads correctly — a cut-off below the
+panel is one nothing can fail.
+
+`vdotVsPeak(i)` is that ratio (1 = it is the peak; it can never exceed 1, since
+the window includes the day itself) and `isNearMax(i)` is the threshold on it.
+The readout says the same thing in words on the VDOT line — "· at the peak" or
+"· 5.3% off the peak" — appended by `vdotBasisText()`.
+
+Three things worth knowing:
+
+- **Peak-setting days get no second marker.** Landing on the line is the
+  distinction, and the gap under it is the whole point of every other dot. On a
+  real 1339-day export, 63 of 603 run days clear 10%, of which 12 *are* the peak.
+- **The dots move the y-floor.** They sit up to `vdotNearPct` below the line, so
+  `drawVdot()` folds the qualifying `dayVdot` values into `yMin` or the panel
+  clips them. Only the floor can move — no reading is ever above the peak that
+  contains it.
+- **Draw-time only.** Nothing computed depends on either setting, so both
+  handlers just `drawAll()` — no recompute, and not even `syncLabels()`.
+- **The panel title carries what the dots mean** (`.vdotNearNote`: "— dots: days
+  within 10% of it, above the dashed line"), so the panel needs no legend of its
+  own, and the note goes away when the dots are off. `drawVdot()` owns that
+  string rather than `syncLabels()`, because only the draw knows whether the
+  dashed line ended up on screen — past roughly 25% it is below the panel floor,
+  and the ", above the dashed line" clause drops itself when it isn't there. At
+  0% the note reads "dots: the days that set it", since "within 0% of it" says
+  the same thing worse.
+
 **Laps** come from Runalyze's `splits` column: `<tag><km>|<time>` pieces joined by
 `-`, e.g. `I1.012|3:54`. The tag (`W`arm-up, `I`nterval, `R`est/`P`ause, `C`ooldown,
 `U`ntagged autolap) is read from real exports but not used for anything — see above.
-A day with no parsed splits (older activities, or ones Runalyze didn't lap) falls
-back to treating the whole day as a single lap.
+They hang off their own activity in `acts`, not off the day. An activity with no
+parsed splits (an older one, or one Runalyze didn't lap) falls back to being
+treated as a single lap — **per activity**, so one run of a day having splits
+never drops the other run's minutes, nor averages the two into one pace.
 
 **Grade-adjusted pace** (`useGap`, "Grade-adjusted pace" under VDOT panel, **off
 by default**) swaps every *time* the pace maths reads for the equivalent flat one,
@@ -419,17 +522,19 @@ Runalyze's `gap` column is grade-adjusted **speed in km/h**, not a pace and not 
 factor (checked against real activities' own distance/time: a flat run's `gap`
 sits within a fraction of a percent of its raw speed, a 34 m/km day about 7%
 above it). `gapRatioOf()` turns it into `gap ÷ raw speed`, clamped to 0.5–2, and
-the pipeline stores the result as *time*: `gsec` per day next to `sec`, and
-`gsec` per lap next to `sec`. On a real export the ratio's median is 1.005 and
+the pipeline stores the result as *time*: `gsec` next to `sec` on every activity and
+every lap. On a real export the ratio's median is 1.005 and
 its max 1.118.
 
 Two things are worth knowing about that ratio. Runalyze reports GAP **once per
-activity**, so the same ratio is spread over every lap of it — the only honest
+activity**, which is also the level `acts` stores a time at, so the same ratio
+is spread over every lap of that activity — the only honest
 option available, since it says "this run was worth this much more than its raw
 pace" without pretending to know which kilometre the hills were in. And **not
 every activity has one** (661 of 664 runs in a real export; the missing ones are
-old). `lapSec()`/`dayTime()` fall back to the raw time whenever there is no
-adjusted one, so the toggle can only ever re-time a day, never blank it.
+old). `effortSec()` — one function, since an activity and a lap are
+the same shape — falls back to the raw time whenever there is no adjusted one,
+so the toggle can only ever re-time a day, never blank it.
 
 `gapOn()` is the real gate: `useGap` *and* the export having a usable `gap`
 column at all (`DATA.gapCount`). An export without one disables the checkbox and
@@ -439,8 +544,9 @@ file and going back to one with GAP doesn't silently forget the setting.
 A bin's height is the adjusted minutes too, not the real ones — the time implied
 by the pace the bar is drawn at, so a day's bars still sum to one coherent
 duration (checked: they sum to exactly `gsec ÷ 60`). `vdotBasisText()` labels
-the figure "grade-adj." when the time it quotes has been adjusted, rather than
-quietly disagreeing with what Runalyze and the watch say.
+the figure "grade-adj." when the time behind it has been adjusted, rather than
+quietly disagreeing with what Runalyze and the watch say — on its second line,
+next to the VDOT figure, for the width reason in the readout section above.
 
 **Pace zones** (easy/marathon/threshold/interval/repetition) are five %VDOT bands,
 anchored at 65.7/81.8/88.0/97.6/106.2% (back-solved from the vdoto2.com example
@@ -623,7 +729,7 @@ for a yellow that passes, because none does.
 
 `runviz.prefs.v1` holds everything the settings sidebar and the what-if box can be
 set to, so the page opens the way it was left: `windowBase`, `windowMult`,
-`windowVdot`, `minLapM`, `useGap`,
+`windowVdot`, `minLapM`, `useGap`, `vdotNearDots`, `vdotNearPct`,
 `colourVerdicts`, `zoneBars`, `maxBehind`, `fadeWindows`, `panels` (`{vol, freq, runs, vdot, zone}`, each independently
 show/hide — see below), `lines` (`{max, s0, s1, s2, s3}` — slot keys, which of
 the five lines the three window panels draw), and `plan` (`null` = the what-if box follows real
@@ -645,7 +751,9 @@ history, `{km, days}` = edited). Three rules:
   the four windows are derived from base and multiple now. A stale entry still
   carrying the old fields is simply ignored and dropped on the next save, as is
   one carrying the old week-count `lines` keys.)
-  `minLapM` is rounded to the nearest 100m, range 100–5000. `useGap` is a plain
+  `minLapM` is rounded to the nearest 100m, range 100–5000. `vdotNearPct` is
+  rounded to a whole percent, range 0–100 — 0 is a real setting (only the days
+  that set the peak), so "off" is `vdotNearDots`, not 0. `useGap` is a plain
   boolean, and is kept even when the loaded export has no `gap` column to use it
   on — see "Grade-adjusted pace" above. `zoneBars` is rounded
   to the nearest whole number, range 1–20. Anything that fails falls back to
@@ -664,7 +772,8 @@ the defaults, and a remembered setting has to overwrite them at boot.
 **There are two resets, and each owns only what sits next to it.**
 
 - **Reset** in the settings sidebar: the window base and multiple, the VDOT
-  window, the min-lap distance, the grade-adjusted-pace toggle, the pace-zone bar
+  window, the min-lap distance, the grade-adjusted-pace toggle, the near-max dots
+  and their percentage, the pace-zone bar
   count, the MAX draw order, the window-line fade, the verdict colour toggle, the
   five panel show/hide toggles and the five line show/hide toggles back to their
   defaults (all shown), plus the view back to its default span. It does *not*
@@ -706,7 +815,7 @@ much height:
 | Group | Holds |
 |---|---|
 | Volume & frequency panels | the five line show/hide swatches, the three panel show/hide boxes, `windowBase`/`windowMult`, `fadeWindows`, `maxBehind` |
-| VDOT panel | its show/hide, `windowVdot`, `minLapM`, `useGap` |
+| VDOT panel | its show/hide, `windowVdot`, `minLapM`, `useGap`, `vdotNearDots`/`vdotNearPct` |
 | Pace zones | its show/hide, `zoneBars` |
 | Verdicts | the four-verdict/rest colour legend and `colourVerdicts` |
 
@@ -819,24 +928,26 @@ way but on a different basis — see "VDOT and pace zones" above.
   22–31 Aug 2026: unshifted agrees on all ten days activity by activity, shifted
   disagrees on three. If this ever looks wrong again, the discriminator is an
   activity starting between 22:00 and midnight — nothing else moves.
-- Each activity is filed under that day, then aggregated per day into `values`
-  (total km), `maxRun` (longest single run), `nRuns` (count), `sec` (total elapsed
-  seconds, for VDOT), `gsec` (the same, grade-adjusted — see "Grade-adjusted
-  pace" above) and `laps` (parsed `splits`, carrying their own `sec`/`gsec`, also
-  for VDOT). 63 of my days have more than one run.
+- Each activity is filed under that day. The day gets `values` (total km),
+  `maxRun` (longest single run) and `nRuns` (count) — and then **`acts`, one row
+  per activity**, each `{km, sec, gsec, laps}` with its own parsed `splits` (each
+  lap `{km, sec, gsec}` in turn). 57 of my days have more than one run, which is
+  why the times are **not** summed into a day total: everything that reads a
+  *pace* has to read one continuous effort. See "VDOT and pace zones" above.
 - **Sport IDs are per-account**, so there is no way to detect "running" generically.
   `summariseSports` shows every sport with count / total km / median speed and
   pre-ticks a guess: the busiest sport with median speed 7.5–17 km/h, plus anything
   comparable in volume. Speed alone over-selects — cross-country skiing at 8.2 km/h
   sits squarely in running range.
-- Parsed data is cached in `localStorage` under `runviz.data.v2` (`SCHEMA = 5`).
+- Parsed data is cached in `localStorage` under `runviz.data.v2` (`SCHEMA = 6`).
   `SCHEMA` guards what the cached numbers *mean*, not only their shape — the day
   attribution fix bumped it to 3 with the shape unchanged, because the cached values
   were wrong and can only be rebuilt from the CSV. It was bumped again to 4 when
-  `sec`/`laps` were added for VDOT, and to 5 when the grade-adjusted times
-  (`gsec` per day, `gsec` per lap, `gapCount`) joined them — both times because
-  the shape itself changed: an older cached copy simply doesn't have those
-  arrays. A stale schema opens the gate
+  `sec`/`laps` were added for VDOT, to 5 when the grade-adjusted times
+  (`gsec` per day, `gsec` per lap, `gapCount`) joined them, and to 6 when the
+  day-level `sec`/`gsec`/`laps` were replaced by per-activity `acts` — every
+  time because the shape itself changed: an older cached copy simply doesn't
+  have those arrays. A stale schema opens the gate
   with `staleCache` set, which says why it is asking for the file again instead of
   doing it silently. Selected sports in `runviz.sports.v2`.
   Settings in `runviz.prefs.v1` (see below).
@@ -880,7 +991,10 @@ Roughly: `recompute` (the four windows' series + their max + `computeTargets`) �
   x; it must not re-centre or pin the left edge.
 - **The readout must not change height** between idle, hovered and pinned. The idle
   state carries an invisible label/value spacer, and `.v2` reserves two line boxes,
-  so all three match by construction. See the readout section above before touching
+  so all three match by construction. The VDOT detail line now *fills* exactly
+  two by construction too (a hard `<br>` at the arrow, both halves measured to
+  fit) — so any new wording on either half has to be re-measured against the
+  246px the sidebar actually gives it, not eyeballed. See the readout section above before touching
   its flex properties.
 - Floating point: `1.05 - 1 > 0.05`, so band edges need the epsilon in `classify`.
 - **Negative zero.** A sliding-window sum adds and subtracts the same distances
@@ -912,6 +1026,23 @@ with `--dump-dom | grep -o '<title>[^<]*'`. Wrap it in `try/catch` and report
 `e.message`, otherwise a thrown error just looks like empty output. Beware
 redeclaring an existing top-level name in the probe (`const ro`, `const out`) — that
 is a `SyntaxError` that kills the whole block.
+
+Two things the probe needs that aren't obvious:
+
+- **`window.RUNVIZ` has to be seeded**, because headless Chrome has none of the
+  `localStorage` the real page reads. The bootstrap script already exposes
+  `parseCsv`/`summariseSports`/`buildData`, so a script inserted immediately
+  *before* `<script>\nconst DATA = window.RUNVIZ;` can do
+  `window.RUNVIZ = buildData(parseCsv(csvText), ids, name)` with the CSV baked in
+  (`JSON.stringify` it from node) and `ids` taken from the `g.guess` sports. Hide
+  the gate too, or it covers the page in a screenshot.
+- **The app's `const`/`let` are invisible from the probe**, because the whole body
+  sits inside `if (DATA) { … }`. Its *function declarations* are visible (sloppy
+  mode hoists them out of the block) but nothing else is. Plant
+  `window.__eval = s => eval(s);` just before that block's closing brace — a
+  direct eval there sees every binding — and the probe can read and set anything.
+  Anchor that replacement on the *last* `renderZonePanel();\n}`, not the first;
+  the first is inside a function and its `eval` has the wrong scope.
 
 Assert against an independent implementation where the maths matters: the target
 formula was checked by brute-forcing every day inside the probe and comparing
