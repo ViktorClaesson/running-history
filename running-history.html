@@ -242,7 +242,11 @@
   /* so a wrapped detail line breaks at the · separators, never mid-phrase
      ("no / long runs", "564 / km/yr") */
   .readout .seg { white-space: nowrap; }
-  .readout .badge { align-self: flex-start; }
+  /* Two lines always: the verdict, then the smaller "why" under it. A rest day
+     gets an empty second line so the pill is the same height either way. */
+  .readout .badge { align-self: flex-start; flex-direction: column; align-items: flex-start;
+    gap: 1px; border-radius: 10px; }
+  .readout .badge .why { font-size: 10px; font-weight: 400; }
   .badge {
     display: inline-flex; align-items: center; gap: 6px;
     font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px;
@@ -426,8 +430,8 @@
       <label class="chk" title="How close to that day's peak a day's own VDOT reading has to be to get a dot. Both ends are useful: 0 marks only the days that actually set the peak, and 100 marks every run day, turning the panel into a scatter of every run's own VDOT under the ceiling. Wide settings open up the y-axis to fit the slowest day in view, which squashes the line towards the top — that is the honest range of the data, not a bug.">&hellip;within
         <input type="number" id="vdotNearPct" min="0" max="100" step="1" value="10"> % of the peak
       </label>
-      <label class="chk" id="useGapLabel" title="Read every pace off Runalyze's grade-adjusted pace — each activity's equivalent flat time — instead of the time actually taken. Moves VDOT and the pace-zone histogram; distances, volume and the targets are untouched. Activities the export has no GAP for keep their raw time.">
-        <input type="checkbox" id="useGap"> Grade-adjusted pace
+      <label class="chk gapLabel" title="Compute VDOT off Runalyze's grade-adjusted pace — each activity's equivalent flat time — instead of the time actually taken. Moves the VDOT panel, and with it where the pace-zone boundaries sit; distances, volume and the targets are untouched. Activities the export has no GAP for keep their raw time.">
+        <input type="checkbox" id="gapVdot"> Grade-adjusted pace for VDOT
       </label>
     </div>
   </section>
@@ -438,6 +442,12 @@
       <label class="chk"><input type="checkbox" id="showZone" checked> Pace-zone histogram</label>
       <label class="chk" title="How many sub-bands each of the five pace zones splits into in the pace-zone histogram.">Pace-zone bars
         <input type="number" id="zoneBars" min="1" max="20" step="1" value="5"> per zone
+      </label>
+      <label class="chk" title="What the height of each pace-zone bar measures: the time spent at that pace, or the distance covered at it. The hover text always gives both.">Bar height
+        <select id="zoneAxis"><option value="time">time (min)</option><option value="dist">distance (km)</option></select>
+      </label>
+      <label class="chk gapLabel" title="Bin each lap by its grade-adjusted pace — its equivalent flat time — instead of the pace actually run. Only moves the laps: the zone boundaries come from the day's VDOT, which has its own grade-adjusted setting under the VDOT panel. Activities the export has no GAP for keep their raw time.">
+        <input type="checkbox" id="gapPace"> Grade-adjusted pace
       </label>
     </div>
   </section>
@@ -903,12 +913,14 @@ const PREF_DEFAULTS = {
   windowMult: 4,     // each next window is this many times the one before, 2-8
   windowVdot: 350,   // 50 weeks
   minLapM: 1500,     // laps shorter than this can't be trusted for VDOT on their own
-  useGap: false,     // read paces off Runalyze's grade-adjusted pace instead of the raw one
+  gapVdot: false,    // compute VDOT off Runalyze's grade-adjusted pace instead of the raw one
+  gapPace: false,    // bin the pace-zone histogram by grade-adjusted pace instead of the raw one
   vdotNearDots: true,  // mark the days that came close to the VDOT ceiling without beating it
   vdotNearPct: 10,     // how close "close" is, in percent of the peak in force that day
                        // (0 = only the days that set it, 100 = every run day)
   colourVerdicts: true,   // colour the bars by verdict at all
   zoneBars: 5,       // sub-bands per pace zone in the pace-zone histogram
+  zoneAxis: 'time',  // what the pace-zone histogram's bars measure: 'time' (minutes) or 'dist' (km)
   panels: { vol: true, freq: true, runs: true, vdot: true, zone: true },   // which optional panels are shown
   // Which of the five lines each volume/frequency panel actually draws. Hiding
   // one is purely a decluttering move: it still appears in the hover readout and
@@ -935,8 +947,12 @@ function loadPrefs() {
   if (num(raw.windowVdot, 7, 1820)) p.windowVdot = week(raw.windowVdot, 1820);
   if (num(raw.minLapM, 100, 5000)) p.minLapM = Math.round(raw.minLapM / 100) * 100;
   if (num(raw.zoneBars, 1, 20)) p.zoneBars = Math.round(raw.zoneBars);
+  if (raw.zoneAxis === 'time' || raw.zoneAxis === 'dist') p.zoneAxis = raw.zoneAxis;
   if (num(raw.vdotNearPct, 0, 100)) p.vdotNearPct = Math.round(raw.vdotNearPct);
-  for (const k of ['colourVerdicts', 'maxBehind', 'fadeWindows', 'useGap', 'vdotNearDots']) {
+  // `useGap` was one toggle for both before VDOT and the histogram got one each;
+  // an entry that still carries it turns both on, until the next save drops it.
+  if (typeof raw.useGap === 'boolean') p.gapVdot = p.gapPace = raw.useGap;
+  for (const k of ['colourVerdicts', 'maxBehind', 'fadeWindows', 'gapVdot', 'gapPace', 'vdotNearDots']) {
     if (typeof raw[k] === 'boolean') p[k] = raw[k];
   }
   if (raw.panels && typeof raw.panels === 'object') {
@@ -964,13 +980,15 @@ function savePrefs() {
     windowMult,
     windowVdot: WINDOW_VDOT,
     minLapM: MIN_LAP_M,
-    useGap,
+    gapVdot,
+    gapPace,
     vdotNearDots,
     vdotNearPct,
     maxBehind,
     fadeWindows,
     colourVerdicts,
     zoneBars: ZONE_BARS,
+    zoneAxis,
     panels: { ...visPanels },
     lines: { ...visLines },
     plan: planEdited ? { km: plan.km, days: plan.days } : null,
@@ -1162,22 +1180,26 @@ function impliedVdot(km, sec) {
 // the two wins — a long tempo run IS its own best evidence when it beats every
 // individual lap (e.g. an evenly-paced race with no lap data at all).
 let MIN_LAP_M = prefs.minLapM;
-// Grade-adjusted pace. Off by default, because the raw pace is what was actually
-// run and this is a second opinion on it, not a correction. On, every time that
-// feeds a pace — the VDOT search below and the pace-zone histogram — reads the
-// activity's equivalent flat time instead of its real one, so a hilly run stops
-// being read as an easy day and the zones stop filling up with "recovery" that
-// was actually a climb. Distances, volume, frequency and the targets are all
-// untouched: kilometres run are kilometres run.
+// Grade-adjusted pace, as two separate toggles, both off by default, because the
+// raw pace is what was actually run and this is a second opinion on it, not a
+// correction. `gapVdot` has the VDOT search below read each activity's
+// equivalent flat time instead of its real one, so a hilly run stops being read
+// as an easy day. `gapPace` does the same for where the pace-zone histogram puts
+// each lap, so its minutes stop filling up "recovery" when they were a climb.
+// The zones themselves come from the day's VDOT, so they move with `gapVdot`
+// only — `gapPace` moves the laps, never the boundaries. Distances, volume,
+// frequency and the targets are untouched either way: kilometres run are
+// kilometres run.
 //
 // Every read goes through `effortSec` — an activity and a lap are the same
 // shape here — which falls back to the raw time whenever there is no adjusted
-// one to use: an export with no `gap` column at all (`gapOn()` false, and the
-// control disabled), or the older activities inside one that has it. So the
+// one to use: an export with no `gap` column at all (`gapUsable` false, and the
+// controls disabled), or the older activities inside one that has it. So a
 // toggle can never blank a day, only re-time it.
-let useGap = prefs.useGap;
-const gapOn = () => useGap && DATA.gapCount > 0;
-const effortSec = e => gapOn() && e.gsec > 0 ? e.gsec : e.sec;
+let gapVdot = prefs.gapVdot;
+let gapPace = prefs.gapPace;
+const gapUsable = DATA.gapCount > 0;
+const effortSec = (e, on) => on && gapUsable && e.gsec > 0 ? e.gsec : e.sec;
 const dayVdot = new Array(N);
 const dayVdotSource = new Array(N);   // {km, sec, kind:'lap'|'day', adj} behind dayVdot[i], or null
 // The search is over EFFORTS, and the day is never one of them: on a day with
@@ -1194,11 +1216,11 @@ function recomputeDayVdot() {
       if (v > best) { best = v; bestSrc = { km, sec, kind, adj: sec !== raw }; }
     };
     for (const act of (dayActs[i] || [])) {
-      const asec = effortSec(act);
+      const asec = effortSec(act, gapVdot);
       if (act.km > 0 && asec > 0) take(act.km, asec, act.sec, 'act');
       for (const lap of act.laps) {
         if (lap.km < minLapKm) continue;
-        take(lap.km, effortSec(lap), lap.sec, 'lap');
+        take(lap.km, effortSec(lap, gapVdot), lap.sec, 'lap');
       }
     }
     dayVdot[i] = best;
@@ -1432,6 +1454,10 @@ const ZONES = [
 // Walking and Recovery (below) are never sub-divided by this — they're not real
 // training zones, just where non-zone effort gets sorted out of easy's way.
 let ZONE_BARS = prefs.zoneBars;
+// Whether the histogram's bars are the minutes or the kilometres spent in each
+// bin. Both are always collected and both appear in the hover text; this only
+// picks which one the bars are drawn at.
+let zoneAxis = prefs.zoneAxis;
 // Independent show/hide for the three optional line panels and the pace-zone
 // histogram — the distance bars (panel 1) always stay up as the anchor chart.
 let visPanels = { ...prefs.panels };
@@ -1502,7 +1528,8 @@ function zoneBandFor(pctOfVdot, vdotHere) {
 // plain constants rather than computed, since nothing about them scales with
 // ZONE_BARS.
 const STANDING_BIN = 0, WALKING_BIN = 1, RECOVERY_BIN = 2, ZONE_BIN_OFFSET = 3;
-// Minutes spent in each bin on day i, judged against that day's own rolling VDOT
+// Minutes and kilometres spent in each bin on day i — `{ mins, km }`, two
+// arrays of the same shape — judged against that day's own rolling VDOT
 // (the fitness level AT THE TIME, not today's) — so a hard rep from years ago is
 // read against years-ago fitness. Bins 0-2 are Standing/Walking/Recovery (see
 // above); bins ZONE_BIN_OFFSET.. are the 5*ZONE_BARS pace-zone sub-bands. Only
@@ -1517,25 +1544,28 @@ function paceHistogramFor(i) {
   const laps = [];
   for (const act of (dayActs[i] || [])) {
     if (act.laps.length) laps.push(...act.laps);
-    else if (act.km > 0 && effortSec(act) > 0) laps.push(act);
+    else if (act.km > 0 && effortSec(act, gapPace) > 0) laps.push(act);
   }
   if (!laps.length) return null;
-  const bins = new Array(ZONE_BIN_OFFSET + 5 * ZONE_BARS).fill(0);
+  const nBins = ZONE_BIN_OFFSET + 5 * ZONE_BARS;
+  const bins = new Array(nBins).fill(0), kmBins = new Array(nBins).fill(0);
+  const add = (b, mins, km) => { bins[b] += mins; kmBins[b] += km; };
   const floor = easyFloorPct(v);
   for (const lap of laps) {
-    // With grade adjustment on, a lap is binned by its equivalent flat pace and
-    // counted for that many minutes — the adjusted duration, not the real one,
-    // so a bin's height stays the time implied by the pace it is drawn at.
-    const sec = effortSec(lap);
+    // With `gapPace` on, a lap is binned by its equivalent flat pace and counted
+    // for that many minutes — the adjusted duration, not the real one, so a
+    // bin's height stays the time implied by the pace it is drawn at. Distance
+    // needs no adjusting: kilometres run are kilometres run.
+    const sec = effortSec(lap, gapPace);
     const vel = lap.km * 1000 / (sec / 60);
     const mins = sec / 60;
-    if (vel < STANDING_MAX_VEL) { bins[STANDING_BIN] += mins; continue; }
-    if (vel < WALKING_MAX_VEL) { bins[WALKING_BIN] += mins; continue; }
+    if (vel < STANDING_MAX_VEL) { add(STANDING_BIN, mins, lap.km); continue; }
+    if (vel < WALKING_MAX_VEL) { add(WALKING_BIN, mins, lap.km); continue; }
     const pct = vo2FromVelocity(vel) / v;
-    if (pct < floor) { bins[RECOVERY_BIN] += mins; continue; }
-    bins[ZONE_BIN_OFFSET + zoneBandFor(pct, v)] += mins;
+    if (pct < floor) { add(RECOVERY_BIN, mins, lap.km); continue; }
+    add(ZONE_BIN_OFFSET + zoneBandFor(pct, v), mins, lap.km);
   }
-  return bins;
+  return { mins: bins, km: kmBins };
 }
 
 const fmtDate = new Intl.DateTimeFormat(undefined, { weekday:'short', year:'numeric', month:'short', day:'numeric' });
@@ -1665,13 +1695,14 @@ const ctx4 = cv4.getContext('2d');
 const cv5  = document.getElementById('chart5');
 const ctx5 = cv5.getContext('2d');
 
-// The default view is the longest window's worth of days, ending on the most
-// recent one, rather than the whole history: zoomed all the way out, years of
-// bars are a few pixels each and the short windows are a solid band of noise.
-// One long window is the widest span where the panels still say something, and
-// it is also exactly the span every line on screen is computed over. Scrolling
-// out to the full history is of course still there.
-const defaultSpan = () => Math.max(5, Math.min(N, WINDOWS[N_WINDOWS - 1].days));
+// The default view is the two longest windows' worth of days added together,
+// ending on the most recent one, rather than the whole history: zoomed all the
+// way out, years of bars are a few pixels each and the short windows are a solid
+// band of noise. The longest window alone is exactly the span the longest line
+// is computed over; adding the next one down leaves room to see where that line
+// came from as well. Scrolling out to the full history is of course still there.
+const defaultSpan = () => Math.max(5, Math.min(N,
+  WINDOWS[N_WINDOWS - 1].days + WINDOWS[N_WINDOWS - 2].days));
 let span = defaultSpan();              // days visible
 let center = N - span / 2;             // index at the horizontal centre
 let tSpan = span, tCenter = center;   // animation targets
@@ -2360,8 +2391,8 @@ function setReadout(i, tag) {
     <span class="pair"><span class="k">VDOT (peak, trailing ${Math.round(WINDOW_VDOT/7)}w)</span><span class="v">${vdot[i] != null ? vdot[i].toFixed(1) : '—'}</span><span class="v2">${vdotBasisText(i)}</span></span>
     <span class="badge" style="color:${c ? fullColour(c) : 'var(--text-secondary)'}">${
       !c ? '— rest day'
-         : `${DIR_ARROW[c.dir]} ${DIR_LABEL[c.dir]} · ${verdictWhy(c)}`
-    }</span>`;
+         : `${DIR_ARROW[c.dir]} ${DIR_LABEL[c.dir]}`
+    }<span class="why">${c ? verdictWhy(c) : '&nbsp;'}</span></span>`;
 }
 
 // Hover always wins; the pinned day is next, and the most recent run after
@@ -2412,7 +2443,10 @@ function renderZonePanel() {
   // whole card shrink and grow on every hover across a rest day — a distracting
   // flicker when scanning quickly through a run of days.
   const realBins = paceHistogramFor(zoneDay);
-  const bins = realBins || new Array(ZONE_BIN_OFFSET + 5 * ZONE_BARS).fill(0);
+  const zeros = () => new Array(ZONE_BIN_OFFSET + 5 * ZONE_BARS).fill(0);
+  const minsBins = realBins ? realBins.mins : zeros(), kmBins = realBins ? realBins.km : zeros();
+  const byDist = zoneAxis === 'dist';
+  const bins = byDist ? kmBins : minsBins;   // what the bars are drawn at
   const emptyMsg = realBins ? null
     : (daily[zoneDay] > 0 ? 'No VDOT yet this far back in history — nothing to judge the pace against.' : 'No run that day.');
   const legend = `<span class="item"><span class="swatch" style="background:${leadRamps.standing}"></span>Standing</span>` +
@@ -2435,8 +2469,10 @@ function renderZonePanel() {
   const { w, h } = fitCanvas(cvZ, ctxZ);
   const pad = { l: 40, r: 10, t: 10, b: 22 };
   const pw = w - pad.l - pad.r, ph = h - pad.t - pad.b;
-  const maxMin = Math.max(1, ...bins);
-  const ticks = niceTicks(maxMin * 1.12);
+  const maxVal = Math.max(1, ...bins);
+  const ticks = niceTicks(maxVal * 1.12);
+  const tickDec = Number.isInteger(ticks.step) ? 0 : 1;   // a 2.5 step shouldn't read "3"
+
   const yMax = ticks[ticks.length - 1];
   const yOf = v => pad.t + ph * (1 - v / yMax);
   // Standing/Walking/Recovery sit apart from the five pace zones, leftmost since
@@ -2477,12 +2513,12 @@ function renderZonePanel() {
       ctxZ.lineWidth = 1;
       ctxZ.beginPath(); ctxZ.moveTo(pad.l, y); ctxZ.lineTo(w - pad.r, y); ctxZ.stroke();
       ctxZ.fillStyle = C('--muted');
-      ctxZ.fillText(t.toFixed(0), pad.l - 8, y);
+      ctxZ.fillText(t.toFixed(tickDec), pad.l - 8, y);
     }
     ctxZ.save();
     ctxZ.translate(13, pad.t + ph / 2); ctxZ.rotate(-Math.PI / 2);
     ctxZ.textAlign = 'center'; ctxZ.fillStyle = C('--muted');
-    ctxZ.fillText('minutes', 0, 0);
+    ctxZ.fillText(byDist ? 'km' : 'minutes', 0, 0);
     ctxZ.restore();
 
     const barAt = (slot, y, colour, hovered) => {
@@ -2532,24 +2568,26 @@ function renderZonePanel() {
     const b = binAt(e.clientX - rect.left);
     drawBars(b);
     if (b === null) { hoverInfo.textContent = 'Hover a bar to see its pace range'; return; }
+    // Both measures, whichever one the bars are drawn at.
+    const amount = `${minsBins[b].toFixed(1)} min · ${kmBins[b].toFixed(2)} km`;
     if (b === STANDING_BIN) {
-      hoverInfo.textContent = `Standing · slower than ${paceStr(1000 / STANDING_MAX_VEL)}/km · ${bins[b].toFixed(1)} min`;
+      hoverInfo.textContent = `Standing · slower than ${paceStr(1000 / STANDING_MAX_VEL)}/km · ${amount}`;
       return;
     }
     if (b === WALKING_BIN) {
-      hoverInfo.textContent = `Walking · ${paceStr(1000 / STANDING_MAX_VEL)}–${paceStr(1000 / WALKING_MAX_VEL)}/km · ${bins[b].toFixed(1)} min`;
+      hoverInfo.textContent = `Walking · ${paceStr(1000 / STANDING_MAX_VEL)}–${paceStr(1000 / WALKING_MAX_VEL)}/km · ${amount}`;
       return;
     }
     if (b === RECOVERY_BIN) {
       const floorPace = 1000 / velocityFromVo2(vdotHere * easyFloorPct(vdotHere));
-      hoverInfo.textContent = `Recovery · ${paceStr(1000 / WALKING_MAX_VEL)}–${paceStr(floorPace)}/km · ${bins[b].toFixed(1)} min`;
+      hoverInfo.textContent = `Recovery · ${paceStr(1000 / WALKING_MAX_VEL)}–${paceStr(floorPace)}/km · ${amount}`;
       return;
     }
     const zb = b - ZONE_BIN_OFFSET, zone = Math.floor(zb / ZONE_BARS), sub = zb % ZONE_BARS;
     const { paceSlow, paceFast, openFast } = paceRangeFor(b);
     const range = openFast ? `faster than ${paceStr(paceFast)}/km`
       : `${paceStr(paceSlow)}–${paceStr(paceFast)}/km`;
-    hoverInfo.textContent = `${ZONES[zone].label} ${sub} · ${range} · ${bins[b].toFixed(1)} min`;
+    hoverInfo.textContent = `${ZONES[zone].label} ${sub} · ${range} · ${amount}`;
   });
   cvZ.addEventListener('mouseleave', () => {
     drawBars(null);
@@ -2695,13 +2733,15 @@ document.getElementById('reset').onclick = () => {
   rebuildWindows();
   WINDOW_VDOT = PREF_DEFAULTS.windowVdot;
   MIN_LAP_M = PREF_DEFAULTS.minLapM;
-  useGap = PREF_DEFAULTS.useGap;
+  gapVdot = PREF_DEFAULTS.gapVdot;
+  gapPace = PREF_DEFAULTS.gapPace;
   vdotNearDots = PREF_DEFAULTS.vdotNearDots;
   vdotNearPct = PREF_DEFAULTS.vdotNearPct;
   maxBehind = PREF_DEFAULTS.maxBehind;
   fadeWindows = PREF_DEFAULTS.fadeWindows;
   colourVerdicts = PREF_DEFAULTS.colourVerdicts;
   ZONE_BARS = PREF_DEFAULTS.zoneBars;
+  zoneAxis = PREF_DEFAULTS.zoneAxis;
   visPanels = { ...PREF_DEFAULTS.panels };
   visLines = { ...PREF_DEFAULTS.lines };
   savePrefs();
@@ -2774,15 +2814,16 @@ function syncControls() {
   // is disabled and shown unticked — but the remembered setting is left alone,
   // so loading such a file and then going back to one with GAP doesn't silently
   // forget that the toggle was on.
-  const gapUsable = DATA.gapCount > 0;
-  useGapChk.checked = useGap && gapUsable;
-  useGapChk.disabled = !gapUsable;
-  document.getElementById('useGapLabel').classList.toggle('off', !gapUsable);
-  if (!gapUsable) {
-    document.getElementById('useGapLabel').title =
-      'This export has no grade-adjusted pace to read — no usable `gap` column.';
+  gapVdotChk.checked = gapVdot && gapUsable;
+  gapPaceChk.checked = gapPace && gapUsable;
+  for (const chk of [gapVdotChk, gapPaceChk]) {
+    chk.disabled = !gapUsable;
+    const label = chk.closest('.gapLabel');
+    label.classList.toggle('off', !gapUsable);
+    if (!gapUsable) label.title = 'This export has no grade-adjusted pace to read — no usable `gap` column.';
   }
   zoneBarsInput.value = ZONE_BARS;
+  zoneAxisSel.value = zoneAxis;
   maxBehindBox.checked = maxBehind;
   fadeWindowsBox.checked = fadeWindows;
   colourVerdictsBox.checked = colourVerdicts;
@@ -2883,18 +2924,32 @@ nearPctInput.onchange = nearPctInput.oninput = () => {
   drawAll();
 };
 
-// Same redraw set as the min-lap input: every pace in the page is derived, so
-// the day VDOTs, the rolling max, the readout and the histogram all have to be
-// rebuilt. Nothing in the volume/frequency half of the page depends on it.
-const useGapChk = document.getElementById('useGap');
-useGapChk.onchange = () => {
-  useGap = useGapChk.checked;
+// Same redraw set as the min-lap input: the day VDOTs, the rolling max, the
+// readout and the histogram (whose zones hang off VDOT) all have to be rebuilt.
+// Nothing in the volume/frequency half of the page depends on it.
+const gapVdotChk = document.getElementById('gapVdot');
+gapVdotChk.onchange = () => {
+  gapVdot = gapVdotChk.checked;
   savePrefs();
   recomputeDayVdot();
   recomputeVdot();
   refreshReadout();
   renderZonePanel();
   drawAll();
+};
+// Only re-bins the histogram's laps — VDOT, and so the zones, stay put.
+const gapPaceChk = document.getElementById('gapPace');
+gapPaceChk.onchange = () => {
+  gapPace = gapPaceChk.checked;
+  savePrefs();
+  renderZonePanel();
+};
+// Draw-time only: both measures are already in every histogram.
+const zoneAxisSel = document.getElementById('zoneAxis');
+zoneAxisSel.onchange = () => {
+  zoneAxis = zoneAxisSel.value;
+  savePrefs();
+  renderZonePanel();
 };
 const zoneBarsInput = document.getElementById('zoneBars');
 zoneBarsInput.onchange = zoneBarsInput.oninput = () => {
