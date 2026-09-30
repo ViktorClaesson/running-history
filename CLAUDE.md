@@ -203,12 +203,13 @@ exactly these lines, and a mark for a line that isn't drawn is clutter of the
 same kind — which is also why hiding `1w` takes its dot off the *bars* panel too,
 where there is no line to hide.
 
-**The default view** is the longest window's worth of days
-(`defaultSpan()` = `WINDOWS[N_WINDOWS - 1].days`, 448 at the defaults) ending on
-the most recent day, not the whole history: zoomed all the way out, years of
-bars are a few pixels each and the short windows are a solid band of noise. One
-long window is the widest span where the panels still say something, and it is
-also exactly the span every line on screen is computed over. Scrolling out to
+**The default view** is the two longest windows' worth of days added together
+(`defaultSpan()` = `WINDOWS[3].days + WINDOWS[2].days`, 448 + 112 = 560 at the
+defaults; 1/4/16/32 would give 48 weeks) ending on the most recent day, not the
+whole history: zoomed all the way out, years of bars are a few pixels each and
+the short windows are a solid band of noise. The longest window alone is exactly
+the span the longest line is computed over; the next one down on top of it
+leaves room to see where that line came from. Scrolling out to
 the full history still works — the clamp is unchanged. `resetView()` is that
 same view, shared by the double-click, the `r` key and the settings Reset so
 "reset the zoom" means one thing everywhere. Changing `windowBase`/`windowMult` moves what
@@ -326,8 +327,11 @@ All of it is derived in-browser from one array of daily distances.
   - **`c.at` is a window slot, not a rung index**, and it is the slot whose
     colour the bar is painted in — so a purple bar says "the purple line is the
     highest one", with no legend lookup in between. `verdictWhy()` spells the
-    same thing out in words next to the verdict ("4w ≥ 16w, 64w", or "64w
-    highest" for the longest window, which has nothing longer to beat).
+    same thing out in words under the verdict ("4w ≥ 16w, 64w", or "64w
+    highest" for the longest window, which has nothing longer to beat). The
+    readout's verdict pill is **always two lines**: the verdict, then that
+    `.why` at 10px under it — a rest day gets an empty second line, so the pill
+    is the same height either way.
   - **Unproductive is the same rule, not a fallback.** Slot 3's rung is
     vacuously true — there is nothing longer for it to beat — so the chain always
     terminates at it, and "unproductive" is just `at = 3`. It is also an honest
@@ -509,11 +513,22 @@ parsed splits (an older one, or one Runalyze didn't lap) falls back to being
 treated as a single lap — **per activity**, so one run of a day having splits
 never drops the other run's minutes, nor averages the two into one pace.
 
-**Grade-adjusted pace** (`useGap`, "Grade-adjusted pace" under VDOT panel, **off
-by default**) swaps every *time* the pace maths reads for the equivalent flat one,
-so a hilly run stops reading as an easy day and its minutes stop landing in
-Recovery when they were a climb. It moves the day VDOTs, the VDOT panel and the
-pace-zone histogram, and nothing else: distances, volume, frequency, targets and
+**Grade-adjusted pace** is **two separate toggles**, both **off by default**, each
+swapping the *time* its half of the pace maths reads for the equivalent flat one:
+
+- **`gapVdot`** ("Grade-adjusted pace for VDOT", under VDOT panel) — the VDOT
+  search, so a hilly run stops reading as an easy day. Moves the day VDOTs, the
+  VDOT panel, **and the pace-zone boundaries**, since those are read off the
+  day's VDOT.
+- **`gapPace`** ("Grade-adjusted pace", under Pace zones) — where the histogram
+  puts each lap, so its minutes stop landing in Recovery when they were a
+  climb. Moves the laps only, **never the zones**: VDOT doesn't see it, so the
+  handler only re-renders the histogram. (Probe on a real export: toggling it
+  changes the histogram on 580 days and `vdot` on 0.)
+
+They used to be one `useGap` that did both; a stored entry still carrying it
+turns both on, and is dropped on the next save. Neither moves anything else:
+distances, volume, frequency, targets and
 verdicts are all untouched, because kilometres run are kilometres run. Off by
 default since the raw pace is what was actually run — this is a second opinion on
 it, not a correction.
@@ -534,12 +549,13 @@ pace" without pretending to know which kilometre the hills were in. And **not
 every activity has one** (661 of 664 runs in a real export; the missing ones are
 old). `effortSec()` — one function, since an activity and a lap are
 the same shape — falls back to the raw time whenever there is no adjusted one,
-so the toggle can only ever re-time a day, never blank it.
+so the toggle can only ever re-time a day, never blank it. It takes the toggle
+that applies as its second argument (`effortSec(lap, gapPace)`).
 
-`gapOn()` is the real gate: `useGap` *and* the export having a usable `gap`
-column at all (`DATA.gapCount`). An export without one disables the checkbox and
-shows it unticked, but leaves the remembered `useGap` alone, so loading such a
-file and going back to one with GAP doesn't silently forget the setting.
+`gapUsable` (`DATA.gapCount > 0`) is the real gate on both: an export without a
+usable `gap` column disables both checkboxes and shows them unticked, but leaves
+the remembered `gapVdot`/`gapPace` alone, so loading such a file and going back
+to one with GAP doesn't silently forget the settings.
 
 A bin's height is the adjusted minutes too, not the real ones — the time implied
 by the pace the bar is drawn at, so a day's bars still sum to one coherent
@@ -729,7 +745,7 @@ for a yellow that passes, because none does.
 
 `runviz.prefs.v1` holds everything the settings sidebar and the what-if box can be
 set to, so the page opens the way it was left: `windowBase`, `windowMult`,
-`windowVdot`, `minLapM`, `useGap`, `vdotNearDots`, `vdotNearPct`,
+`windowVdot`, `minLapM`, `gapVdot`, `gapPace`, `vdotNearDots`, `vdotNearPct`,
 `colourVerdicts`, `zoneBars`, `maxBehind`, `fadeWindows`, `panels` (`{vol, freq, runs, vdot, zone}`, each independently
 show/hide — see below), `lines` (`{max, s0, s1, s2, s3}` — slot keys, which of
 the five lines the three window panels draw), and `plan` (`null` = the what-if box follows real
@@ -738,7 +754,7 @@ history, `{km, days}` = edited). Three rules:
 - **Read at the very top of the `if (DATA)` block**, above `WINDOWS` and
   `let WINDOW_VDOT`, because `recompute()` runs at load and reads `WINDOWS` — the
   declaration-order gotcha below. (`WINDOW_VDOT` isn't read by `recompute()`, but
-  is declared alongside for the same reason. `MIN_LAP_M` and `useGap` are declared further down, right next to
+  is declared alongside for the same reason. `MIN_LAP_M`, `gapVdot` and `gapPace` are declared further down, right next to
   `recomputeDayVdot()` — nothing earlier touches them, so they don't need to
   move. `ZONE_BARS` is declared
   right next to the `ZONES` constant, for the same reason.)
@@ -753,8 +769,8 @@ history, `{km, days}` = edited). Three rules:
   one carrying the old week-count `lines` keys.)
   `minLapM` is rounded to the nearest 100m, range 100–5000. `vdotNearPct` is
   rounded to a whole percent, range 0–100 — 0 is a real setting (only the days
-  that set the peak), so "off" is `vdotNearDots`, not 0. `useGap` is a plain
-  boolean, and is kept even when the loaded export has no `gap` column to use it
+  that set the peak), so "off" is `vdotNearDots`, not 0. `gapVdot`/`gapPace` are plain
+  booleans (a legacy `useGap` seeds both), and are kept even when the loaded export has no `gap` column to use it
   on — see "Grade-adjusted pace" above. `zoneBars` is rounded
   to the nearest whole number, range 1–20. Anything that fails falls back to
   `PREF_DEFAULTS` for that field alone.
@@ -772,7 +788,7 @@ the defaults, and a remembered setting has to overwrite them at boot.
 **There are two resets, and each owns only what sits next to it.**
 
 - **Reset** in the settings sidebar: the window base and multiple, the VDOT
-  window, the min-lap distance, the grade-adjusted-pace toggle, the near-max dots
+  window, the min-lap distance, both grade-adjusted-pace toggles, the near-max dots
   and their percentage, the pace-zone bar
   count, the MAX draw order, the window-line fade, the verdict colour toggle, the
   five panel show/hide toggles and the five line show/hide toggles back to their
@@ -815,8 +831,8 @@ much height:
 | Group | Holds |
 |---|---|
 | Volume & frequency panels | the five line show/hide swatches, the three panel show/hide boxes, `windowBase`/`windowMult`, `fadeWindows`, `maxBehind` |
-| VDOT panel | its show/hide, `windowVdot`, `minLapM`, `useGap`, `vdotNearDots`/`vdotNearPct` |
-| Pace zones | its show/hide, `zoneBars` |
+| VDOT panel | its show/hide, `windowVdot`, `minLapM`, `gapVdot`, `vdotNearDots`/`vdotNearPct` |
+| Pace zones | its show/hide, `zoneBars`, `gapPace` |
 | Verdicts | the four-verdict/rest colour legend and `colourVerdicts` |
 
 Two placements are worth naming. **The legend is split across two groups**, not
@@ -824,10 +840,11 @@ kept as one block — even though both halves are now literally the same four
 colours: the window-line swatches are the show/hide control for those lines, so
 they belong beside the panels they colour, while the verdict swatches belong
 beside the toggle that switches them off. Each half says so in its own note, so
-the repetition reads as the point rather than as an oversight. And **`minLapM` and `useGap` sit under
+the repetition reads as the point rather than as an oversight. And **`minLapM` and `gapVdot` sit under
 VDOT** even though both also move the pace-zone histogram — they are VDOT
-inputs, and the histogram is read against the day's VDOT, so that is where they
-come from. Reset sits outside all four, since it owns the lot.
+inputs, and the histogram's zones are read against the day's VDOT, so that is
+where they come from. `gapPace` is the one that only moves the histogram, so it
+sits with it. Reset sits outside all four, since it owns the lot.
 
 ## Colour system
 
