@@ -759,8 +759,13 @@ of them Endurance → Recovery, and no run at Marathon or above changes.
 
 Standing, Walking and Recovery are each a single, undivided bar — `ZONE_BARS`
 only ever splits the five real Daniels zones — drawn leftmost (slowest first),
-in that order, separated from the five zones by a bar width of empty space
-rather than a divider line. They're flat neutral greys rather than a zone hue
+in that order. They used to be separated from the five zones by a bar width of
+empty space; that gap is gone, and the Recovery/Endurance edge now gets the
+same `--grid` divider every other zone edge has (`z === 0` in the divider
+loop). All eight buckets are real two-sided pace ranges tiling one axis
+contiguously — Recovery hands over to Endurance at `enduranceFloorPct()`
+exactly the way Endurance hands over to Marathon — so a hole in the axis was
+saying something that is no longer true. They're flat neutral greys rather than a zone hue
 (`--nocolour` for Standing, then two steps of an OKLab fade from `--nocolour`
 towards endurance's own weak blue for Walking and Recovery — see `leadRamps` in
 `buildRamps()`), so the transition visually previews "getting closer to real

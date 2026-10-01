@@ -3030,13 +3030,16 @@ function mountZoneHist(cvZ, hoverInfo, minsBins, kmBins, real, maxVal, byDist, v
 
   const yMax = ticks[ticks.length - 1];
   const yOf = v => pad.t + ph * (1 - v / yMax);
-  // Standing/Walking/Recovery sit apart from the five pace zones, leftmost since
-  // they're the slow end — they aren't real training paces, so they don't belong
-  // on the same tiled continuum — separated by one bar-width of empty space
-  // (GAP_BARS) rather than a divider line.
+  // Standing/Walking/Recovery are leftmost, since they're the slow end. They
+  // used to sit a bar-width of empty space apart from the five pace zones, on
+  // the grounds that they aren't real training paces. The gap is gone: every
+  // one of the eight buckets is now a real two-sided pace range and they tile
+  // the axis contiguously, Recovery handing straight over to Endurance at
+  // enduranceFloorPct() the same way Endurance hands over to Marathon. What
+  // marks the handover is the zone divider below, drawn at that edge like
+  // every other zone edge, rather than a hole in the axis.
   const nZoneBins = 5 * ZONE_BARS;
-  const GAP_BARS = 1;
-  const zoneSlotStart = ZONE_BIN_OFFSET + GAP_BARS;   // 3 lead bars + 1 gap
+  const zoneSlotStart = ZONE_BIN_OFFSET;   // the 3 lead bars, then the zones
   const nSlots = zoneSlotStart + nZoneBins;
   const bw = pw / nSlots;
   const xOf = slot => pad.l + slot * bw;
@@ -3100,7 +3103,10 @@ function mountZoneHist(cvZ, hoverInfo, minsBins, kmBins, real, maxVal, byDist, v
     ctxZ.textAlign = 'center'; ctxZ.textBaseline = 'top'; ctxZ.fillStyle = C('--muted');
     for (let z = 0; z <= 5; z++) {
       const x = Math.round(xOf(zoneSlotStart + z * ZONE_BARS)) + 0.5;
-      if (z > 0 && z < 5) { ctxZ.strokeStyle = C('--grid'); ctxZ.lineWidth = 1; ctxZ.beginPath(); ctxZ.moveTo(x, pad.t); ctxZ.lineTo(x, pad.t + ph); ctxZ.stroke(); }
+      // z === 0 is the Recovery/Endurance edge — drawn now that nothing else
+      // separates the lead bars from the zones. z === 5 is the plot's own right
+      // edge, which already has one.
+      if (z < 5) { ctxZ.strokeStyle = C('--grid'); ctxZ.lineWidth = 1; ctxZ.beginPath(); ctxZ.moveTo(x, pad.t); ctxZ.lineTo(x, pad.t + ph); ctxZ.stroke(); }
       if (z < 5) { ctxZ.fillStyle = C('--muted'); ctxZ.fillText(ZONES[z].label, xOf(zoneSlotStart + (z + 0.5) * ZONE_BARS), pad.t + ph + 6); }
     }
   }
