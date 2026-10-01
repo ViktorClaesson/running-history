@@ -31,8 +31,10 @@ Up to six stacked panels sharing one x-axis, one bar/point per calendar day:
    between a 4 and a 6 km day stays readable. See "The bar panel's log axis"
    below for how the floor and the rest-day stubs work.
 2. **Lines** — rolling **distance per week**, one line per window (see "The four
-   windows" below) plus their per-day max: the measure the bars used to carry,
-   moved out into a panel of its own so the bars could become per-run distance.
+   windows" below): the measure the bars used to carry, moved out into a panel of
+   its own so the bars could become per-run distance. With `highlightMax` on (the
+   default) whichever line is highest is drawn at full strength and the other
+   three faded — which is the same statement the bars' colour makes.
 3. **Lines** — average run days per week over each window, on a fixed 0–7 axis
    with a reference line per whole day. A day with two runs still counts as one
    day here, so 7 is a real ceiling.
@@ -83,10 +85,10 @@ data rather than at zero:
   no gridline is drawn in `--baseline` and none is labelled 0.
 
 Hovering a day fills the readout sidebar: exact distance, then one small table
-per measure (distance/week, run days/week, runs/week) giving MAX first and then
-each window from 1w to 64w, then — when the stacked-zone panel is up — that
-panel's window split by pace zone (see "Running volume by pace zone") — the same order the panels are read in, since MAX is
-the line drawn on top. Every line is listed whether or not it is currently
+per measure (distance/week, run days/week, runs/week) listing each window from
+1w to 64w, then — when the stacked-zone panel is up — that
+panel's window split by pace zone (see "Running volume by pace zone") — the same
+order the panels' legend reads in. Every line is listed whether or not it is currently
 *drawn*: the per-line toggles declutter the chart, they don't filter the numbers.
 Each row carries a dim note to the right of its value — the raw counts behind the
 rate ("78 of 112 days", "87 runs in 112 days"), or for the distance table that
@@ -269,43 +271,52 @@ All of it is derived in-browser from one array of daily distances.
   window per day, all expressed as rates so windows of very different lengths
   share an axis: `volSeries` (km/week), `freqSeries` (run days/week) and
   `runSeries` (runs/week).
-- **MAX** — an extra series appended to each set at index `MAXI`, the per-day
-  **max across the four windows** — the upper envelope, not a running all-time
-  best. It answers "at whatever timescale flatters me most, where am I".
-  Drawn last, in plain ink (`--wmax`) at full strength, over the four windows at
-  `WIN_ALPHA` 0.55 — **`fadeWindows`** turns that transparency off, which is
-  what you want when comparing two windows against *each other* rather than
-  against the max: every crossing is legible at full strength, at the cost of a
-  busier panel. It's what makes the max read as the primary line without being
-  any thicker. It was on by default and is now **off** (as is the MAX line
-  itself, `visLines.max`), since with MAX hidden there is nothing for the fade
-  to defer to. No area fill either — the single-line panels this grew
-  out of each had one, and the VDOT panel still does, but with five lines
-  crossing each other a shaded region under the max only reads as the max line
-  having a shadow. **`maxBehind`** flips the z-order: MAX is the upper envelope,
-  so wherever it equals a window line the two sit exactly on top of each other
-  and whichever is drawn second wins. Last by default, which is what makes it
-  the line read first; behind instead, the shortest window stays visible along
-  the stretches where it *is* the max and MAX shows only where it pulls away.
-  Purely a draw order — nothing computed changes, so the toggle only redraws.
-  **All five are the same weight** (`LINE_WIDTH`) — the max
-  was briefly drawn thicker as well as darker, which read as heavy-handed and
-  wasn't carrying any of the work: full-strength ink against four
-  semi-transparent hues separates it at any width. Hiding a window line (below)
-  does **not** take it out of MAX — MAX is always the max of all four. In practice it tracks the 1-week line most of the
-  time and pulls away from it exactly when a short window collapses (a taper, an
-  injury, a holiday) while a longer one is still high — which is the case worth
-  seeing.
-- **Per-line show/hide** — `visLines`, five booleans (`max` plus each window's
-  key), persisted in `runviz.prefs.v1` as `lines`. The control is the legend's
-  own "Windows" row, whose swatches are checkboxes; an unticked one dims via
+- **`highlightMax`** ("Highlight the highest line", **on** by default) — the
+  four lines are all laid down at `WIN_ALPHA` 0.32, then each is redrawn at full
+  strength along just the stretches where it is the **highest of the drawn
+  lines**. Every line is the same weight either way (`LINE_WIDTH` 2.2, up from
+  the 1.6 this started at — four hues on one plot means the colour *is* the
+  label, and a 1.6px line reads as dark-ish ink rather than as purple; 2.8 is
+  too heavy, it smears the 1-week line's spikes together at a year-wide zoom).
+  The highlight is carried by alpha alone. So "which window is on top" is something you see rather than work
+  out — and it is the **same statement the bars' verdict colour makes** (see
+  "Verdict" below), which is why slot *k*'s line and verdict *k* share a colour.
+  Off draws all four at full strength, which is what you want when comparing two
+  windows against *each other* rather than reading which leads. Purely a drawing
+  choice: nothing computed depends on it, so the handler only redraws.
+
+  The lead run of each window reaches **half a day past both its ends**, to the
+  x-midpoint of the handover, so the highlight passes from one line to the next
+  with no faded gap between them. The y at that midpoint is on the *outgoing*
+  window's own line, which is within a line width of the true crossing by
+  definition — the two lines cross somewhere inside that one day. The lead paths
+  are disjoint in x, so the order they are stroked in doesn't matter; the faded
+  pass underneath still goes longest window first, so the spikiest line (the
+  shortest window) sits on top of the smooth ones.
+
+  **There used to be a fifth line here**: MAX, the per-day max across the four,
+  in plain ink (`--wmax`) at full strength, with `fadeWindows` and `maxBehind`
+  as its two drawing settings. It is gone, and so are both of those. MAX said
+  exactly what the highlight says, but as a *separate series*, so reading it
+  meant tracing a value back to whichever coloured line it happened to be
+  sitting on. The highlight says it in place, on the line that owns it. Nothing
+  else fell out: the verdict never read MAX (it reads the four windows
+  directly), and `--wmax` is gone with it — the stacked-zone panel's faint
+  total line, its one other user, now draws in `--text-primary`.
+- **Per-line show/hide** — `visLines`, four booleans (each window's slot key),
+  persisted in `runviz.prefs.v1` as `lines`. The control is the legend's
+  own "Lines" row, whose swatches are checkboxes; an unticked one dims via
   `.legend .item.off`. This is a view filter and nothing more: a hidden line is
-  still in the hover readout and still counts towards MAX. Three things do
-  follow it, because all three exist to make the remaining lines readable — the
-  y-axis scales to the highest line actually **drawn** rather than to MAX
-  (except the fixed 0–7 run-days axis), the hover/pin marker moves to MAX, or to
-  the shortest window still drawn when MAX is off, and a window's start mark
-  goes with its line (see "Window-start marks" above).
+  still in the hover readout, and the **verdict still reads all four windows**
+  whatever is drawn. Three things do follow it, because all three exist to make
+  the remaining lines readable — the y-axis scales to the highest line actually
+  **drawn** (except the fixed 0–7 run-days axis), the highlight and the hover/pin
+  marker pick the highest of the **drawn** lines (so hiding the leader hands the
+  highlight to the next one down rather than leaving the stretch looking unled —
+  which does mean the marker and the bar colour can name different windows while
+  a line is hidden), and a window's start mark goes with its line (see
+  "Window-start marks" above). With *every* line hidden the axis falls back to
+  all four and neither a line nor a marker is drawn.
 - **The two windows the target maths needs** — a *target* can only be a single
   number, so it keeps exactly one volume window and one frequency window:
   `IV`/`IF`, **slots 1 and 2**, i.e. `WINDOW_VOL` and `WINDOW_FREQ`, which at
@@ -314,46 +325,51 @@ All of it is derived in-browser from one array of daily distances.
   that is actually on screen. `avg`, `perWeekAt()` and `perWeekRunsAt()` are the
   single-window views the tiles, the table and the target maths read.
   **`windowBase`/`windowMult` therefore move the targets — and, for a separate
-  reason, the bar colours too**, since the verdict compares neighbouring windows
-  directly. Deliberate, but worth knowing before wondering why a whole history
+  reason, the bar colours too**, since the verdict is a comparison between the
+  four windows. Deliberate, but worth knowing before wondering why a whole history
   changed colour.
-- **Verdict** (`classify`) — the **bar colours**. One sentence: it is
-  **the shortest window slot that is at least as high as every longer one**,
-  read off the day's **distance per week** (the same `volSeries` panel 2 draws).
+- **Verdict** (`classify`) — the **bar colours**. One line of arithmetic:
+  **which window's distance per week is highest that day**, the shortest winning
+  a tie. Read off `volSeries`, the same series panel 2 draws.
 
-  | | | |
-  |---|---|---|
-  | `w0 ≥ w1, w2, w3` | **highly productive** | this week tops everything |
-  | else `w1 ≥ w2, w3` | **productive** | the block tops the quarter and the year |
-  | else `w2 ≥ w3` | **steady** | the quarter tops the year |
-  | else | **unproductive** | only the year is on top |
+  | | |
+  |---|---|
+  | `w0` highest | **highly productive** |
+  | `w1` | **productive** |
+  | `w2` | **steady** |
+  | `w3` | **unproductive** |
 
-  Each rung has to beat **every** longer window, not just the next one along.
-  `w0 ≥ w1` on its own would call a week highly productive while it sat below the
-  quarter *and* the year, which is not a claim worth making.
+  The shorter the window on top, the more recent the growth: a 1-week window
+  above the year means this week beat everything, and a 64-week window on top
+  means only the year is holding anything up.
 
-  Three things fall out of that and are worth holding onto:
+  Three things worth holding onto:
 
-  - **`c.at` is a window slot, not a rung index**, and it is the slot whose
-    colour the bar is painted in — so a purple bar says "the purple line is the
-    highest one", with no legend lookup in between. `verdictWhy()` spells the
-    same thing out in words under the verdict ("4w ≥ 16w, 64w", or "64w
-    highest" for the longest window, which has nothing longer to beat). The
+  - **It is literally the line `highlightMax` picks out.** Same `volSeries`,
+    same argmax, same tie rule — so slot *k*'s line and verdict *k* share a
+    colour, and a purple bar says "the purple line is the highest one" with no
+    legend lookup in between. The one way the two can disagree: the highlight
+    picks the highest of the **drawn** lines, the verdict always reads all four.
+    `verdictWhy()` spells the verdict out in words under it ("4w highest"). The
     readout's verdict pill is **always two lines**: the verdict, then that
     `.why` at 10px under it — a rest day gets an empty second line, so the pill
     is the same height either way.
-  - **Unproductive is the same rule, not a fallback.** Slot 3's rung is
-    vacuously true — there is nothing longer for it to beat — so the chain always
-    terminates at it, and "unproductive" is just `at = 3`. It is also an honest
-    reading: failing every earlier rung forces `w3` strictly above all three
-    others, so the longest window really is on top whenever it gets there.
-  - **Highly productive ⟺ the 1-week line *is* the MAX line.** `w0` topping
-    every longer window is exactly `volSeries[0][i] === volSeries[MAXI][i]`. The
-    headless probe asserts the equivalence in both directions.
+  - **It used to be written as a ladder of rungs** — each window having to be at
+    least as high as *every* longer one, walking outwards from the shortest, with
+    "unproductive" as the vacuously-true last rung. That is the *same function*,
+    and the simpler statement replaced it rather than changing it: the first slot
+    that beats every longer one is the first slot holding the maximum, and every
+    shorter slot fails because the maximum is longer than it. A probe
+    re-derives the old ladder alongside the new argmax over a real 1340-day
+    export: **0 disagreements**, same 394/137/67/6 counts.
+  - **No epsilon.** The ladder's comparisons and the argmax are both strictly
+    greater on raw `volSeries` values, so a tie keeps the shortest slot by
+    construction. (The old target-based verdict did need one, for band edges —
+    that is gone with it.)
 
-  Flat colours, no ramp: a rung either holds or it doesn't. A **rest day has no
-  verdict at all** (`classify` returns `null`) and keeps its pale `--rest` stub,
-  so every colour on the chart belongs to a run.
+  Flat colours, no ramp: a window either is the highest or it isn't. A **rest day
+  has no verdict at all** (`classify` returns `null`) and keeps its pale `--rest`
+  stub, so every colour on the chart belongs to a run.
 
   **Why not judge the run.** The old verdict was the day's distance over a target
   for that day, ramped by how far past it landed. It never really worked: a
@@ -365,16 +381,17 @@ All of it is derived in-browser from one array of daily distances.
   setting, and the OKLab ramps — see "Colour system" for the hatch that went with
   the long-run scheme.
 
-  **The skew, and why it is fine.** On a day you ran, the 1-week window *contains*
-  that run, so slot 0's rung is the easy one to clear: on a real 1339-day export
-  the verdicts come out **393 highly productive / 137 productive / 67 steady / 6
-  unproductive** across 603 run days. That is not a bug and it is not (only) the
-  rule flattering itself — this history is a volume ramp from late 2024 onwards,
-  so short windows genuinely do sit above long ones most of the time, and the days
-  that actually work against the ramp are the rest days, which are grey by design.
-  The first cut of this rule compared each window only against the next one along
-  and gave 423/137/42/**1**; requiring every longer window is what moved 30 days
-  out of the top verdict and 5 more into the bottom one.
+  **The skew, and why it is fine.** On a day you ran, the 1-week window
+  *contains* that run, so slot 0 is the easy one to be highest: on a real
+  1340-day export the verdicts come out **394 highly productive / 137 productive
+  / 67 steady / 6 unproductive** across 604 run days. That is not a bug and it is
+  not (only) the rule flattering itself — this history is a volume ramp from late
+  2024 onwards, so short windows genuinely do sit above long ones most of the
+  time, and the days that actually work against the ramp are the rest days, which
+  are grey by design. An earlier cut of the rule compared each window only
+  against the *next one along* rather than against all of them and gave
+  423/137/42/**1** — that is a genuinely different function from this one, and
+  the one it was replaced by.
 - **Target** — still computed and still shown (the readout's distance line and the
   data table's Target column), it just no longer colours anything. What a run that
   day had to be to hold the average steady:
@@ -399,8 +416,8 @@ All of it is derived in-browser from one array of daily distances.
   therefore ramps in from zero rather than being extrapolated: one run on day one
   is 0.11 run days/week over the 64-week window, not "7 a week" off a single
   elapsed day. This is also why the four lines fan out from zero at different
-  rates over the first year or so of history, and why MAX there is essentially
-  always the 1-week line. A "days elapsed"
+  rates over the first year or so of history, and why the highlight there is
+  essentially always on the 1-week line. A "days elapsed"
   ramp-in mode existed and was removed: it made the readout say "1 of 1 days" while
   the rate was computed against a 7-day floor, which was both inconsistent and not
   what the chart is for.
@@ -951,9 +968,9 @@ for filled bands.
 `runviz.prefs.v1` holds everything the settings sidebar and the what-if box can be
 set to, so the page opens the way it was left: `windowBase`, `windowMult`,
 `windowVdot`, `minLapM`, `gapVdot`, `gapPace`, `vdotNearDots`, `vdotNearPct`,
-`barColour` (`'verdict'`/`'workout'`/`'none'`; a legacy `colourVerdicts: false` reads as `'none'`), `wtExp` (0–4, halves), `wtShare` (1–100), `zoneBars`, `zoneAxis`, `maxBehind`, `fadeWindows`, `panels` (`{vol, freq, runs, vdot, zone}`, each independently
-show/hide — see below), `lines` (`{max, s0, s1, s2, s3}` — slot keys, which of
-the five lines the three window panels draw), `zoneAreaWin` (a slot key: which
+`barColour` (`'verdict'`/`'workout'`/`'none'`; a legacy `colourVerdicts: false` reads as `'none'`), `wtExp` (0–4, halves), `wtShare` (1–100), `zoneBars`, `zoneAxis`, `highlightMax`, `panels` (`{vol, freq, runs, vdot, zone}`, each independently
+show/hide — see below), `lines` (`{s0, s1, s2, s3}` — slot keys, which of
+the four lines the three window panels draw), `zoneAreaWin` (a slot key: which
 window the stacked-zone panel is over, `'s2'` by default), `zoneAreaMode` (`'km'`/`'min'`/`'pctKm'`/`'pctMin'`), and `plan` (`null` = the what-if box follows real
 history, `{km, days}` = edited). Three rules:
 
@@ -999,9 +1016,9 @@ the defaults, and a remembered setting has to overwrite them at boot.
 - **Reset** in the settings sidebar: the window base and multiple, the VDOT
   window, the min-lap distance, both grade-adjusted-pace toggles, the near-max dots
   and their percentage, the pace-zone bar
-  count and bar height, the MAX draw order, the window-line fade, the bar-colour mode and the two workout-type settings, the
+  count and bar height, the highest-line highlight, the bar-colour mode and the two workout-type settings, the
   six panel show/hide toggles and the five line show/hide toggles back to their
-  defaults (every panel shown, every line except MAX), plus the view back to its
+  defaults (every panel shown, all four lines, the highlight on), plus the view back to its
   default span. It does *not*
   touch the what-if.
 - **reset** in the Today's target tile: clears the what-if back to following real
@@ -1040,7 +1057,7 @@ much height:
 
 | Group | Holds |
 |---|---|
-| Volume & frequency panels | the five line show/hide swatches, the three panel show/hide boxes, `windowBase`/`windowMult`, `fadeWindows`, `maxBehind` |
+| Volume & frequency panels | the four line show/hide swatches, the three panel show/hide boxes, `windowBase`/`windowMult`, `highlightMax` |
 | VDOT panel | its show/hide, `windowVdot`, `minLapM`, `gapVdot`, `vdotNearDots`/`vdotNearPct` |
 | Pace zones | its show/hide, `zoneBars`, `zoneAxis`, `gapPace` |
 | Pace-zone volume | the eight-bucket zone legend, the panel's show/hide, `zoneAreaWin`, `zoneAreaMode` |
@@ -1061,7 +1078,8 @@ sits with it. Reset sits outside all four, since it owns the lot.
 
 **One** four-colour scheme does two jobs, because they are the same job: the four
 rolling **window lines** (slot 0 → slot 3) and the four **verdicts**. A verdict is
-"which window slot is on top from here out", so slot *k*'s line and verdict *k*
+"which window slot is the highest that day", which is literally what
+`highlightMax` draws on the panel above, so slot *k*'s line and verdict *k*
 share a colour, and a purple bar means the purple line is the highest one. Hexes
 live in the CSS custom properties at the top of the file (light and dark, each
 declared under three scopes — see the comment there).
@@ -1073,10 +1091,12 @@ declared under three scopes — see the comment there).
 | 2 (16w) | steady | blue `--v-st` | `#2880b0` | `#3e96ea` |
 | 3 (64w) | unproductive | orange `--v-un` | `#e08a1e` | `#d97900` |
 
-Plus `--wmax` for the MAX line — plain ink (`#0b0b0b` light, `#ffffff` dark)
-rather than a hue, because it is the line meant to be read first and should not
-compete as a fifth category. The VDOT panel keeps its own `--vdot` violet; it is
-a single-series panel and not part of this scheme.
+Four hues and no fifth: there used to be a `--wmax`, plain ink (`#0b0b0b` light,
+`#ffffff` dark) for the MAX line, picked so it wouldn't compete as a fifth
+category. That line is gone (see "The model") and so is the variable — which
+means the scheme is now exactly four colours doing exactly two jobs. The VDOT
+panel keeps its own `--vdot` violet; it is a single-series panel and not part of
+this scheme.
 
 Rest days are a pale neutral `--rest` (this is also what the bar panel's rest-day
 stubs are drawn in); with `barColour` set to `'none'` every run falls back to a
@@ -1191,7 +1211,7 @@ One file, in this order: CSS custom properties → styles → markup → load-ga
 → bootstrap script (CSV parsing, storage, sport picker, boot) → app script, whose
 entire body is wrapped in `if (DATA) { … }` so nothing runs until data exists.
 
-Roughly: `recompute` (the four windows' series + their max + `computeTargets`) →
+Roughly: `recompute` (the four windows' series + `computeTargets`) →
 `classify` (verdict per day, off the windows) → `buildRamps`/`barColour` → `drawBars` /
 `drawWindowPanel` (shared by `drawVol`/`drawFreq`/`drawRuns`) / `drawVdot` /
 `drawZoneArea` / `drawAll` → `setReadout`/`winGrid`/`zoneGrid`/`renderTable`/
@@ -1200,7 +1220,7 @@ Roughly: `recompute` (the four windows' series + their max + `computeTargets`) �
 ## Gotchas that have bitten before
 
 - **Declaration order.** `recompute()` runs at load. Anything it touches
-  (`WINDOWS`, `IV`/`IF`, `MAXI`, `LONG_MIN_RUNS_PER_WEEK`, the series
+  (`WINDOWS`, `IV`/`IF`, `LONG_MIN_RUNS_PER_WEEK`, the series
   arrays) must be declared
   *above* that call or the whole script dies on a `const`/`let` TDZ error, which
   surfaces confusingly as "Cannot access 'C' before initialization". `loadPrefs()`
@@ -1225,7 +1245,6 @@ Roughly: `recompute` (the four windows' series + their max + `computeTargets`) �
   fit) — so any new wording on either half has to be re-measured against the
   246px the sidebar actually gives it, not eyeballed. See the readout section above before touching
   its flex properties.
-- Floating point: `1.05 - 1 > 0.05`, so band edges need the epsilon in `classify`.
 - **Negative zero.** A sliding-window sum adds and subtracts the same distances
   in a different order, so it doesn't land back on exactly 0 over a stretch with
   no runs — it lands on dust, often *negative* dust, which `toFixed`/`Intl`

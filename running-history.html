@@ -18,7 +18,7 @@
     /* ONE four-colour scheme, used for two things that are really the same thing:
        the four rolling window lines (slot 0 to slot 3) and the four verdicts
        (highly productive, productive, steady, unproductive). A verdict IS "which
-       window slot is on top from here out", so slot k's line and verdict k get
+       window slot is the highest that day", so slot k's line and verdict k get
        the same colour — a purple bar says the purple line is the highest one,
        with no legend lookup in between. Purple, green, blue, orange.
        Flat, not ramped: a verdict is a comparison that either holds or it
@@ -36,14 +36,11 @@
        2.8 and 3.0:1, which measures low but reads strongly as a saturated hue on
        near-black. The legend, the hover readout and the table all label every
        line and name every verdict in words, which is the relief those warnings
-       ask for.
-       --wmax is the per-day max across the four — the line that's meant to be
-       read first, so it's plain ink rather than a fifth hue. */
+       ask for. */
     --v-hp:           #6b3fa0;
     --v-pr:           #2c8a52;
     --v-st:           #2880b0;
     --v-un:           #e08a1e;
-    --wmax:           #0b0b0b;
     /* Page chrome, not data: the primary button, the focus underline and the
        gate's error line. Kept separate from the verdict hues so those stay
        purely semantic. */
@@ -106,7 +103,6 @@
       --v-pr:           #007440;
       --v-st:           #3e96ea;
       --v-un:           #d97900;
-      --wmax:           #ffffff;
       --accent:         #5c90cf;
       --bad:            #e8871f;
       --nocolour:       #5c5a54;
@@ -139,7 +135,6 @@
     --v-pr:           #007440;
     --v-st:           #3e96ea;
     --v-un:           #d97900;
-    --wmax:           #ffffff;
     --accent:         #5c90cf;
     --bad:            #e8871f;
     --nocolour:       #5c5a54;
@@ -224,9 +219,9 @@
   .readout .pair .sub-v { font-size: 12px; font-weight: 400; color: var(--text-secondary); }
   .readout .pair .v2 { font-size: 11px; font-weight: 400; color: var(--muted);
     font-variant-numeric: tabular-nums; margin-top: 1px; min-height: 33px; min-height: 2lh; }
-  /* The four windows plus their max, as one small table per measure. Every row
-     is always present (five windows, run or no run), so unlike the free-text
-     detail lines this can't change the sidebar's height from day to day. */
+  /* The four windows, as one small table per measure. Every row is always
+     present (four windows, run or no run), so unlike the free-text detail
+     lines this can't change the sidebar's height from day to day. */
   .readout .wingrid { display: grid; grid-template-columns: auto auto auto 1fr; gap: 1px 5px;
     align-items: baseline; margin-top: 3px; font-variant-numeric: tabular-nums; font-size: 12px; }
   .readout .wingrid .sw { width: 10px; height: 3px; border-radius: 2px; align-self: center; }
@@ -240,7 +235,6 @@
      weeks stop wrapping — sized against a 280px sidebar, which is what this is
      actually used at. */
   .readout .wingrid .wx { color: var(--muted); font-size: 10px; }
-  .readout .wingrid .wl.r-max, .readout .wingrid .wv.r-max { font-weight: 700; color: var(--text-primary); }
   /* so a wrapped detail line breaks at the · separators, never mid-phrase
      ("no / long runs", "564 / km/yr") */
   .readout .seg { white-space: nowrap; }
@@ -395,13 +389,12 @@
   <section class="setgroup">
     <h2 class="setgroup-title">Volume &amp; frequency panels</h2>
     <div class="legend">
-      <div class="legend-row" id="row-windows" title="Hiding a line takes it off the three panels and takes its window-start dot off every panel — it stays in the hover readout and still counts towards MAX."><span class="legend-tag">Lines</span>
-        <label class="item"><input type="checkbox" id="line-max"><span class="swatch line" style="background:var(--wmax)"></span>MAX</label>
+      <div class="legend-row" id="row-windows" title="Hiding a line takes it off the three panels and takes its window-start dot off every panel — it stays in the hover readout."><span class="legend-tag">Lines</span>
         <label class="item"><input type="checkbox" id="line-s0" checked><span class="swatch line" style="background:var(--v-hp)"></span><span class="winLabel0">1w</span></label>
         <label class="item"><input type="checkbox" id="line-s1" checked><span class="swatch line" style="background:var(--v-pr)"></span><span class="winLabel1">4w</span></label>
         <label class="item"><input type="checkbox" id="line-s2" checked><span class="swatch line" style="background:var(--v-st)"></span><span class="winLabel2">16w</span></label>
         <label class="item"><input type="checkbox" id="line-s3" checked><span class="swatch line" style="background:var(--v-un)"></span><span class="winLabel3">64w</span></label>
-        <span class="legend-dim"><span class="winsN">1 / 4 / 16 / 64</span>-week rolling averages, and the highest of the four on the day. Each line's colour is also its verdict colour below — whichever line is on top is what the bars are coloured by. Untick one to take it, and its window-start dot, off the panels; it stays in the readout and still counts towards MAX.</span>
+        <span class="legend-dim"><span class="winsN">1 / 4 / 16 / 64</span>-week rolling averages. Each line's colour is also its verdict colour below — whichever line is highest on the day is what the bars are coloured by. Untick one to take it, and its window-start dot, off the panels; it stays in the readout.</span>
       </div>
     </div>
     <div class="ctrls">
@@ -414,11 +407,8 @@
       <label class="chk" title="Each window is this many times the one before it, so the four are base, base x m, base x m squared, base x m cubed. The second and third of the four are also what the per-day target is computed from, so changing these moves the bar colours too.">Next window &times;
         <input type="number" id="windowMult" min="2" max="8" step="1" value="4">
       </label>
-      <label class="chk" title="The four window lines are drawn semi-transparent by default, which is what makes the max read as the primary line without being any thicker. Turn this off to compare two windows against each other at full strength, at the cost of a busier panel.">
-        <input type="checkbox" id="fadeWindows"> Fade the window lines
-      </label>
-      <label class="chk" title="The max line sits on top of the four windows by default, which is what makes it the one read first. Put it underneath and the shortest window stays visible along the stretches where it IS the max, so the max shows only where it pulls away.">
-        <input type="checkbox" id="maxBehind"> Draw MAX behind the windows
+      <label class="chk" title="Along every stretch, the highest of the four lines is drawn at full strength and the other three are faded — so which window is on top is something you see rather than work out. It is also exactly what the bars' verdict colour says. Turn it off to draw all four at full strength, which is what you want when comparing two windows against each other.">
+        <input type="checkbox" id="highlightMax" checked> Highlight the highest line
       </label>
     </div>
   </section>
@@ -477,13 +467,12 @@
       </div>
       <div class="legend-row"><span class="legend-tag">No run</span>
         <span class="item"><span class="swatch" style="background:var(--rest)"></span>rest day</span>
-        <span class="legend-dim">Which distance-per-week window is on top that day, shortest first — each one has to
-          beat <em>every</em> longer window, not just the next along.
-          <span class="winLabel0">1w</span> highest is highly productive;
-          else <span class="winLabel1">4w</span> over <span class="winLabel2">16w</span> and <span class="winLabel3">64w</span> is productive;
-          else <span class="winLabel2">16w</span> over <span class="winLabel3">64w</span> is steady;
-          else <span class="winLabel3">64w</span> is the highest and that is unproductive.
-          Same four colours as the window lines above, since that is the same statement.
+        <span class="legend-dim">Simply <em>which distance-per-week window is highest that day</em> — the
+          shortest one wins a tie. <span class="winLabel0">1w</span> highest is highly productive,
+          <span class="winLabel1">4w</span> productive, <span class="winLabel2">16w</span> steady,
+          <span class="winLabel3">64w</span> unproductive: the shorter the window on top, the more
+          recent the growth. Same four colours as the window lines above, because it is the same
+          statement — it is the line &ldquo;Highlight the highest line&rdquo; picks out.
           A rest day has no verdict.</span>
       </div>
     </div>
@@ -567,7 +556,7 @@
     flatten every short one and short runs stay readable against each other. A day with
     no run gets a tiny grey stub below the axis floor rather than nothing at all, which
     also keeps it easy to hover and click. The colour is not about that one run: it
-    says <strong>which rolling distance-per-week window is on top that day</strong> &mdash;
+    says <strong>which rolling distance-per-week window is highest that day</strong> &mdash;
     the shortest one winning is the strongest reading &mdash; so the answer is
     &ldquo;is my training trending up&rdquo; rather than &ldquo;was this run long
     enough&rdquo;. Rolling weekly volume has moved to its own panel just below, in
@@ -585,15 +574,15 @@
   <div class="chartcard">
     <canvas id="chart"></canvas>
     <div class="chart-panel" id="panel-vol">
-      <div class="panel-title">Distance per week &mdash; <span class="winsN">1 / 4 / 16 / 64</span>-week rolling averages, and their max</div>
+      <div class="panel-title">Distance per week &mdash; <span class="winsN">1 / 4 / 16 / 64</span>-week rolling averages</div>
       <canvas id="chart5"></canvas>
     </div>
     <div class="chart-panel" id="panel-freq">
-      <div class="panel-title">Run days per week &mdash; <span class="winsN">1 / 4 / 16 / 64</span>-week rolling averages, and their max</div>
+      <div class="panel-title">Run days per week &mdash; <span class="winsN">1 / 4 / 16 / 64</span>-week rolling averages</div>
       <canvas id="chart2"></canvas>
     </div>
     <div class="chart-panel" id="panel-runs">
-      <div class="panel-title">Runs per week &mdash; <span class="winsN">1 / 4 / 16 / 64</span>-week rolling averages, and their max</div>
+      <div class="panel-title">Runs per week &mdash; <span class="winsN">1 / 4 / 16 / 64</span>-week rolling averages</div>
       <canvas id="chart3"></canvas>
     </div>
     <div class="chart-panel" id="panel-vdot">
@@ -1024,12 +1013,12 @@ const PREF_DEFAULTS = {
   // this week's weather.
   zoneAreaWin: 's2',
   zoneAreaMode: 'km',   // what the bands measure: 'km'/'min' per week, or 'pctKm'/'pctMin' share
-  // Which of the five lines each volume/frequency panel actually draws. Hiding
-  // one is purely a decluttering move: it still appears in the hover readout and
-  // still counts towards MAX. All but MAX shown by default.
-  lines: { max: false, s0: true, s1: true, s2: true, s3: true },
-  maxBehind: false,   // draw the max line under the four windows rather than over them
-  fadeWindows: false, // the four window lines semi-transparent, so the max reads first
+  // Which of the four lines each volume/frequency panel actually draws. Hiding
+  // one is purely a decluttering move: it still appears in the hover readout.
+  lines: { s0: true, s1: true, s2: true, s3: true },
+  // Draw the highest of the four at full strength along every stretch and fade
+  // the rest — which window is on top, seen rather than worked out.
+  highlightMax: true,
   plan: null,        // null = the what-if box follows real history; {km, days} = edited
 };
 // Slot keys, not week counts — a slot keeps its colour and its show/hide
@@ -1037,7 +1026,7 @@ const PREF_DEFAULTS = {
 const SLOT_KEYS = ['s0', 's1', 's2', 's3'];
 // The optional panels, i.e. everything but the bars.
 const PANEL_KEYS = ['vol', 'freq', 'runs', 'vdot', 'zone', 'zarea'];
-const LINE_KEYS = ['max', ...SLOT_KEYS];
+const LINE_KEYS = SLOT_KEYS;
 function loadPrefs() {
   const p = { ...PREF_DEFAULTS, panels: { ...PREF_DEFAULTS.panels }, lines: { ...PREF_DEFAULTS.lines } };
   const raw = lsGet(LS_PREFS);
@@ -1065,7 +1054,9 @@ function loadPrefs() {
   // `useGap` was one toggle for both before VDOT and the histogram got one each;
   // an entry that still carries it turns both on, until the next save drops it.
   if (typeof raw.useGap === 'boolean') p.gapVdot = p.gapPace = raw.useGap;
-  for (const k of ['maxBehind', 'fadeWindows', 'gapVdot', 'gapPace', 'vdotNearDots']) {
+  // `maxBehind`/`fadeWindows` belonged to the MAX line and are ignored, as is a
+  // `lines.max` entry — all dropped on the next save.
+  for (const k of ['highlightMax', 'gapVdot', 'gapPace', 'vdotNearDots']) {
     if (typeof raw[k] === 'boolean') p[k] = raw[k];
   }
   if (raw.panels && typeof raw.panels === 'object') {
@@ -1099,8 +1090,7 @@ function savePrefs() {
     gapPace,
     vdotNearDots,
     vdotNearPct,
-    maxBehind,
-    fadeWindows,
+    highlightMax,
     barColour: barColourMode,
     ...wt,
     zoneBars: ZONE_BARS,
@@ -1135,8 +1125,8 @@ function savePrefs() {
 // setting when the numbers behind it change.
 const N_WINDOWS = 4;
 // Slot k's line colour is verdict k's colour, because they mean the same thing:
-// verdict k is "window slot k is the highest from k out to the longest", so a
-// purple bar says the purple line is on top. See the comment on --v-hp.
+// verdict k is "window slot k is the highest of the four", so a purple bar says
+// the purple line is on top. See the comment on --v-hp.
 const WIN_CSS = ['--v-hp', '--v-pr', '--v-st', '--v-un'];
 let windowBase = prefs.windowBase;   // weeks, 1-8
 let windowMult = prefs.windowMult;   // 2-8
@@ -1190,16 +1180,13 @@ for (let i = N - 1; i >= 0; i--) { if (daily[i] > 0) { lastRunIdx = i; break; } 
 // Trailing-window means. The first window's worth of days has no full window behind
 // it and is still divided by the full window, so each series ramps up from zero
 // rather than reading a single 5 km run on day one as a 5 km/day "average".
-// One set of series per window, plus a per-day max across the four. Everything
-// is a *rate* (km per week, run days per week, runs per week) so four windows of
-// very different lengths are directly comparable on one axis.
+// One set of series per window. Everything is a *rate* (km per week, run days
+// per week, runs per week) so four windows of very different lengths are
+// directly comparable on one axis.
 //   volSeries  km per week
 //   freqSeries run days per week   (a two-run day still counts once)
 //   runSeries  runs per week       (a two-run day counts twice)
-// MAXI is the index of the extra "max of the four" series appended to each set;
-// it is the upper envelope of the four, not a running all-time best.
-const MAXI = WINDOWS.length;
-const blank = () => Array.from({ length: WINDOWS.length + 1 }, () => new Array(N));
+const blank = () => Array.from({ length: WINDOWS.length }, () => new Array(N));
 const volSeries = blank();
 const freqSeries = blank();
 const runSeries = blank();
@@ -1250,13 +1237,6 @@ function recompute() {
       if (w === IV) avg[i] = km / d;
     }
   });
-  for (let i = 0; i < N; i++) {
-    for (const set of [volSeries, freqSeries, runSeries]) {
-      let m = set[0][i];
-      for (let w = 1; w < WINDOWS.length; w++) if (set[w][i] > m) m = set[w][i];
-      set[MAXI][i] = m;
-    }
-  }
   computeTargets();
 }
 recompute();
@@ -1503,21 +1483,25 @@ function computeTargets() {
 // worked: a low-volume day, a long run and an interval session are all
 // deliberately the "wrong" length, so a per-run comparison said more about
 // which kind of day it was than about whether training was going anywhere.
-// So the verdict is now read off the windows themselves — the same
-// distance-per-week series the second panel draws — shortest against next
-// shortest, walking outwards:
-//     w0 >= w1                  -> highly productive   (this week beats the block)
-//     else w1 >= w2             -> productive          (the block beats the quarter)
-//     else w2 >= w3             -> steady              (the quarter beats the year)
-//     else                      -> unproductive        (every span is below the one above it)
-// Each rung is "the shorter span is at least holding the longer one up", so the
-// verdict says how far out training is still growing rather than how long one
-// run was. Which four windows are in play therefore moves the verdicts too —
-// see the note on windowBase/windowMult.
+// So the verdict is read off the windows themselves, and it is one line of
+// arithmetic: WHICH DISTANCE-PER-WEEK WINDOW IS HIGHEST THAT DAY, with the
+// shortest winning a tie.
+//     w0 highest -> highly productive
+//     w1         -> productive
+//     w2         -> steady
+//     w3         -> unproductive
+// The shorter the window on top, the more recent the growth. It is exactly the
+// line the panels' "highlight the highest line" picks out, which is why slot k's
+// line and verdict k share a colour. Which four windows are in play therefore
+// moves the verdicts too — see the note on windowBase/windowMult.
+// (This used to be written as a ladder of rungs, each window having to beat
+// *every* longer one. That is the same function: the first slot that beats all
+// longer ones is the first slot holding the maximum, and every shorter slot
+// fails because the maximum is longer than it. Same counts on a real export.)
 // A rest day still has no verdict at all: it keeps its pale grey stub, so the
 // colour on the chart always belongs to a run.
-// `at` is the slot that topped the rest, which is also the slot whose colour the
-// bar is painted in, and what the readout and table name behind the word.
+// `at` is the highest slot, which is also the slot whose colour the bar is
+// painted in, and what the readout and table name behind the word.
 const VERDICT_DIRS = ['hp', 'pr', 'st', 'un'];   // indexed by that slot
 const DIR_LABEL = { hp: 'highly productive', pr: 'productive', st: 'steady', un: 'unproductive' };
 const DIR_ARROW = { hp: '▲▲', pr: '▲', st: '=', un: '▼' };
@@ -1528,32 +1512,14 @@ let barColourMode = prefs.barColour;
 
 function classify(i) {
   if (daily[i] <= 0) return null;                 // rest day
-  // Each rung compares its window against EVERY longer one, not just the next
-  // one along: "1w ≥ 4w" alone would call a week highly productive while it sat
-  // below the quarter and the year, which is not a claim worth making.
-  for (let k = 0; k < N_WINDOWS - 1; k++) {
-    let tops = true;
-    for (let j = k + 1; j < N_WINDOWS; j++) {
-      if (volSeries[j][i] > volSeries[k][i]) { tops = false; break; }
-    }
-    if (tops) return { dir: VERDICT_DIRS[k], at: k };
-  }
-  // Nothing shorter topped its tail, which leaves the longest window — whose own
-  // rung has nothing longer to beat and so always holds. (It really is the
-  // highest of the four whenever it gets here, not just the last one standing:
-  // failing every earlier rung forces each window below it.)
-  return { dir: VERDICT_DIRS[N_WINDOWS - 1], at: N_WINDOWS - 1 };
+  // Strictly greater, so a tie keeps the earlier (shorter) slot.
+  let at = 0;
+  for (let k = 1; k < N_WINDOWS; k++) if (volSeries[k][i] > volSeries[at][i]) at = k;
+  return { dir: VERDICT_DIRS[at], at };
 }
-// Names the comparison behind the verdict, so the word is never the only thing
-// on offer: "4w ≥ 16w, 64w", or "64w highest" for the longest window, which has
-// nothing longer to be compared against.
-function verdictWhy(c) {
-  if (!c) return '';
-  const longer = WINDOWS.slice(c.at + 1).map(w => w.label);
-  return longer.length
-    ? `${WINDOWS[c.at].label} ≥ ${longer.join(', ')}`
-    : `${WINDOWS[c.at].label} highest`;
-}
+// Names what the verdict is reading, so the word is never the only thing on
+// offer: "4w highest".
+const verdictWhy = c => c ? `${WINDOWS[c.at].label} highest` : '';
 
 // ---- pace zones, from a VDOT value --------------------------------------
 // Five Daniels training intensities, each a %VDOT anchor back-solved from
@@ -1598,19 +1564,15 @@ const zoneAreaSlot = () => SLOT_KEYS.indexOf(zoneAreaWin);
 // share of the week ('pctKm'/'pctMin'). The first two change what is summed,
 // so they need a recompute; the share modes are derived from the same sums.
 let zoneAreaMode = prefs.zoneAreaMode;
-// Which of the five lines the three window panels draw. Purely a view filter:
-// a hidden line is still in the readout and still counts towards MAX — see the
-// comment on PREF_DEFAULTS.lines.
+// Which of the four lines the three window panels draw. Purely a view filter:
+// a hidden line is still in the readout — see the comment on PREF_DEFAULTS.lines.
 let visLines = { ...prefs.lines };
-// Whether the max is drawn under the four windows instead of over them. Only a
-// z-order: it changes nothing about what is computed or which lines are drawn.
-let maxBehind = prefs.maxBehind;
-// Whether the four window lines are drawn semi-transparent. On by default: it
-// is what makes the max read as the primary line without being any thicker.
-// Off is for comparing two windows against each other rather than against the
-// max — at full strength every crossing is legible, at the cost of a busier
-// panel. Like maxBehind, purely a drawing choice.
-let fadeWindows = prefs.fadeWindows;
+// Whether the highest line at each point is drawn at full strength and the
+// others faded. On by default: "which window is on top" is the question these
+// panels are for, and it is the same statement the bars' verdict colour makes.
+// Off draws all four at full strength, for comparing two windows against each
+// other. Purely a drawing choice — nothing computed depends on it.
+let highlightMax = prefs.highlightMax;
 const ZONE_ANCHOR_PCT = [0.657, 0.818, 0.880, 0.976, 1.062];
 const ZONE_BOUND_PCT = [null,   // easy's floor is per-day now — see easyFloorPct()
   (ZONE_ANCHOR_PCT[0] + ZONE_ANCHOR_PCT[1]) / 2,
@@ -2333,35 +2295,57 @@ function paintLeadSwatches() {
 
 // ---- panels 1b/2/3: the same measure over all four rolling windows -------
 // One shared drawer, because the three panels differ only in which series set
-// they read, their axis and their label. Four window lines, deliberately thin
-// and semi-transparent so they read as context, plus the per-day max of the
-// four in plain ink at full strength — that's the line meant to be read first.
-// A colour means the same window in every panel (see the --w* custom properties).
-// All five are drawn at the same weight. The max used to be thicker as well as
-// darker; that read as heavy-handed, and it wasn't carrying any of the work —
-// full-strength plain ink against four semi-transparent hues already separates
-// it, at any width.
-const WIN_ALPHA = 0.55;     // the four window lines: present, but recessive
-const LINE_WIDTH = 1.6;
+// they read, their axis and their label. Four window lines, all at the same
+// weight; a colour means the same window in every panel (see the --v-* custom
+// properties, which are also the verdict colours).
+//
+// `highlightMax` is what makes "which window is on top" readable: every line is
+// laid down faded, then each one is redrawn at full strength along just the
+// stretches where it IS the highest of the drawn lines. There used to be a
+// fifth line here — the per-day max of the four, in plain ink — which said the
+// same thing as a separate series you then had to trace back to a colour. The
+// highlight says it in place, on the line that owns it.
+const WIN_ALPHA = 0.32;     // the lines that aren't on top: present, but recessive
+// 2.2, not the 1.6 this started at: these are four hues on one plot and the
+// colour IS the label, so a line has to carry enough pixels to read as its own
+// colour rather than as dark-ish ink. Measured by eye against 2.8, which is too
+// heavy — it smears the 1-week line's spikes together at a year-wide zoom.
+// Every line is the same weight, highlighted or faded; the highlight is carried
+// by alpha alone (see WIN_ALPHA).
+const LINE_WIDTH = 2.2;
 function drawWindowPanel(canvas, c, set, insets, panelKey, axisLabel, opts = {}) {
   const { w, h } = fitCanvas(canvas, c);
   const isBottom = bottomPanel() === panelKey;
   insets.b = isBottom ? XLAB_B : 12;
   const plotH = h - insets.t - insets.b;
   const [i0, i1] = visibleRange();
-  const mx = set[MAXI];
-  // Series indices to draw, in the panel's own order. A line can be switched off
-  // for legibility; it stays in the readout and still feeds MAX either way. With
-  // everything off there is nothing to scale to, so MAX comes back as the floor.
-  const showMax = visLines.max;
+  // Window slots to draw, shortest first. A line can be switched off for
+  // legibility; it stays in the readout either way. With everything off there
+  // is nothing to scale to, so the axis falls back to all four and no line (and
+  // no marker) is drawn.
   const drawn = WINDOWS.map((w, k) => visLines[w.key] ? k : -1).filter(k => k >= 0);
-  if (showMax) drawn.push(MAXI);
-  if (!drawn.length) drawn.push(MAXI);
+  const noneDrawn = !drawn.length;
+  // The slots the axis and the highlight read. Normally just the drawn ones;
+  // with nothing drawn there is nothing to scale to, so all four stand in.
+  const active = noneDrawn ? WINDOWS.map((w, k) => k) : drawn;
+  // Which of the active lines is highest on each visible day — both the
+  // highlight and the marker's colour come off this one array. Strictly
+  // greater, so a tie keeps the shortest window, exactly as classify() does; on
+  // the distance panel with all four lines drawn it IS the day's verdict slot.
+  // Only the drawn lines are candidates: highlighting a line that isn't on the
+  // panel would leave the stretch looking unled.
+  const lead = new Array(i1 - i0 + 1);
+  for (let i = i0; i <= i1; i++) {
+    let best = active[0];
+    for (const k of active) if (set[k][i] > set[best][i]) best = k;
+    lead[i - i0] = best;
+  }
+  const leadAt = i => lead[i - i0];
 
-  // Scaled to the highest line actually *drawn*, not to MAX, so hiding the
-  // spiky short windows really does open the panel up for the ones left — that
-  // is the whole point of the per-line toggles. Run days per week keeps its
-  // fixed 0–7 axis (there is no eighth day to run on) instead.
+  // Scaled to the highest line actually *drawn*, so hiding the spiky short
+  // windows really does open the panel up for the ones left — that is the whole
+  // point of the per-line toggles. Run days per week keeps its fixed 0–7 axis
+  // (there is no eighth day to run on) instead.
   let ticks, yMax;
   if (opts.fixed7) {
     yMax = 7;
@@ -2369,7 +2353,7 @@ function drawWindowPanel(canvas, c, set, insets, panelKey, axisLabel, opts = {})
     ticks.step = 1;
   } else {
     let peak = 0;
-    for (const k of drawn) for (let i = i0; i <= i1; i++) if (set[k][i] > peak) peak = set[k][i];
+    for (const k of active) for (let i = i0; i <= i1; i++) if (set[k][i] > peak) peak = set[k][i];
     ticks = niceTicks(Math.max(peak * 1.12, 1));
     yMax = ticks[ticks.length - 1];
   }
@@ -2378,8 +2362,8 @@ function drawWindowPanel(canvas, c, set, insets, panelKey, axisLabel, opts = {})
   const px = i => xOf(i) + barW() / 2;
 
   // No area fill under any of these. The single-line panels this grew out of
-  // each had one, but with five lines crossing each other a shaded region only
-  // reads as "the max line has a shadow" — it says nothing the line doesn't.
+  // each had one, but with four lines crossing each other a shaded region only
+  // reads as the topmost line having a shadow — it says nothing the line doesn't.
 
   c.font = '11px system-ui, -apple-system, sans-serif';
   c.textAlign = 'right'; c.textBaseline = 'middle';
@@ -2409,30 +2393,46 @@ function drawWindowPanel(canvas, c, set, insets, panelKey, axisLabel, opts = {})
     c.strokeStyle = C(css); c.lineWidth = LINE_WIDTH; c.globalAlpha = alpha;
     c.stroke(); c.globalAlpha = 1;
   };
-  // Longest window first, so the spikiest line (the shortest window) ends up on
-  // top of the smooth ones rather than buried under them.
-  const winAlpha = fadeWindows ? WIN_ALPHA : 1;
-  const strokeWindows = () => {
-    for (let k = WINDOWS.length - 1; k >= 0; k--) {
-      if (visLines[WINDOWS[k].key]) stroke(set[k], WINDOWS[k].css, winAlpha);
+  // The lead stretch of one window, at full strength: the days it is highest,
+  // run together into one path. Each run of days reaches half a day past its
+  // ends, to the x-midpoint of the handover, so the highlight passes from one
+  // line to the next without a faded gap between them. The y there is on this
+  // window's own line, which is within a line width of the crossing by
+  // definition — the two lines cross somewhere inside that one day.
+  const strokeLead = k => {
+    const sr = set[k];
+    const midX = (a, b) => (px(a) + px(b)) / 2, midY = (a, b) => (yOf(sr[a]) + yOf(sr[b])) / 2;
+    c.strokeStyle = C(WINDOWS[k].css); c.lineWidth = LINE_WIDTH;
+    c.beginPath();
+    let open = false;
+    for (let i = i0; i <= i1; i++) {
+      if (leadAt(i) !== k) { open = false; continue; }
+      if (open) c.lineTo(px(i), yOf(sr[i]));
+      else {
+        if (i > i0) { c.moveTo(midX(i - 1, i), midY(i - 1, i)); c.lineTo(px(i), yOf(sr[i])); }
+        else c.moveTo(px(i), yOf(sr[i]));
+        open = true;
+      }
+      if (i < i1 && leadAt(i + 1) !== k) c.lineTo(midX(i, i + 1), midY(i, i + 1));
     }
+    c.stroke();
   };
-  // MAX is the upper envelope, so wherever it equals a window line the two sit
-  // exactly on top of each other and whichever is drawn second wins. Last by
-  // default, which is what makes it the line read first; `maxBehind` puts it
-  // underneath instead, so the shortest window stays visible along the stretches
-  // where it *is* the max and MAX shows only where it pulls away.
-  const strokeMax = () => { if (showMax) stroke(mx, '--wmax', 1); };
-  if (maxBehind) { strokeMax(); strokeWindows(); } else { strokeWindows(); strokeMax(); }
+  // Longest window first, so the spikiest line (the shortest window) ends up on
+  // top of the smooth ones rather than buried under them. Then, with the
+  // highlight on, every line's lead stretches go back over the top — they are
+  // disjoint in x, so their own order doesn't matter.
+  for (let k = WINDOWS.length - 1; k >= 0; k--) {
+    if (visLines[WINDOWS[k].key]) stroke(set[k], WINDOWS[k].css, highlightMax ? WIN_ALPHA : 1);
+  }
+  if (highlightMax) for (const k of drawn) strokeLead(k);
 
   // Only one line carries a marker: the crosshair already says which day, and
-  // five dots in a column would be five things to read instead of one. It sits
-  // on MAX, or — if MAX is switched off — on the shortest window still drawn,
-  // which is the one running highest. Same split as the bars: the pinned day is
-  // a hollow ring, the hovered one solid.
-  const anchor = showMax ? MAXI : drawn[0];
-  const anchorCss = anchor === MAXI ? '--wmax' : WINDOWS[anchor].css;
+  // four dots in a column would be four things to read instead of one. It sits
+  // on whichever line is highest that day — the one the highlight picks out, and
+  // on the distance panel the one the day's verdict colour names. Same split as
+  // the bars: the pinned day is a hollow ring, the hovered one solid.
   const dot = (i, hollow) => {
+    const anchor = leadAt(i), anchorCss = WINDOWS[anchor].css;
     const x = Math.round(px(i)) + 0.5, y = yOf(set[anchor][i]);
     c.strokeStyle = C('--text-primary'); c.lineWidth = 1; c.globalAlpha = hollow ? 0.16 : 0.25;
     c.beginPath(); c.moveTo(x, insets.t); c.lineTo(x, insets.t + plotH); c.stroke();
@@ -2441,7 +2441,7 @@ function drawWindowPanel(canvas, c, set, insets, panelKey, axisLabel, opts = {})
     c.fillStyle = hollow ? C('--surface-1') : C(anchorCss); c.fill();
     c.strokeStyle = hollow ? C(anchorCss) : C('--surface-1'); c.lineWidth = 2; c.stroke();
   };
-  const seen = i => i !== null && i >= i0 && i <= i1;
+  const seen = i => i !== null && i >= i0 && i <= i1 && !noneDrawn;
   if (seen(selected) && selected !== hover) dot(selected, true);
   if (seen(hover)) dot(hover, false);
   // Each window's dot rides its own line here, so `yAt` is that series' y.
@@ -2731,7 +2731,7 @@ function drawZoneArea() {
     const x = px(i), y = yOf(below[i - i0]);
     if (i === i0) c.moveTo(x, y); else c.lineTo(x, y);
   }
-  c.strokeStyle = C('--wmax'); c.lineWidth = 1; c.globalAlpha = 0.35;
+  c.strokeStyle = C('--text-primary'); c.lineWidth = 1; c.globalAlpha = 0.35;
   c.lineJoin = 'round'; c.stroke(); c.globalAlpha = 1;
 
   // Same marker language as every other panel: the hovered day solid, the
@@ -2806,14 +2806,12 @@ function vdotBasisText(i) {
 }
 
 // ---- readout -------------------------------------------------------------
-// One measure, all four windows plus their max, ordered max-first and then
-// shortest window to longest — the same order the eye has to use on the panel,
-// where the max is the line drawn on top. Every line is listed whether or not
-// it is currently drawn: the toggles are a decluttering move on the chart, not
-// a filter on the numbers. `extra(w, v)` is an optional dim note per row — the
-// raw counts behind a rate, or the same rate over a longer span — with `w` the
-// window index, or null on the max row, which isn't a window and so has no
-// counts of its own.
+// One measure, all four windows, shortest to longest — the same order the
+// panels' legend reads in. Every line is listed whether or not it is currently
+// drawn: the toggles are a decluttering move on the chart, not a filter on the
+// numbers. `extra(w, v)` is an optional dim note per row — the raw counts
+// behind a rate, or the same rate over a longer span — with `w` the window
+// index.
 function winGrid(set, i, dp, unit, extra) {
   const row = (cls, css, label, v, w) =>
     `<span class="sw ${cls}" style="background:var(${css})"></span>` +
@@ -2821,7 +2819,6 @@ function winGrid(set, i, dp, unit, extra) {
     `<span class="wv ${cls}">${v.toFixed(dp)}${unit ? ' ' + unit : ''}</span>` +
     `<span class="wx ${cls}">${extra ? extra(w, v) : ''}</span>`;
   return `<span class="wingrid">` +
-    row('r-max', '--wmax', 'MAX', set[MAXI][i], null) +
     WINDOWS.map((win, w) => row('', win.css, win.label, set[w][i], w)).join('') +
     `</span>`;
 }
@@ -2877,9 +2874,9 @@ function setReadout(i, tag) {
     <span class="date">${fmtDate.format(dateAt(i))}${tag ? `<span class="pin">${tag}</span>` : ''}</span>
     <span class="pair detail"><span class="k">Distance that day</span><span class="v">${daily[i] > 0 ? km(daily[i]) + ' km' : 'no run'}${nRuns[i] > 1 ? `<span class="sub-v"> in ${nRuns[i]} runs</span>` : ''}</span><span class="v2">${
       nRuns[i] > 1 ? seg((dayActs[i] || []).map(a => `${km(a.km)}`)).replaceAll(' · ', ' + ') + ' km' : ''}</span></span>
-    <span class="pair"><span class="k">Distance per week</span>${winGrid(volSeries, i, 1, 'km', (w, v) => longerSpans(v))}</span>
-    <span class="pair"><span class="k">Run days per week</span>${winGrid(freqSeries, i, 1, '', w => w === null ? '' : `${runDaysIn[w][i]} of ${WINDOWS[w].days} days`)}</span>
-    <span class="pair"><span class="k">Runs per week</span>${winGrid(runSeries, i, 1, '', w => w === null ? '' : `${runsIn[w][i]} runs in ${WINDOWS[w].days} days`)}</span>
+    <span class="pair"><span class="k">Distance per week</span>${winGrid(volSeries, i, 1, 'km', (_w, v) => longerSpans(v))}</span>
+    <span class="pair"><span class="k">Run days per week</span>${winGrid(freqSeries, i, 1, '', w => `${runDaysIn[w][i]} of ${WINDOWS[w].days} days`)}</span>
+    <span class="pair"><span class="k">Runs per week</span>${winGrid(runSeries, i, 1, '', w => `${runsIn[w][i]} runs in ${WINDOWS[w].days} days`)}</span>
     ${zk < 0 ? '' : `<span class="pair"><span class="k">By pace zone, ${WINDOWS[zk].label} ${
       zoneAreaMin() ? 'min' : 'km'}/week</span>${zoneGrid(i, zk)}</span>`}
     <span class="pair"><span class="k">VDOT (peak, trailing ${Math.round(WINDOW_VDOT/7)}w)</span><span class="v">${vdot[i] != null ? vdot[i].toFixed(1) : '—'}</span><span class="v2">${vdotBasisText(i)}</span></span>
@@ -3265,8 +3262,7 @@ document.getElementById('reset').onclick = () => {
   gapPace = PREF_DEFAULTS.gapPace;
   vdotNearDots = PREF_DEFAULTS.vdotNearDots;
   vdotNearPct = PREF_DEFAULTS.vdotNearPct;
-  maxBehind = PREF_DEFAULTS.maxBehind;
-  fadeWindows = PREF_DEFAULTS.fadeWindows;
+  highlightMax = PREF_DEFAULTS.highlightMax;
   barColourMode = PREF_DEFAULTS.barColour;
   for (const k of Object.keys(wt)) wt[k] = PREF_DEFAULTS[k];
   ZONE_BARS = PREF_DEFAULTS.zoneBars;
@@ -3387,8 +3383,7 @@ function syncControls() {
   }
   zoneBarsInput.value = ZONE_BARS;
   zoneAxisSel.value = zoneAxis;
-  maxBehindBox.checked = maxBehind;
-  fadeWindowsBox.checked = fadeWindows;
+  highlightMaxBox.checked = highlightMax;
   zoneAreaWinSel.value = zoneAreaWin;
   zoneAreaModeSel.value = zoneAreaMode;
   syncBarColour();
@@ -3436,21 +3431,15 @@ for (const k in WT_INPUTS) {
     drawAll();
   };
 }
-const fadeWindowsBox = document.getElementById('fadeWindows');
-fadeWindowsBox.onchange = () => {
-  fadeWindows = fadeWindowsBox.checked;
+const highlightMaxBox = document.getElementById('highlightMax');
+highlightMaxBox.onchange = () => {
+  highlightMax = highlightMaxBox.checked;
   savePrefs();
   drawAll();   // a drawing choice only — nothing to recompute
 };
-const maxBehindBox = document.getElementById('maxBehind');
-maxBehindBox.onchange = () => {
-  maxBehind = maxBehindBox.checked;
-  savePrefs();
-  drawAll();   // z-order only — nothing to recompute
-};
 // The two numbers behind all four windows. Both move the whole set, and since
-// the verdict is a comparison between neighbouring windows (and the target
-// reads slots 1 and 2), they move the bars' colours too — hence the full
+// the verdict is which of them is highest (and the target reads slots 1 and 2),
+// they move the bars' colours too — hence the full
 // applyWindow() (recompute + relabel + tiles + readout + redraw) rather than
 // just a redraw.
 const winBaseInput = document.getElementById('windowBase');
