@@ -235,6 +235,12 @@
      weeks stop wrapping — sized against a 280px sidebar, which is what this is
      actually used at. */
   .readout .wingrid .wx { color: var(--muted); font-size: 10px; }
+  /* The zone rows carry a fifth column — each bucket's pace band — after the
+     share. Right-aligning the share puts its % signs in a column the way the
+     amounts' units already are, instead of letting a 9% and a 100% start at the
+     same x. Nothing wraps: measured against the 246px this sidebar gives a row. */
+  .readout .zonegrid { grid-template-columns: auto auto auto auto 1fr; }
+  .readout .zonegrid .wp { text-align: right; }
   /* so a wrapped detail line breaks at the · separators, never mid-phrase
      ("no / long runs", "564 / km/yr") */
   .readout .seg { white-space: nowrap; }
@@ -2835,19 +2841,43 @@ const longerSpans = v => seg([`${nf0.format(perMonthKm(v / 7))} km/mo`,
 // Both readings are always here — the amount and the share — whichever one the
 // panels happen to be stacked at.
 const zaReadoutSlot = () => visPanels.zarea ? zoneAreaSlot() : -1;
+// The pace a whole bucket covers, for a given VDOT — the same boundaries
+// binLap() sorts a lap by, collapsed to whole zones (the readout has no
+// sub-bands) and rendered the way the histogram's own hover line renders them.
+// Standing and Walking are fixed absolute paces; Recovery runs from walking
+// pace up to easy's per-day floor; repetition's fast edge is the practical 120%
+// ceiling rather than a real boundary, so it stays open-ended, exactly as the
+// histogram reports it.
+function zoneBucketPace(b, v) {
+  if (!(v > 0)) return '';
+  const standing = paceStr(1000 / STANDING_MAX_VEL), walking = paceStr(1000 / WALKING_MAX_VEL);
+  if (b === STANDING_BIN) return `slower than ${standing}`;
+  if (b === WALKING_BIN) return `${standing}\u2013${walking}`;
+  const floor = easyFloorPct(v);
+  if (b === RECOVERY_BIN) return `${walking}\u2013${paceStr(1000 / velocityFromVo2(v * floor))}`;
+  const z = b - ZONE_BIN_OFFSET;
+  const slow = paceStr(1000 / velocityFromVo2(v * (z === 0 ? floor : ZONE_BOUND_PCT[z])));
+  if (z === 4) return `faster than ${slow}`;
+  return `${slow}\u2013${paceStr(1000 / velocityFromVo2(v * ZONE_BOUND_PCT[z + 1]))}`;
+}
 function zoneGrid(i, k) {
   const unit = zoneAreaMin() ? 'min' : 'km';
   const nf = zoneAreaMin() ? nf0 : nf1;
   const colours = zoneBucketColours();
   const tot = zoneAreaTot[k][i];
+  // The bands are read off the shown day's own VDOT, like the histogram below —
+  // the window's figures are a sum over weeks, but "what pace is threshold" is
+  // only answerable at one fitness level, and today's is the useful one.
+  const v = vdot[i];
   const row = b => {
-    const v = zoneArea[k][b][i];
+    const x = zoneArea[k][b][i];
     return `<span class="sw fill" style="background:${colours[b]}"></span>` +
       `<span class="wl">${ZB_LABELS[b]}</span>` +
-      `<span class="wv">${nf.format(v)} ${unit}</span>` +
-      `<span class="wx">${tot > 0 ? nf0.format(v / tot * 100) + '%' : ''}</span>`;
+      `<span class="wv">${nf.format(x)} ${unit}</span>` +
+      `<span class="wx wp">${tot > 0 ? nf0.format(x / tot * 100) + '%' : ''}</span>` +
+      `<span class="wx">${zoneBucketPace(b, v)}</span>`;
   };
-  return `<span class="wingrid">` +
+  return `<span class="wingrid zonegrid">` +
     Array.from({ length: N_ZB }, (_, b) => row(N_ZB - 1 - b)).join('') +
     `</span>`;
 }

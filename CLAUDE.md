@@ -963,6 +963,26 @@ tables it can't change the sidebar's height from day to day. Its swatches are
 `.sw.fill` — a block rather than the line-shaped `.sw`, since these rows stand
 for filled bands.
 
+Each row ends with **the pace that bucket covers** (`zoneBucketPace()`), in the
+same dim 10px as the share next to it: the boundaries `binLap()` sorts a lap by,
+collapsed to whole zones since the readout has no sub-bands, and worded exactly
+as the histogram's own hover line words them — Standing and Walking at their
+fixed absolute paces, Recovery from walking pace up to easy's per-day floor, and
+repetition open-ended, since its fast edge is `ZONE_BOUND_PCT`'s practical 120%
+ceiling and not a real boundary. The bands are read off **the shown day's own
+VDOT** (`vdot[i]`), like the histogram below: the figures beside them are a sum
+over weeks, but "what pace is threshold" is only answerable at one fitness
+level. Before the first logged run there is no VDOT and the column is simply
+empty.
+
+That makes the zone rows five columns rather than four, so they carry their own
+`.zonegrid` modifier on top of `.wingrid`: an extra `auto` track, and
+`text-align: right` on the share (`.wp`) so the `%` signs line up in a column
+the way the amounts' units already do. Measured, not eyeballed — across all
+1339 days × all four `zoneAreaMode` values, nothing overflows the 246px the
+sidebar gives a row and the block is **exactly 151px tall every single time**,
+which is the height-stability rule these tables exist under.
+
 ## Remembered settings
 
 `runviz.prefs.v1` holds everything the settings sidebar and the what-if box can be
