@@ -274,7 +274,11 @@ All of it is derived in-browser from one array of daily distances.
 - **`highlightMax`** ("Highlight the highest line", **on** by default) — the
   four lines are all laid down at `WIN_ALPHA` 0.32, then each is redrawn at full
   strength along just the stretches where it is the **highest of the drawn
-  lines**. So "which window is on top" is something you see rather than work
+  lines**. Every line is the same weight either way (`LINE_WIDTH` 2.2, up from
+  the 1.6 this started at — four hues on one plot means the colour *is* the
+  label, and a 1.6px line reads as dark-ish ink rather than as purple; 2.8 is
+  too heavy, it smears the 1-week line's spikes together at a year-wide zoom).
+  The highlight is carried by alpha alone. So "which window is on top" is something you see rather than work
   out — and it is the **same statement the bars' verdict colour makes** (see
   "Verdict" below), which is why slot *k*'s line and verdict *k* share a colour.
   Off draws all four at full strength, which is what you want when comparing two

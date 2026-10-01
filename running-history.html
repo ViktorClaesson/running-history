@@ -2306,7 +2306,13 @@ function paintLeadSwatches() {
 // same thing as a separate series you then had to trace back to a colour. The
 // highlight says it in place, on the line that owns it.
 const WIN_ALPHA = 0.32;     // the lines that aren't on top: present, but recessive
-const LINE_WIDTH = 1.6;
+// 2.2, not the 1.6 this started at: these are four hues on one plot and the
+// colour IS the label, so a line has to carry enough pixels to read as its own
+// colour rather than as dark-ish ink. Measured by eye against 2.8, which is too
+// heavy — it smears the 1-week line's spikes together at a year-wide zoom.
+// Every line is the same weight, highlighted or faded; the highlight is carried
+// by alpha alone (see WIN_ALPHA).
+const LINE_WIDTH = 2.2;
 function drawWindowPanel(canvas, c, set, insets, panelKey, axisLabel, opts = {}) {
   const { w, h } = fitCanvas(canvas, c);
   const isBottom = bottomPanel() === panelKey;
