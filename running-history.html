@@ -2859,14 +2859,20 @@ function winGrid(set, i, dp, unit, extra) {
 const longerSpans = v => seg([`${nf0.format(perMonthKm(v / 7))} km/mo`,
                               `${nf0.format(perYearKm(v / 7))} km/yr`]);
 
-// The shown day's running split by zone, for the longest stacked-zone panel
-// actually on screen — the numbers behind the band thicknesses, which a stacked
-// area is bad at giving up by eye. One row per bucket, always all eight, so this
-// block is the same height on every day and the sidebar can't twitch on hover.
+// The shown day's running split by zone, over the window the stacked-zone panel
+// is set to — the numbers behind the band thicknesses, which a stacked area is
+// bad at giving up by eye. One row per bucket, always all eight, so this block
+// is the same height on every day and the sidebar can't twitch on hover.
 // Ordered hardest first, mirroring the panel read top-down.
 // Both readings are always here — the amount and the share — whichever one the
-// panels happen to be stacked at.
-const zaReadoutSlot = () => visPanels.zarea ? zoneAreaSlot() : -1;
+// panel happens to be stacked at.
+// It used to go away with the panel (a `zaReadoutSlot()` that returned -1 when
+// `visPanels.zarea` was off), on the grounds that it shouldn't quote figures
+// nothing on screen is drawing. Wrong way round: the rolling sums behind it are
+// computed either way, and the block is most useful precisely when the panel is
+// off and nothing else is giving the split. It reads `zoneAreaSlot()` directly
+// now — `zoneAreaWin`/`zoneAreaMode` still say which window and which measure,
+// and those selects stay live whether or not the panel is drawn.
 // The pace a whole bucket covers, for a given VDOT — the same boundaries
 // binLap() sorts a lap by, collapsed to whole zones (the readout has no
 // sub-bands) and rendered the way the histogram's own hover line renders them.
@@ -2922,9 +2928,7 @@ function setReadout(i, tag) {
   // The pill names whichever classification the bars are painted in; with
   // colouring off it keeps the verdict, as it always has.
   const ws = barColourMode === 'workout' && c ? workoutsOf(i) : [];
-  // -1 when the stacked-zone panel is hidden: the block goes with the panel it
-  // reports on, so it isn't quoting figures nothing on screen is drawing.
-  const zk = zaReadoutSlot();
+  const zk = zoneAreaSlot();
   ro.className = 'readout';
   ro.innerHTML = `
     <span class="date">${fmtDate.format(dateAt(i))}${tag ? `<span class="pin">${tag}</span>` : ''}</span>
@@ -2933,8 +2937,8 @@ function setReadout(i, tag) {
     <span class="pair"><span class="k">Distance per week</span>${winGrid(volSeries, i, 1, 'km', (_w, v) => longerSpans(v))}</span>
     <span class="pair"><span class="k">Run days per week</span>${winGrid(freqSeries, i, 1, '', w => `${runDaysIn[w][i]} of ${WINDOWS[w].days} days`)}</span>
     <span class="pair"><span class="k">Runs per week</span>${winGrid(runSeries, i, 1, '', w => `${runsIn[w][i]} runs in ${WINDOWS[w].days} days`)}</span>
-    ${zk < 0 ? '' : `<span class="pair"><span class="k">By pace zone, ${WINDOWS[zk].label} ${
-      zoneAreaMin() ? 'min' : 'km'}/week</span>${zoneGrid(i, zk)}</span>`}
+    <span class="pair"><span class="k">By pace zone, ${WINDOWS[zk].label} ${
+      zoneAreaMin() ? 'min' : 'km'}/week</span>${zoneGrid(i, zk)}</span>
     <span class="pair"><span class="k">VDOT (peak, trailing ${Math.round(WINDOW_VDOT/7)}w)</span><span class="v">${vdot[i] != null ? vdot[i].toFixed(1) : '—'}</span><span class="v2">${vdotBasisText(i)}</span></span>
     ${barColourMode === 'workout' && c
       ? workoutBadge(ws)
@@ -3611,7 +3615,6 @@ for (const k of ['vol', 'freq', 'runs', 'vdot', 'zarea']) {
     visPanels[k] = e.target.checked;
     savePrefs();
     syncPanelVisibility();
-    refreshReadout();   // the zone block goes with the stacked-zone panel
     drawAll();
   };
 }

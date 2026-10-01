@@ -1000,10 +1000,16 @@ time, which is what the question is. `drawZoneArea()`, over whichever window
 **hardest first**, mirroring the panel read top-down. Both readings are always
 there — the amount in whichever measure the panel is stacked at, and the share
 as the dim note — so the share modes don't hide the kilometres and vice versa.
-It reports the panel's own window — `zaReadoutSlot()` is just
-`visPanels.zarea ? zoneAreaSlot() : -1`, so the two can't disagree about which
-window they mean, and the block goes away with the panel rather than quoting
-figures nothing on screen is drawing. Always all eight rows, so like the `winGrid`
+It reports `zoneAreaSlot()`, the window the stacked-zone panel is set to, so
+the two can't disagree about which window they mean — but it is **always
+there, panel or no panel**. It used to be gated on `visPanels.zarea` (a
+`zaReadoutSlot()` that returned -1 when the panel was off), on the grounds
+that the readout shouldn't quote figures nothing on screen is drawing. That
+was the wrong way round: the rolling sums are computed either way, and the
+block is most useful exactly when the panel is off and nothing else is giving
+the split. `zoneAreaWin` and `zoneAreaMode` still name the window and the
+measure, and both selects stay live whether or not the panel is drawn.
+Always all eight rows, so like the `winGrid`
 tables it can't change the sidebar's height from day to day. Its swatches are
 `.sw.fill` — a block rather than the line-shaped `.sw`, since these rows stand
 for filled bands.
