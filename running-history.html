@@ -230,6 +230,8 @@
   .readout .wingrid { display: grid; grid-template-columns: auto auto auto 1fr; gap: 1px 5px;
     align-items: baseline; margin-top: 3px; font-variant-numeric: tabular-nums; font-size: 12px; }
   .readout .wingrid .sw { width: 10px; height: 3px; border-radius: 2px; align-self: center; }
+  /* the zone rows stand for filled bands, not lines, so their swatch is a block */
+  .readout .wingrid .sw.fill { height: 9px; }
   .readout .wingrid .wl { color: var(--text-secondary); }
   .readout .wingrid .wv { text-align: right; font-weight: 600; }
   /* The dim note is the first thing to give when a row runs out of room, and it
@@ -319,6 +321,7 @@
   #chart3 { display: block; width: 100%; height: 156px; touch-action: none; cursor: crosshair; }
   #chart4 { display: block; width: 100%; height: 156px; touch-action: none; cursor: crosshair; }
   #chart5 { display: block; width: 100%; height: 156px; touch-action: none; cursor: crosshair; }
+  #chartZa { display: block; width: 100%; height: 156px; touch-action: none; cursor: crosshair; }
   .panel-title { font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
     color: var(--muted); padding: 4px 0 2px 54px; }
   .hint { padding: 6px 4px 0; font-size: 11px; color: var(--muted); }
@@ -511,6 +514,49 @@
     </div>
   </section>
 
+  <section class="setgroup">
+    <h2 class="setgroup-title">Pace-zone volume</h2>
+    <div class="legend">
+      <div class="legend-row"><span class="legend-tag">Zones</span>
+        <span class="item"><span class="swatch zs-standing"></span>standing</span>
+        <span class="item"><span class="swatch zs-walking"></span>walking</span>
+        <span class="item"><span class="swatch zs-recovery"></span>recovery</span>
+        <span class="item"><span class="swatch" style="background:var(--z-easy)"></span>easy</span>
+        <span class="item"><span class="swatch" style="background:var(--z-marathon)"></span>marathon</span>
+        <span class="item"><span class="swatch" style="background:var(--z-threshold)"></span>threshold</span>
+        <span class="item"><span class="swatch" style="background:var(--z-interval)"></span>interval</span>
+        <span class="item"><span class="swatch" style="background:var(--z-repetition)"></span>repetition</span>
+        <span class="legend-dim">One rolling window&rsquo;s running, split by which pace zone the
+          kilometres were actually run in &mdash; so the bands add up to that window&rsquo;s own
+          distance-per-week line, the one drawn in that colour further up. Slowest band at the bottom,
+          so the hard running is the band on top &mdash; the same order the pace-zone histogram reads
+          left to right. Whole zones only, never the histogram&rsquo;s sub-bands: &ldquo;how much
+          threshold have I been running&rdquo; is not a question about threshold&nbsp;2. Zones come from
+          each day&rsquo;s own VDOT, so a run the export has no recorded time for puts nothing in the
+          stack, which is the one way a total can end up under that line.</span>
+      </div>
+    </div>
+    <div class="ctrls">
+      <label class="chk"><input type="checkbox" id="showZarea" checked> Pace-zone volume panel</label>
+      <label class="chk" title="Which of the four rolling windows the stacked-zone panel is over. One at a time: the stack is eight bands deep, so four of them at once is a lot of chart — and this way the panel and the readout's zone table always agree about which window they mean.">Window
+        <select id="zoneAreaWin">
+          <option value="s0" class="winLabel0">1w</option>
+          <option value="s1" class="winLabel1">4w</option>
+          <option value="s2" class="winLabel2" selected>16w</option>
+          <option value="s3" class="winLabel3">64w</option>
+        </select>
+      </label>
+      <label class="chk" title="What the bands measure: the kilometres or the minutes spent in each zone per week, or each zone's share of the week. The hover readout always gives both the amount and the share.">Stack
+        <select id="zoneAreaMode">
+          <option value="km" selected>km / week</option>
+          <option value="min">minutes / week</option>
+          <option value="pctKm">% of distance</option>
+          <option value="pctMin">% of time</option>
+        </select>
+      </label>
+    </div>
+  </section>
+
   <button id="reset" title="Put every setting in this sidebar back to its default and the view back to the default span. Leaves the what-if target alone — that has its own reset.">Reset</button>
 </aside>
 <div class="wrap">
@@ -553,6 +599,10 @@
     <div class="chart-panel" id="panel-vdot">
       <div class="panel-title">Highest VDOT in the trailing <span class="winVdotN">910</span> days<span class="vdotNearNote"></span></div>
       <canvas id="chart4"></canvas>
+    </div>
+    <div class="chart-panel" id="panel-zarea">
+      <div class="panel-title"><span class="zaN">Distance per week</span> by pace zone &mdash; <span class="zaWinN">16w</span> rolling</div>
+      <canvas id="chartZa"></canvas>
     </div>
     <div class="hint">Scroll or pinch to zoom — the day under the cursor stays put while both sides scale around it. Drag to pan. Double-click, or press <kbd>r</kbd>, to go back to the default view, the longest window ending on the most recent day.
       Click a day to pin its numbers in the readout above; click it again, or press <kbd>t</kbd> or Esc, to release.
@@ -965,7 +1015,15 @@ const PREF_DEFAULTS = {
   wtShare: 35,       // % of the score a zone plus everything faster needs to be the run's type
   zoneBars: 3,       // sub-bands per pace zone in the pace-zone histogram
   zoneAxis: 'dist',  // what the pace-zone histogram's bars measure: 'time' (minutes) or 'dist' (km)
-  panels: { vol: true, freq: true, runs: true, vdot: true, zone: true },   // which optional panels are shown
+  panels: { vol: true, freq: true, runs: true, vdot: true, zone: true, zarea: true },   // which optional panels are shown
+  // Which window the stacked-zone panel is over — one at a time, since the
+  // stack is eight bands deep and four of those at once is a lot of chart. A
+  // slot key, so it keeps its meaning when windowBase/windowMult change. s2
+  // (16 weeks at the defaults) reads as "what has this training phase been
+  // made of", which is the question the panel is for; the 1-week end is mostly
+  // this week's weather.
+  zoneAreaWin: 's2',
+  zoneAreaMode: 'km',   // what the bands measure: 'km'/'min' per week, or 'pctKm'/'pctMin' share
   // Which of the five lines each volume/frequency panel actually draws. Hiding
   // one is purely a decluttering move: it still appears in the hover readout and
   // still counts towards MAX. All but MAX shown by default.
@@ -976,7 +1034,10 @@ const PREF_DEFAULTS = {
 };
 // Slot keys, not week counts — a slot keeps its colour and its show/hide
 // setting when windowBase/windowMult change what it actually measures.
-const LINE_KEYS = ['max', 's0', 's1', 's2', 's3'];
+const SLOT_KEYS = ['s0', 's1', 's2', 's3'];
+// The optional panels, i.e. everything but the bars.
+const PANEL_KEYS = ['vol', 'freq', 'runs', 'vdot', 'zone', 'zarea'];
+const LINE_KEYS = ['max', ...SLOT_KEYS];
 function loadPrefs() {
   const p = { ...PREF_DEFAULTS, panels: { ...PREF_DEFAULTS.panels }, lines: { ...PREF_DEFAULTS.lines } };
   const raw = lsGet(LS_PREFS);
@@ -1008,7 +1069,7 @@ function loadPrefs() {
     if (typeof raw[k] === 'boolean') p[k] = raw[k];
   }
   if (raw.panels && typeof raw.panels === 'object') {
-    for (const k of ['vol', 'freq', 'runs', 'vdot', 'zone']) {
+    for (const k of PANEL_KEYS) {
       if (typeof raw.panels[k] === 'boolean') p.panels[k] = raw.panels[k];
     }
   }
@@ -1017,6 +1078,8 @@ function loadPrefs() {
       if (typeof raw.lines[k] === 'boolean') p.lines[k] = raw.lines[k];
     }
   }
+  if (SLOT_KEYS.includes(raw.zoneAreaWin)) p.zoneAreaWin = raw.zoneAreaWin;
+  if (['km', 'min', 'pctKm', 'pctMin'].includes(raw.zoneAreaMode)) p.zoneAreaMode = raw.zoneAreaMode;
   if (raw.plan && num(raw.plan.km, 0, 700) && num(raw.plan.days, 0, 7)) {
     p.plan = { km: raw.plan.km, days: raw.plan.days };
   }
@@ -1044,6 +1107,8 @@ function savePrefs() {
     zoneAxis,
     panels: { ...visPanels },
     lines: { ...visLines },
+    zoneAreaWin,
+    zoneAreaMode,
     plan: planEdited ? { km: plan.km, days: plan.days } : null,
   };
   const changed = Object.keys(PREF_DEFAULTS)
@@ -1524,6 +1589,15 @@ let zoneAxis = prefs.zoneAxis;
 // Independent show/hide for the three optional line panels and the pace-zone
 // histogram — the distance bars (panel 1) always stay up as the anchor chart.
 let visPanels = { ...prefs.panels };
+// Which window the stacked-zone panel is over. Its show/hide lives in
+// visPanels.zarea with every other panel's; this is only *which* window, as a
+// slot key — see PREF_DEFAULTS.zoneAreaWin.
+let zoneAreaWin = prefs.zoneAreaWin;
+const zoneAreaSlot = () => SLOT_KEYS.indexOf(zoneAreaWin);
+// What those panels' bands measure: 'km' or 'min' per week, or each zone's
+// share of the week ('pctKm'/'pctMin'). The first two change what is summed,
+// so they need a recompute; the share modes are derived from the same sums.
+let zoneAreaMode = prefs.zoneAreaMode;
 // Which of the five lines the three window panels draw. Purely a view filter:
 // a hidden line is still in the readout and still counts towards MAX — see the
 // comment on PREF_DEFAULTS.lines.
@@ -1639,6 +1713,79 @@ function paceHistogramFor(i, a) {
   }
   return { mins: bins, km: kmBins };
 }
+
+// ---- running volume by pace zone, per window -----------------------------
+// The histogram above answers "what did THIS day look like". These panels
+// answer "what have the last N weeks been made of": the same lap binning,
+// rolled over each window and stacked.
+//
+// Whole zones only — the histogram's sub-bands are collapsed away, because a
+// stacked area wants part-to-whole and "how much threshold have I been
+// running" is not a question about threshold 2. Which also means ZONE_BARS
+// doesn't move these panels at all.
+//
+// Eight buckets, slowest first, exactly the histogram's left-to-right order:
+// Standing and Walking are in here too rather than dropped, so the stack adds
+// up to the kilometres actually binned instead of quietly losing the walking.
+const N_ZB = ZONE_BIN_OFFSET + 5;
+const ZB_LABELS = ['Standing', 'Walking', 'Recovery', ...ZONES.map(z => z.label)];
+// A histogram bin (which carries a sub-band) down to its whole zone.
+const zoneBucketOf = bin => bin < ZONE_BIN_OFFSET
+  ? bin : ZONE_BIN_OFFSET + Math.floor((bin - ZONE_BIN_OFFSET) / ZONE_BARS);
+// Per day, per bucket: kilometres and minutes. Flat arrays, bucket b of day i
+// at i * N_ZB + b. A rest day is all zeros, and so is a day with no VDOT yet
+// (nothing to judge a pace against before the first logged run) or a run the
+// export has no time for — which is why a stack's total can sit a little under
+// the distance-per-week line rather than matching it exactly.
+const dayZoneKm = new Float64Array(N * N_ZB);
+const dayZoneMin = new Float64Array(N * N_ZB);
+function recomputeDayZones() {
+  dayZoneKm.fill(0); dayZoneMin.fill(0);
+  for (let i = 0; i < N; i++) {
+    const v = vdot[i];
+    if (!(v > 0)) continue;
+    const floor = easyFloorPct(v);
+    for (const lap of lapsOfDay(i)) {
+      const { bin, mins } = binLap(lap, v, floor);
+      const at = i * N_ZB + zoneBucketOf(bin);
+      dayZoneKm[at] += lap.km; dayZoneMin[at] += mins;
+    }
+  }
+}
+// Rolling sums per window, expressed per week like every other panel, so the
+// 1-week and the 64-week panel are read on the same units. Divided by the FULL
+// window throughout and snapped off float dust, same as recompute() — see the
+// comments there for both.
+const zoneArea = Array.from({ length: N_WINDOWS }, () =>
+  Array.from({ length: N_ZB }, () => new Float64Array(N)));
+const zoneAreaTot = Array.from({ length: N_WINDOWS }, () => new Float64Array(N));
+const zoneAreaMin = () => zoneAreaMode === 'min' || zoneAreaMode === 'pctMin';
+function recomputeZoneWindows() {
+  const src = zoneAreaMin() ? dayZoneMin : dayZoneKm;
+  WINDOWS.forEach((win, w) => {
+    const d = win.days;
+    for (let b = 0; b < N_ZB; b++) {
+      const out = zoneArea[w][b];
+      let sum = 0;
+      for (let i = 0; i < N; i++) {
+        sum += src[i * N_ZB + b];
+        if (i >= d) { sum -= src[(i - d) * N_ZB + b]; if (sum < 1e-9) sum = 0; }
+        out[i] = sum * 7 / d;
+      }
+    }
+    const tot = zoneAreaTot[w];
+    for (let i = 0; i < N; i++) {
+      let t = 0;
+      for (let b = 0; b < N_ZB; b++) t += zoneArea[w][b][i];
+      tot[i] = t;
+    }
+  });
+}
+// The lap walk is cheap enough (a few ms over a 1339-day export) that every
+// call site just does both halves rather than reasoning about which one its
+// setting moved.
+const recomputeZones = () => { recomputeDayZones(); recomputeZoneWindows(); };
+recomputeZones();
 
 // ---- workout type, from the same lap binning ------------------------------
 // The other way to colour the bars: what KIND of session each run was, in the
@@ -1857,6 +2004,10 @@ const cv4  = document.getElementById('chart4');
 const ctx4 = cv4.getContext('2d');
 const cv5  = document.getElementById('chart5');
 const ctx5 = cv5.getContext('2d');
+const zaCv  = document.getElementById('chartZa');
+const zaCtx = zaCv.getContext('2d');
+// Every panel drives the same view, so every panel gets the same listeners.
+const PANEL_CVS = [cv, cv2, cv3, cv4, cv5, zaCv];
 
 // The default view is the two longest windows' worth of days added together,
 // ending on the most recent one, rather than the whole history: zoomed all the
@@ -1906,15 +2057,21 @@ const BARS = { t: 14, b: 12 };    // top panel insets
 const VOLI  = { t: 10, b: 12 };  // km/week panel insets
 const FREQ  = { t: 10, b: 12 };  // run days/week panel insets
 const FREQ2 = { t: 10, b: 12 };  // runs/week panel insets
-const VDOTI = { t: 10, b: 26 };  // bottom panel insets (carries the x labels)
-// Whichever of bars/freq/runs/vdot is the lowest currently-visible panel carries
-// the x-axis date labels, so hiding a panel never leaves the chart without dates.
-// Its bottom inset is widened to VDOTI.b's label-sized padding to fit them.
+// The bottom inset that fits the x-axis date labels. Whichever panel is lowest
+// takes it; everything above keeps the plain 12.
+const XLAB_B = 26;
+const VDOTI = { t: 10, b: XLAB_B };
+const ZAI   = { t: 10, b: 12 };  // stacked-zone panel insets
+// Whichever panel is the lowest currently-visible one carries the x-axis date
+// labels, so hiding a panel never leaves the chart without dates. Its bottom
+// inset is widened to XLAB_B to fit them. Listed in DOM order, top to bottom —
+// the bars are always up, so they're the floor of it.
+const PANEL_ORDER = ['bars', 'vol', 'freq', 'runs', 'vdot', 'zarea'];
+const panelShown = k => k === 'bars' || visPanels[k];
 function bottomPanel() {
-  if (visPanels.vdot) return 'vdot';
-  if (visPanels.runs) return 'runs';
-  if (visPanels.freq) return 'freq';
-  if (visPanels.vol) return 'vol';
+  for (let i = PANEL_ORDER.length - 1; i > 0; i--) {
+    if (panelShown(PANEL_ORDER[i])) return PANEL_ORDER[i];
+  }
   return 'bars';
 }
 let W = 0;
@@ -2064,13 +2221,13 @@ const REST_STUB = 5;   // px, a no-run day
 const MIN_RUN_H = 11;  // px, the shortest a real run is ever drawn
 function drawBars() {
   buildRamps();
-  // Recovery's colour is an OKLab mix, not a custom property, so its legend
-  // swatch has to be painted from here, where it is worked out.
-  for (const el of document.querySelectorAll('.wt-recovery')) el.style.background = leadRamps.recovery;
+  // Standing/Walking/Recovery are OKLab mixes, not custom properties, so their
+  // legend swatches have to be painted from here, where they're worked out.
+  paintLeadSwatches();
   const { w, h } = fitCanvas(cv, ctx);
   W = w;
   const isBottom = bottomPanel() === 'bars';
-  BARS.b = isBottom ? VDOTI.b : 12;
+  BARS.b = isBottom ? XLAB_B : 12;
   const plotH = h - BARS.t - BARS.b;
   const base = BARS.t + plotH;
   const [i0, i1] = visibleRange();
@@ -2166,6 +2323,14 @@ function drawBars() {
   if (isBottom) drawXAxisLabels(ctx, w, BARS.t, plotH, i0, i1);
 }
 
+// The three non-zone buckets' colours come out of buildRamps() rather than the
+// stylesheet, so any swatch standing for one has to be painted in code.
+function paintLeadSwatches() {
+  const map = { '.wt-recovery': leadRamps.recovery, '.zs-standing': leadRamps.standing,
+                '.zs-walking': leadRamps.walking, '.zs-recovery': leadRamps.recovery };
+  for (const sel in map) for (const el of document.querySelectorAll(sel)) el.style.background = map[sel];
+}
+
 // ---- panels 1b/2/3: the same measure over all four rolling windows -------
 // One shared drawer, because the three panels differ only in which series set
 // they read, their axis and their label. Four window lines, deliberately thin
@@ -2181,7 +2346,7 @@ const LINE_WIDTH = 1.6;
 function drawWindowPanel(canvas, c, set, insets, panelKey, axisLabel, opts = {}) {
   const { w, h } = fitCanvas(canvas, c);
   const isBottom = bottomPanel() === panelKey;
-  insets.b = isBottom ? VDOTI.b : 12;
+  insets.b = isBottom ? XLAB_B : 12;
   const plotH = h - insets.t - insets.b;
   const [i0, i1] = visibleRange();
   const mx = set[MAXI];
@@ -2337,6 +2502,10 @@ function drawXAxisLabels(c, w, insetTop, plotH, i0, i1) {
 // there is nothing to fake a "0" fitness reading from.
 function drawVdot() {
   const { w, h } = fitCanvas(cv4, ctx4);
+  // This used to be the bottom panel by construction, so it always carried the
+  // x-axis labels. The stacked-zone panels sit below it, so now it has to ask.
+  const isBottom = bottomPanel() === 'vdot';
+  VDOTI.b = isBottom ? XLAB_B : 12;
   const plotH = h - VDOTI.t - VDOTI.b;
   const [i0, i1] = visibleRange();
   let yMax = 0, yMin = Infinity, any = false;
@@ -2473,7 +2642,120 @@ function drawVdot() {
       : ` \u2014 dots: days within ${vdotNearPct}% of it${dashSeen ? ', above the dashed line' : ''}`;
   }
 
-  drawXAxisLabels(c, w, VDOTI.t, plotH, i0, i1);
+  if (isBottom) drawXAxisLabels(c, w, VDOTI.t, plotH, i0, i1);
+}
+
+// ---- panels 5-8: one window's running, stacked by pace zone --------------
+// A stacked area, because the question is part-to-whole over time: the bands
+// add up to that window's own distance per week — the same figure the volume
+// panel's line of this colour draws — and each one is the share of it run in
+// that zone. Slowest at the bottom, so the hard running is the band on top and
+// a block of threshold work reads as a band thickening rather than as a line
+// moving. One panel per window: the stack is already five-plus deep, so putting
+// four windows in one panel isn't an option the way it is for a single line.
+const zaAxisLabel = () => zoneAreaMode === 'km' ? 'km / week'
+  : zoneAreaMode === 'min' ? 'min / week'
+  : zoneAreaMode === 'pctKm' ? '% of km' : '% of time';
+const zaMeasureTitle = () => zoneAreaMode === 'km' ? 'Distance per week'
+  : zoneAreaMode === 'min' ? 'Time per week'
+  : zoneAreaMode === 'pctKm' ? 'Share of distance' : 'Share of time';
+// The eight buckets' fill colours, in bucket order. The five zones take their
+// own strong hue — the same one the histogram's fastest sub-band and the
+// workout-type bars use, so a colour means one zone everywhere on the page.
+function zoneBucketColours() {
+  if (!leadRamps) buildRamps();
+  return [leadRamps.standing, leadRamps.walking, leadRamps.recovery, ...ZONES.map(z => C(z.strong))];
+}
+function drawZoneArea() {
+  const k = zoneAreaSlot();
+  const c = zaCtx, insets = ZAI;
+  const { w, h } = fitCanvas(zaCv, c);
+  const isBottom = bottomPanel() === 'zarea';
+  insets.b = isBottom ? XLAB_B : 12;
+  const plotH = h - insets.t - insets.b;
+  const [i0, i1] = visibleRange();
+  const pct = zoneAreaMode.startsWith('pct');
+  const series = zoneArea[k], tot = zoneAreaTot[k];
+  // In share mode a day with nothing binned has no split to show, so the stack
+  // goes to zero there rather than inventing one.
+  const valAt = (b, i) => pct ? (tot[i] > 0 ? series[b][i] / tot[i] * 100 : 0) : series[b][i];
+  let ticks, yMax;
+  if (pct) { ticks = [0, 25, 50, 75, 100]; ticks.step = 25; yMax = 100; }
+  else {
+    let peak = 0;
+    for (let i = i0; i <= i1; i++) if (tot[i] > peak) peak = tot[i];
+    ticks = niceTicks(Math.max(peak * 1.12, 1));
+    yMax = ticks[ticks.length - 1];
+  }
+  const dec = ticks.step < 1 ? 1 : 0;
+  const yOf = v => insets.t + plotH * (1 - v / yMax);
+  const px = i => xOf(i) + barW() / 2;
+
+  c.font = '11px system-ui, -apple-system, sans-serif';
+  c.textAlign = 'right'; c.textBaseline = 'middle';
+  for (const t of ticks) {
+    const y = Math.round(yOf(t)) + 0.5;
+    c.strokeStyle = t === 0 ? C('--baseline') : C('--grid');
+    c.lineWidth = 1;
+    c.beginPath(); c.moveTo(PAD.l, y); c.lineTo(w - PAD.r, y); c.stroke();
+    c.fillStyle = C('--muted');
+    c.fillText(t.toFixed(dec), PAD.l - 8, y);
+  }
+  c.save();
+  c.translate(13, insets.t + plotH / 2); c.rotate(-Math.PI / 2);
+  c.textAlign = 'center'; c.fillStyle = C('--muted');
+  c.fillText(zaAxisLabel(), 0, 0);
+  c.restore();
+
+  c.save();
+  c.beginPath(); c.rect(PAD.l, insets.t, plotW(), plotH); c.clip();
+  // One filled band per bucket, each riding the running total of the ones below
+  // it: out along its own top, back along the top of the stack underneath. No
+  // separating strokes — the hues are far enough apart (they're the histogram's
+  // CVD-checked adjacent set) that a seam would only add noise, and a sliver of
+  // a band would be all seam.
+  const below = new Float64Array(i1 - i0 + 1);
+  const colours = zoneBucketColours();
+  for (let b = 0; b < N_ZB; b++) {
+    c.beginPath();
+    for (let i = i0; i <= i1; i++) c.lineTo(px(i), yOf(below[i - i0] + valAt(b, i)));
+    for (let i = i1; i >= i0; i--) c.lineTo(px(i), yOf(below[i - i0]));
+    c.closePath(); c.fillStyle = colours[b]; c.fill();
+    for (let i = i0; i <= i1; i++) below[i - i0] += valAt(b, i);
+  }
+  // The top of the stack as a line of its own, faint and in plain ink, so the
+  // total is readable as a total rather than as wherever the last band happens
+  // to end — the top band is usually a sliver.
+  c.beginPath();
+  for (let i = i0; i <= i1; i++) {
+    const x = px(i), y = yOf(below[i - i0]);
+    if (i === i0) c.moveTo(x, y); else c.lineTo(x, y);
+  }
+  c.strokeStyle = C('--wmax'); c.lineWidth = 1; c.globalAlpha = 0.35;
+  c.lineJoin = 'round'; c.stroke(); c.globalAlpha = 1;
+
+  // Same marker language as every other panel: the hovered day solid, the
+  // pinned one a hollow ring, both sitting on the top of the stack. The dot
+  // takes this window's own colour, since the panel is that one window.
+  const css = WINDOWS[k].css;
+  const dot = (i, hollow) => {
+    const x = Math.round(px(i)) + 0.5, y = yOf(below[i - i0]);
+    c.strokeStyle = C('--text-primary'); c.lineWidth = 1; c.globalAlpha = hollow ? 0.16 : 0.25;
+    c.beginPath(); c.moveTo(x, insets.t); c.lineTo(x, insets.t + plotH); c.stroke();
+    c.globalAlpha = 1;
+    c.beginPath(); c.arc(x, y, 4.5, 0, Math.PI * 2);
+    c.fillStyle = hollow ? C('--surface-1') : C(css); c.fill();
+    c.strokeStyle = hollow ? C(css) : C('--surface-1'); c.lineWidth = 2; c.stroke();
+  };
+  const seen = i => i !== null && i >= i0 && i <= i1;
+  if (seen(selected) && selected !== hover) dot(selected, true);
+  if (seen(hover)) dot(hover, false);
+  // One window here, not four, so one mark — the same way the VDOT panel marks
+  // only its own window. It rides the top of the stack.
+  markWindowStarts(c, insets.t, plotH, i0, i1, [{ days: WINDOWS[k].days, css, slot: 0,
+    yAt: st => yOf(below[st - i0]) }]);
+  c.restore();
+  if (isBottom) drawXAxisLabels(c, w, insets.t, plotH, i0, i1);
 }
 
 function drawAll() {
@@ -2482,6 +2764,7 @@ function drawAll() {
   if (visPanels.freq) drawFreq();
   if (visPanels.runs) drawRuns();
   if (visPanels.vdot) drawVdot();
+  if (visPanels.zarea) drawZoneArea();
   const [i0, i1] = visibleRange();
   renderTable(i0, i1);
 }
@@ -2547,6 +2830,31 @@ function winGrid(set, i, dp, unit, extra) {
 const longerSpans = v => seg([`${nf0.format(perMonthKm(v / 7))} km/mo`,
                               `${nf0.format(perYearKm(v / 7))} km/yr`]);
 
+// The shown day's running split by zone, for the longest stacked-zone panel
+// actually on screen — the numbers behind the band thicknesses, which a stacked
+// area is bad at giving up by eye. One row per bucket, always all eight, so this
+// block is the same height on every day and the sidebar can't twitch on hover.
+// Ordered hardest first, mirroring the panel read top-down.
+// Both readings are always here — the amount and the share — whichever one the
+// panels happen to be stacked at.
+const zaReadoutSlot = () => visPanels.zarea ? zoneAreaSlot() : -1;
+function zoneGrid(i, k) {
+  const unit = zoneAreaMin() ? 'min' : 'km';
+  const nf = zoneAreaMin() ? nf0 : nf1;
+  const colours = zoneBucketColours();
+  const tot = zoneAreaTot[k][i];
+  const row = b => {
+    const v = zoneArea[k][b][i];
+    return `<span class="sw fill" style="background:${colours[b]}"></span>` +
+      `<span class="wl">${ZB_LABELS[b]}</span>` +
+      `<span class="wv">${nf.format(v)} ${unit}</span>` +
+      `<span class="wx">${tot > 0 ? nf0.format(v / tot * 100) + '%' : ''}</span>`;
+  };
+  return `<span class="wingrid">` +
+    Array.from({ length: N_ZB }, (_, b) => row(N_ZB - 1 - b)).join('') +
+    `</span>`;
+}
+
 const ro = document.getElementById('readout');
 function setReadout(i, tag) {
   if (i === null) {
@@ -2561,6 +2869,9 @@ function setReadout(i, tag) {
   // The pill names whichever classification the bars are painted in; with
   // colouring off it keeps the verdict, as it always has.
   const ws = barColourMode === 'workout' && c ? workoutsOf(i) : [];
+  // -1 when the stacked-zone panel is hidden: the block goes with the panel it
+  // reports on, so it isn't quoting figures nothing on screen is drawing.
+  const zk = zaReadoutSlot();
   ro.className = 'readout';
   ro.innerHTML = `
     <span class="date">${fmtDate.format(dateAt(i))}${tag ? `<span class="pin">${tag}</span>` : ''}</span>
@@ -2569,6 +2880,8 @@ function setReadout(i, tag) {
     <span class="pair"><span class="k">Distance per week</span>${winGrid(volSeries, i, 1, 'km', (w, v) => longerSpans(v))}</span>
     <span class="pair"><span class="k">Run days per week</span>${winGrid(freqSeries, i, 1, '', w => w === null ? '' : `${runDaysIn[w][i]} of ${WINDOWS[w].days} days`)}</span>
     <span class="pair"><span class="k">Runs per week</span>${winGrid(runSeries, i, 1, '', w => w === null ? '' : `${runsIn[w][i]} runs in ${WINDOWS[w].days} days`)}</span>
+    ${zk < 0 ? '' : `<span class="pair"><span class="k">By pace zone, ${WINDOWS[zk].label} ${
+      zoneAreaMin() ? 'min' : 'km'}/week</span>${zoneGrid(i, zk)}</span>`}
     <span class="pair"><span class="k">VDOT (peak, trailing ${Math.round(WINDOW_VDOT/7)}w)</span><span class="v">${vdot[i] != null ? vdot[i].toFixed(1) : '—'}</span><span class="v2">${vdotBasisText(i)}</span></span>
     ${barColourMode === 'workout' && c
       ? workoutBadge(ws)
@@ -2886,7 +3199,7 @@ function onTouchMove(e) {
   }
 }
 
-for (const el of [cv, cv2, cv3, cv4, cv5]) {
+for (const el of PANEL_CVS) {
   el.addEventListener('mousemove', onMove);
   el.addEventListener('mouseleave', () => { hover = null; refreshReadout(); renderZonePanel(); drawAll(); });
   el.addEventListener('wheel', onWheel, { passive: false });
@@ -2915,7 +3228,7 @@ for (const el of [cv, cv2, cv3, cv4, cv5]) {
 window.addEventListener('mouseup', () => {
   draggedNotClicked = !!(drag && drag.moved);
   drag = null;
-  for (const el of [cv, cv2, cv3, cv4, cv5]) el.style.cursor = 'crosshair';
+  for (const el of PANEL_CVS) el.style.cursor = 'crosshair';
 });
 // Keys, for the two things worth doing without aiming at anything: `r` puts the
 // view back to its default span (the double-click, minus the aiming) and `t`
@@ -2960,10 +3273,13 @@ document.getElementById('reset').onclick = () => {
   zoneAxis = PREF_DEFAULTS.zoneAxis;
   visPanels = { ...PREF_DEFAULTS.panels };
   visLines = { ...PREF_DEFAULTS.lines };
+  zoneAreaWin = PREF_DEFAULTS.zoneAreaWin;
+  zoneAreaMode = PREF_DEFAULTS.zoneAreaMode;
   savePrefs();
   syncControls();
   recomputeDayVdot();
   recomputeVdot();
+  recomputeZones();
   applyWindow();         // recompute + relabels + rebuilds the tiles + redraws
   renderZonePanel();
   resetView();
@@ -2979,6 +3295,10 @@ function syncLabels() {
     for (const el of document.querySelectorAll('.winLabel' + k)) el.textContent = w.label;
   });
   for (const el of document.querySelectorAll('.winVolN')) el.textContent = WINDOWS[IV].weeks;
+  // The stacked-zone panel's title says which measure it's stacked at and
+  // which window it's over.
+  for (const el of document.querySelectorAll('.zaN')) el.textContent = zaMeasureTitle();
+  for (const el of document.querySelectorAll('.zaWinN')) el.textContent = WINDOWS[zoneAreaSlot()].label;
   renderTiles();
 }
 
@@ -2987,10 +3307,12 @@ function syncLabels() {
 // Pushes visPanels into both the checkboxes and the panel wrapper divs' `hidden`
 // attribute — the one place panel visibility is written to the DOM, same idea as
 // syncControls() below.
-const PANEL_CHK = { vol: 'showVol', freq: 'showFreq', runs: 'showRuns', vdot: 'showVdot', zone: 'showZone' };
-const PANEL_EL = { vol: 'panel-vol', freq: 'panel-freq', runs: 'panel-runs', vdot: 'panel-vdot', zone: 'zonecard' };
+const PANEL_CHK = { vol: 'showVol', freq: 'showFreq', runs: 'showRuns', vdot: 'showVdot',
+                    zone: 'showZone', zarea: 'showZarea' };
+const PANEL_EL = { vol: 'panel-vol', freq: 'panel-freq', runs: 'panel-runs', vdot: 'panel-vdot',
+                   zone: 'zonecard', zarea: 'panel-zarea' };
 function syncPanelVisibility() {
-  for (const k of ['vol', 'freq', 'runs', 'vdot', 'zone']) {
+  for (const k of PANEL_KEYS) {
     document.getElementById(PANEL_CHK[k]).checked = visPanels[k];
     // 'zone' also depends on whether there's a day to show it for — renderZonePanel()
     // owns that half of its `hidden` state, this only ever forces it fully hidden.
@@ -3010,6 +3332,31 @@ function syncLineVisibility() {
     box.closest('.item').classList.toggle('off', !visLines[k]);
   }
 }
+// Which window the one stacked-zone panel is over. All four windows' sums are
+// always computed (0.4 ms for the lot), so this is a relabel and a redraw —
+// nothing to recompute. The readout's zone block reads the same slot, so the
+// two can't disagree about which window they mean.
+const zoneAreaWinSel = document.getElementById('zoneAreaWin');
+zoneAreaWinSel.onchange = () => {
+  zoneAreaWin = zoneAreaWinSel.value;
+  savePrefs();
+  syncLabels();          // the panel title names the window
+  refreshReadout();
+  drawAll();
+};
+// 'km' and 'min' change what is summed, so this recomputes; the two share modes
+// are derived from the same sums, but going through one path is simpler than
+// working out which half of the pair the select just moved.
+const zoneAreaModeSel = document.getElementById('zoneAreaMode');
+zoneAreaModeSel.onchange = () => {
+  zoneAreaMode = zoneAreaModeSel.value;
+  savePrefs();
+  recomputeZoneWindows();
+  syncLabels();          // the panel title names the measure
+  refreshReadout();
+  drawAll();
+};
+
 for (const k of LINE_KEYS) {
   document.getElementById('line-' + k).onchange = e => {
     visLines[k] = e.target.checked;
@@ -3042,6 +3389,8 @@ function syncControls() {
   zoneAxisSel.value = zoneAxis;
   maxBehindBox.checked = maxBehind;
   fadeWindowsBox.checked = fadeWindows;
+  zoneAreaWinSel.value = zoneAreaWin;
+  zoneAreaModeSel.value = zoneAreaMode;
   syncBarColour();
   syncPanelVisibility();
   syncLineVisibility();
@@ -3049,6 +3398,7 @@ function syncControls() {
 
 function applyWindow() {
   recompute();
+  recomputeZoneWindows();
   syncLabels();          // rebuilds the tiles, which re-renders the target box
   refreshReadout();
   tableKey = '';
@@ -3128,6 +3478,7 @@ winVdotInput.onchange = winVdotInput.oninput = () => {
   WINDOW_VDOT = v * 7;
   savePrefs();
   recomputeVdot();
+  recomputeZones();
   syncLabels();
   refreshReadout();
   renderZonePanel();
@@ -3141,6 +3492,7 @@ minLapInput.onchange = minLapInput.oninput = () => {
   savePrefs();
   recomputeDayVdot();
   recomputeVdot();
+  recomputeZones();
   refreshReadout();
   renderZonePanel();
   drawAll();
@@ -3172,6 +3524,7 @@ gapVdotChk.onchange = () => {
   savePrefs();
   recomputeDayVdot();
   recomputeVdot();
+  recomputeZones();
   refreshReadout();
   renderZonePanel();
   drawAll();
@@ -3182,6 +3535,7 @@ const gapPaceChk = document.getElementById('gapPace');
 gapPaceChk.onchange = () => {
   gapPace = gapPaceChk.checked;
   savePrefs();
+  recomputeZones();   // the laps move, so what landed in which zone moves
   refreshReadout();
   renderZonePanel();
   drawAll();
@@ -3201,11 +3555,12 @@ zoneBarsInput.onchange = zoneBarsInput.oninput = () => {
   savePrefs();
   renderZonePanel();
 };
-for (const k of ['vol', 'freq', 'runs', 'vdot']) {
+for (const k of ['vol', 'freq', 'runs', 'vdot', 'zarea']) {
   document.getElementById(PANEL_CHK[k]).onchange = e => {
     visPanels[k] = e.target.checked;
     savePrefs();
     syncPanelVisibility();
+    refreshReadout();   // the zone block goes with the stacked-zone panel
     drawAll();
   };
 }

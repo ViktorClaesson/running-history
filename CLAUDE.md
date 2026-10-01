@@ -20,7 +20,7 @@ to refresh). After that the page opens straight into the chart.
 
 ## What the chart shows
 
-Five stacked panels sharing one x-axis, one bar/point per calendar day:
+Up to six stacked panels sharing one x-axis, one bar/point per calendar day:
 
 1. **Bars** — height is **that day's own distance**, on a **logarithmic** axis.
    Colour is a *verdict on where training stands that day* — not on that one run.
@@ -43,14 +43,20 @@ Five stacked panels sharing one x-axis, one bar/point per calendar day:
    (default 50 weeks, set independently — see "VDOT and pace zones" below).
    Undefined (a gap, not a zero) before the first-ever logged run. Plus **dots**
    for the days that went after that ceiling — see "Near-max days" below.
+6. **Stacked area** — what one window's running was made of, zone by zone.
+   *Which* window is a setting (`zoneAreaWin`, default the 16-week slot); only
+   ever one at a time. See "Running volume by pace zone" below.
 
-Panels 2–5 and the pace-zone histogram each have their own show/hide checkbox in
+Panels 2–6 and the pace-zone histogram each have their own show/hide checkbox in
 the settings sidebar (`visPanels`, persisted in `runviz.prefs.v1` as `panels`) —
 panel 1 (the bars) always stays up as the anchor chart. The x-axis date labels
-live on whichever of panels 1–5 is currently the lowest *visible* one
-(`bottomPanel()`), not hard-wired to the last panel, so hiding panels never leaves
-the chart without dates; that panel's bottom inset also widens to fit them, same as
-the VDOT panel's always did.
+live on whichever panel is currently the lowest *visible* one (`bottomPanel()`,
+walking `PANEL_ORDER` — the panels in DOM order, top to bottom — from the back),
+not hard-wired to the last panel, so hiding panels never leaves the chart without
+dates; that panel's bottom inset also widens to `XLAB_B` to fit them. The VDOT
+panel used to be the bottom one by construction and so drew the labels
+unconditionally; the stacked-zone panels sit below it, so it now asks like
+everyone else.
 
 ## The bar panel's log axis
 
@@ -78,7 +84,8 @@ data rather than at zero:
 
 Hovering a day fills the readout sidebar: exact distance, then one small table
 per measure (distance/week, run days/week, runs/week) giving MAX first and then
-each window from 1w to 64w — the same order the panels are read in, since MAX is
+each window from 1w to 64w, then — when the stacked-zone panel is up — that
+panel's window split by pace zone (see "Running volume by pace zone") — the same order the panels are read in, since MAX is
 the line drawn on top. Every line is listed whether or not it is currently
 *drawn*: the per-line toggles declutter the chart, they don't filter the numbers.
 Each row carries a dim note to the right of its value — the raw counts behind the
@@ -866,6 +873,79 @@ so the honest fallback is the old muddy gold (`#7c5000` / `#b48b2e` light,
 `#855e00` / `#3d2d00` dark) with the weak-end contrast bug fixed — not a hunt
 for a yellow that passes, because none does.
 
+## Running volume by pace zone
+
+The pace-zone histogram answers "what did *this day* look like". This panel
+answers "what have the last N weeks been made of": the same lap binning,
+rolled over the chosen window and drawn as a **stacked area** — part-to-whole over
+time, which is what the question is. `drawZoneArea()`, over whichever window
+`zoneAreaWin` names.
+
+- **Whole zones only.** The histogram's `ZONE_BARS` sub-bands are collapsed away
+  (`zoneBucketOf`, which maps a histogram bin to its zone by integer-dividing
+  the sub-band out). "How much threshold have I been running" is not a question
+  about threshold 2 — and it means `ZONE_BARS` doesn't move this panel at all.
+  A probe confirms it: re-deriving the per-day buckets at `ZONE_BARS` 1, 2, 7 and
+  20 gives bit-identical arrays.
+- **Eight buckets, slowest at the bottom** — Standing, Walking, Recovery, then
+  the five Daniels zones, exactly the order the histogram reads left to right.
+  Standing and Walking are in the stack rather than dropped, so the bands add up
+  to the kilometres actually binned instead of quietly losing the walking. Hard
+  running is therefore the band on **top**, where a block of threshold work reads
+  as a band thickening rather than as a line moving.
+- **The total is the distance-per-week line.** Each band is a rolling sum over
+  that window, divided by the full window and expressed per week, the same as
+  every other panel (and with the same float-dust snap — see the gotcha). So the
+  top of the stack *is* `volSeries[k]`, decomposed: on a real export the largest
+  gap between `zoneAreaTot[k]` and `volSeries[k]` is **0.019 km/wk** at 1w and
+  **0.002** at 64w, which is lap-distance rounding and nothing else. Every one of
+  604 run days has something binned, and the worst single day is 10 m out.
+  The top of the stack is also drawn as a faint plain-ink line, because the top
+  band is usually a sliver and the total shouldn't be read off wherever that
+  happens to end.
+- **One window at a time, picked by a setting.** The stack is already eight
+  deep, so four windows can't go in one plot the way four lines can — and four
+  separate panels was a lot of chart. So the panel has the same shape as every
+  other: one show/hide box (`visPanels.zarea`) plus a **window select**
+  (`zoneAreaWin`, a *slot key* so it survives a change to
+  `windowBase`/`windowMult`; its `<option>`s carry the `.winLabelK` classes, so
+  `syncLabels()` relabels them for free). Default **`s2`** — 16 weeks at the
+  default windows, which reads as "what has this training phase been made of";
+  the 1-week end is mostly this week's weather. All four windows' sums are
+  computed regardless (0.4 ms for the lot), so switching window is a relabel and
+  a redraw with nothing to recompute.
+- **`zoneAreaMode`** — one select, four values, because both halves of the
+  question are real: `'km'`/`'min'` stack the kilometres or the minutes per week,
+  `'pctKm'`/`'pctMin'` stack each zone's **share** of the week on a fixed 0–100
+  axis. The two share modes are derived from the same sums as their absolute
+  twins, so only the km↔min half actually needs `recomputeZoneWindows()`; the
+  handler does it either way rather than working out which half moved. In a
+  share mode a day with nothing binned goes to zero rather than inventing a
+  split. The panel title names both the measure and the window (`.zaN` and
+  `.zaWinN`, set by `syncLabels()`).
+- **Hover/pin marks** are the same language as every other panel — solid dot for
+  hover, hollow ring for the pin, both riding the top of the stack, in that
+  window's own colour. One window-start mark, in that window's colour, the way
+  the VDOT panel marks only its own window.
+- **Costs nothing.** `recomputeDayZones()` (the lap walk) plus
+  `recomputeZoneWindows()` (the rolling sums) is **0.4 ms** over a 1339-day
+  export, so every call site just does both via `recomputeZones()` rather than
+  reasoning about which half its setting moved. It is wired to everything that
+  moves where a lap lands: the VDOT window, `minLapM`, `gapVdot`, `gapPace`, and
+  — rolling sums only, via `applyWindow()` — `windowBase`/`windowMult`.
+
+**In the readout**, the shown day gets a `zoneGrid` block: one row per bucket,
+**hardest first**, mirroring the panel read top-down. Both readings are always
+there — the amount in whichever measure the panel is stacked at, and the share
+as the dim note — so the share modes don't hide the kilometres and vice versa.
+It reports the panel's own window — `zaReadoutSlot()` is just
+`visPanels.zarea ? zoneAreaSlot() : -1`, so the two can't disagree about which
+window they mean, and the block goes away with the panel rather than quoting
+figures nothing on screen is drawing. Always all eight rows, so like the `winGrid`
+tables it can't change the sidebar's height from day to day. Its swatches are
+`.sw.fill` — a block rather than the line-shaped `.sw`, since these rows stand
+for filled bands.
+
 ## Remembered settings
 
 `runviz.prefs.v1` holds everything the settings sidebar and the what-if box can be
@@ -873,7 +953,8 @@ set to, so the page opens the way it was left: `windowBase`, `windowMult`,
 `windowVdot`, `minLapM`, `gapVdot`, `gapPace`, `vdotNearDots`, `vdotNearPct`,
 `barColour` (`'verdict'`/`'workout'`/`'none'`; a legacy `colourVerdicts: false` reads as `'none'`), `wtExp` (0–4, halves), `wtShare` (1–100), `zoneBars`, `zoneAxis`, `maxBehind`, `fadeWindows`, `panels` (`{vol, freq, runs, vdot, zone}`, each independently
 show/hide — see below), `lines` (`{max, s0, s1, s2, s3}` — slot keys, which of
-the five lines the three window panels draw), and `plan` (`null` = the what-if box follows real
+the five lines the three window panels draw), `zoneAreaWin` (a slot key: which
+window the stacked-zone panel is over, `'s2'` by default), `zoneAreaMode` (`'km'`/`'min'`/`'pctKm'`/`'pctMin'`), and `plan` (`null` = the what-if box follows real
 history, `{km, days}` = edited). Three rules:
 
 - **Read at the very top of the `if (DATA)` block**, above `WINDOWS` and
@@ -898,8 +979,10 @@ history, `{km, days}` = edited). Three rules:
   booleans (a legacy `useGap` seeds both), and are kept even when the loaded export has no `gap` column to use it
   on — see "Grade-adjusted pace" above. `zoneBars` is rounded
   to the nearest whole number, range 1–20. `zoneAxis` must be `'time'` or
-  `'dist'`. Anything that fails falls back to
-  `PREF_DEFAULTS` for that field alone.
+  `'dist'`, `zoneAreaMode` one of `'km'`/`'min'`/`'pctKm'`/`'pctMin'`, and
+  `zoneAreaWin` one of the four slot keys. `panels` and `lines` take only real
+  booleans, key by key. Anything that fails falls back to `PREF_DEFAULTS` for
+  that field alone.
 - **Written only when something is off-default** (`savePrefs`), and the entry is
   *removed* the moment everything is back to default. A page whose settings have
   never been touched leaves nothing behind.
@@ -917,8 +1000,9 @@ the defaults, and a remembered setting has to overwrite them at boot.
   window, the min-lap distance, both grade-adjusted-pace toggles, the near-max dots
   and their percentage, the pace-zone bar
   count and bar height, the MAX draw order, the window-line fade, the bar-colour mode and the two workout-type settings, the
-  five panel show/hide toggles and the five line show/hide toggles back to their
-  defaults (all shown except MAX), plus the view back to its default span. It does *not*
+  six panel show/hide toggles and the five line show/hide toggles back to their
+  defaults (every panel shown, every line except MAX), plus the view back to its
+  default span. It does *not*
   touch the what-if.
 - **reset** in the Today's target tile: clears the what-if back to following real
   history, and nothing else.
@@ -948,7 +1032,7 @@ rather than the horizontal chartcard header row it replaced meant `.ctrls` lost
 its `margin-left: auto` (nothing to push right against in a column) and gained
 `flex-direction: column; align-items: stretch` instead.
 
-It is split into four `.setgroup` sections, **grouped by what each setting
+It is split into five `.setgroup` sections, **grouped by what each setting
 moves** rather than by what kind of control it is — "which panel is this about"
 is the question being asked when someone comes looking for a setting. A 1px
 rule separates them rather than more whitespace, so the grouping doesn't cost
@@ -959,6 +1043,7 @@ much height:
 | Volume & frequency panels | the five line show/hide swatches, the three panel show/hide boxes, `windowBase`/`windowMult`, `fadeWindows`, `maxBehind` |
 | VDOT panel | its show/hide, `windowVdot`, `minLapM`, `gapVdot`, `vdotNearDots`/`vdotNearPct` |
 | Pace zones | its show/hide, `zoneBars`, `zoneAxis`, `gapPace` |
+| Pace-zone volume | the eight-bucket zone legend, the panel's show/hide, `zoneAreaWin`, `zoneAreaMode` |
 | Bar colour | the `barColour` select, then whichever of its two legends is in use: the four-verdict/rest legend, or the workout-type legend plus its five thresholds |
 
 Two placements are worth naming. **The legend is split across two groups**, not
@@ -1109,7 +1194,8 @@ entire body is wrapped in `if (DATA) { … }` so nothing runs until data exists.
 Roughly: `recompute` (the four windows' series + their max + `computeTargets`) →
 `classify` (verdict per day, off the windows) → `buildRamps`/`barColour` → `drawBars` /
 `drawWindowPanel` (shared by `drawVol`/`drawFreq`/`drawRuns`) / `drawVdot` /
-`drawAll` → `setReadout`/`winGrid`/`renderTable`/`renderTiles`/`syncLabels`.
+`drawZoneArea` / `drawAll` → `setReadout`/`winGrid`/`zoneGrid`/`renderTable`/
+`renderTiles`/`syncLabels`.
 
 ## Gotchas that have bitten before
 
