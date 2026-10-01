@@ -1618,6 +1618,22 @@ function enduranceFloorPct(vdotHere) {
   const walkingPct = vo2FromVelocity(WALKING_MAX_VEL) / vdotHere;
   return Math.min(ZONE_BOUND_PCT[1] - 0.05, Math.max(ENDURANCE_FLOOR_PCT, walkingPct));
 }
+// The velocity at the k-th of ZONE_BARS+1 edges across a zone, for a runner at
+// vdotHere. A zone's own two ends are %VDOT; its sub-bands divide what lies
+// between them into ZONE_BARS **equal steps of speed**, not of %VDOT and
+// certainly not of pace. Speed is the right axis because pace is its reciprocal:
+// ten seconds per km is a much bigger change at 6:00 than at 3:30, so equal
+// slices of pace would make the slow sub-bands far narrower in effort than the
+// fast ones. (Equal %VDOT is nearly the same thing — vo2FromVelocity is only
+// mildly quadratic, so the two agree to about 0.01 km/h over any real zone — but
+// "equal km/h" is then true by accident rather than by construction, and the one
+// that's actually meant should be the one written down.)
+// The one source of these edges: zoneBandFor() sorts laps by them and
+// paceRangeFor() reports them, so the bars and their hover text can't disagree.
+function zoneEdgeVel(vdotHere, lo, hi, k) {
+  const vLo = velocityFromVo2(vdotHere * lo), vHi = velocityFromVo2(vdotHere * hi);
+  return vLo + k / ZONE_BARS * (vHi - vLo);
+}
 // Bin 0-(5*ZONE_BARS-1): zone*ZONE_BARS + sub-band, continuous endurance0.., marathon0.., ...
 // Only ever called for a lap already faster than enduranceFloorPct(vdotHere) — see
 // paceHistogramFor, which routes anything slower to the standing/walking/recovery
@@ -1628,7 +1644,11 @@ function zoneBandFor(pctOfVdot, vdotHere) {
   for (let z = 0; z < 5; z++) {
     const lo = z === 0 ? lo0 : ZONE_BOUND_PCT[z], hi = ZONE_BOUND_PCT[z + 1];
     if (p <= hi || z === 4) {
-      const sub = Math.min(ZONE_BARS - 1, Math.max(0, Math.floor((p - lo) / (hi - lo) * ZONE_BARS)));
+      // Back through the same curve the caller came in on, so this is the lap's
+      // own velocity exactly, not an approximation of it.
+      const vel = velocityFromVo2(vdotHere * p);
+      const vLo = zoneEdgeVel(vdotHere, lo, hi, 0), vHi = zoneEdgeVel(vdotHere, lo, hi, ZONE_BARS);
+      const sub = Math.min(ZONE_BARS - 1, Math.max(0, Math.floor((vel - vLo) / (vHi - vLo) * ZONE_BARS)));
       return z * ZONE_BARS + sub;
     }
   }
@@ -3044,19 +3064,19 @@ function mountZoneHist(cvZ, hoverInfo, minsBins, kmBins, real, maxVal, byDist, v
   const bw = pw / nSlots;
   const xOf = slot => pad.l + slot * bw;
 
-  // The pace *range* a bin covers, from the two %VDOT bounds either side of it —
-  // this is what item 3 asked for: what pace is "marathon 3" actually asking for.
-  // Endurance's slow edge and repetition's fast edge come from ZONE_BOUND_PCT/enduranceFloorPct
-  // — see the comments there for why one is exact and the other stays open.
-  // Standing/Walking/Recovery aren't %VDOT bins, so they report their own fixed or
-  // per-day pace bounds instead of going through this at all.
+  // The pace range a bin covers: what pace is "marathon 3" actually asking for.
+  // Off zoneEdgeVel(), the same edges zoneBandFor() sorted the laps by — equal
+  // steps of speed across the zone, so the bar and its hover text agree by
+  // construction. Endurance's slow edge and repetition's fast edge come from
+  // ZONE_BOUND_PCT/enduranceFloorPct — see the comments there for why one is
+  // exact and the other stays open. Standing/Walking/Recovery aren't zone bins,
+  // so they report their own fixed or per-day pace bounds without coming here.
   function paceRangeFor(b) {
     const zb = b - ZONE_BIN_OFFSET, zone = Math.floor(zb / ZONE_BARS), sub = zb % ZONE_BARS;
     const lo = zone === 0 ? enduranceFloorPct(vdotHere) : ZONE_BOUND_PCT[zone], hi = ZONE_BOUND_PCT[zone + 1];
-    const pctLo = lo + sub / ZONE_BARS * (hi - lo), pctHi = lo + (sub + 1) / ZONE_BARS * (hi - lo);
-    // higher %VDOT -> faster pace (lower min/km), so the slow edge comes from pctLo
-    const paceSlow = 1000 / velocityFromVo2(vdotHere * pctLo);
-    const paceFast = 1000 / velocityFromVo2(vdotHere * pctHi);
+    // faster speed -> lower min/km, so the slow edge is the lower-speed one
+    const paceSlow = 1000 / zoneEdgeVel(vdotHere, lo, hi, sub);
+    const paceFast = 1000 / zoneEdgeVel(vdotHere, lo, hi, sub + 1);
     const openFast = zb === nZoneBins - 1;
     return { paceSlow, paceFast, openFast };
   }

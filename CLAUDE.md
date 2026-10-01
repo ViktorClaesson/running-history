@@ -714,6 +714,26 @@ adjustable 1–20 — "Pace-zone bars" in the settings sidebar). `zoneBandFor()`
 a %VDOT to one of the `5 * ZONE_BARS` bins (`zone*ZONE_BARS + subBand`, continuous
 endurance0.., marathon0.., ...).
 
+**The sub-bands are equal steps of speed**, not of %VDOT and not of pace.
+`zoneEdgeVel(vdotHere, lo, hi, k)` is the only place those edges are computed —
+both `zoneBandFor()` (which sorts laps by them) and `paceRangeFor()` (which
+reports them in the hover text) go through it, so a bar and its label can't
+disagree. Speed is the right axis because pace is its reciprocal: ten seconds
+per km is a far bigger change at 6:00 than at 3:30, so equal slices of *pace*
+would make the slow sub-bands much narrower in effort than the fast ones. A
+zone running 10→15 km/h at `ZONE_BARS` 5 therefore cuts at 10/11/12/13/14/15
+km/h, i.e. 6:00 / 5:27 / 5:00 / 4:37 / 4:17 / 4:00 — second-widths that
+*shrink* left to right, which is what equal speed looks like read as pace.
+
+This was already very nearly true before being written down: the edges used to
+be equal steps of **%VDOT**, and `vo2FromVelocity` is only mildly quadratic
+(the `0.000104 v²` term against `0.182258 v`), so the two agree to about **0.01
+km/h** over any real zone. Making it exact moved the histogram's sub-band split
+on **18 of 1340 days**, shifting **66 km of 6353 (1.0%)** between neighbouring
+sub-bands *inside* their own zone. Nothing crossed a zone boundary: the
+per-day whole-zone `dayZoneKm` buckets and all 666 workout-type verdicts are
+**bit-identical** before and after, since both collapse the sub-bands away.
+
 Endurance's slow end used to be closed off the same way, at a practical 40% floor —
 which meant a genuinely slow recovery jog, actual walking, and standing still at
 a red light all landed in the same bin. They no longer do. Three fixed or
