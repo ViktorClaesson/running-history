@@ -276,6 +276,8 @@
   .legend-tag { color: var(--text-secondary); font-weight: 600; min-width: 82px;
     display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
   .legend-row.off .item { opacity: 0.35; }
+  .setsub { display: flex; flex-direction: column; gap: 10px; }
+  .setsub[hidden] { display: none; }
   /* a single legend item switched off — the window lines toggle one at a time,
      unlike the two colour schemes, which toggle a whole row */
   .legend .item.off { opacity: 0.4; }
@@ -324,7 +326,10 @@
   .hint kbd { font: inherit; border: 1px solid var(--border); border-radius: 3px;
     padding: 0 3px; color: var(--text-secondary); }
 
-  #chartZone { display: block; width: 100%; height: 220px; }
+  .chartZone { display: block; width: 100%; height: 220px; }
+  .zone-run { padding: 6px 4px 4px; font-size: 12px; font-weight: 600; color: var(--text-primary); }
+  .zone-run + .zone-hover { padding-top: 0; }
+  .zone-shares { font-weight: 400; }
   .zone-legend { display: flex; gap: 14px; flex-wrap: wrap; padding: 0 4px 8px; font-size: 12px; color: var(--text-secondary); }
   .zone-legend .item { display: inline-flex; align-items: center; gap: 6px; }
   /* The canvas itself always renders — same axes/grid whether or not the day has
@@ -369,6 +374,7 @@
   details.table summary { cursor: pointer; font-size: 13px; color: var(--text-secondary); }
   .tablewrap { max-height: 340px; overflow: auto; margin-top: 10px; border: 1px solid var(--border); border-radius: 8px; }
   table { border-collapse: collapse; width: 100%; font-size: 13px; background: var(--surface-1); }
+  td .why { color: var(--muted); font-size: 10px; }
   th, td { text-align: right; padding: 6px 12px; border-bottom: 1px solid var(--grid); font-variant-numeric: tabular-nums; }
   th:first-child, td:first-child { text-align: left; }
   th { position: sticky; top: 0; background: var(--surface-1); color: var(--muted);
@@ -387,7 +393,7 @@
     <h2 class="setgroup-title">Volume &amp; frequency panels</h2>
     <div class="legend">
       <div class="legend-row" id="row-windows" title="Hiding a line takes it off the three panels and takes its window-start dot off every panel — it stays in the hover readout and still counts towards MAX."><span class="legend-tag">Lines</span>
-        <label class="item"><input type="checkbox" id="line-max" checked><span class="swatch line" style="background:var(--wmax)"></span>MAX</label>
+        <label class="item"><input type="checkbox" id="line-max"><span class="swatch line" style="background:var(--wmax)"></span>MAX</label>
         <label class="item"><input type="checkbox" id="line-s0" checked><span class="swatch line" style="background:var(--v-hp)"></span><span class="winLabel0">1w</span></label>
         <label class="item"><input type="checkbox" id="line-s1" checked><span class="swatch line" style="background:var(--v-pr)"></span><span class="winLabel1">4w</span></label>
         <label class="item"><input type="checkbox" id="line-s2" checked><span class="swatch line" style="background:var(--v-st)"></span><span class="winLabel2">16w</span></label>
@@ -406,7 +412,7 @@
         <input type="number" id="windowMult" min="2" max="8" step="1" value="4">
       </label>
       <label class="chk" title="The four window lines are drawn semi-transparent by default, which is what makes the max read as the primary line without being any thicker. Turn this off to compare two windows against each other at full strength, at the cost of a busier panel.">
-        <input type="checkbox" id="fadeWindows" checked> Fade the window lines
+        <input type="checkbox" id="fadeWindows"> Fade the window lines
       </label>
       <label class="chk" title="The max line sits on top of the four windows by default, which is what makes it the one read first. Put it underneath and the shortest window stays visible along the stretches where it IS the max, so the max shows only where it pulls away.">
         <input type="checkbox" id="maxBehind"> Draw MAX behind the windows
@@ -428,7 +434,7 @@
         <input type="checkbox" id="vdotNearDots" checked> Mark near-max days
       </label>
       <label class="chk" title="How close to that day's peak a day's own VDOT reading has to be to get a dot. Both ends are useful: 0 marks only the days that actually set the peak, and 100 marks every run day, turning the panel into a scatter of every run's own VDOT under the ceiling. Wide settings open up the y-axis to fit the slowest day in view, which squashes the line towards the top — that is the honest range of the data, not a bug.">&hellip;within
-        <input type="number" id="vdotNearPct" min="0" max="100" step="1" value="10"> % of the peak
+        <input type="number" id="vdotNearPct" min="0" max="100" step="1" value="5"> % of the peak
       </label>
       <label class="chk gapLabel" title="Compute VDOT off Runalyze's grade-adjusted pace — each activity's equivalent flat time — instead of the time actually taken. Moves the VDOT panel, and with it where the pace-zone boundaries sit; distances, volume and the targets are untouched. Activities the export has no GAP for keep their raw time.">
         <input type="checkbox" id="gapVdot"> Grade-adjusted pace for VDOT
@@ -441,21 +447,26 @@
     <div class="ctrls">
       <label class="chk"><input type="checkbox" id="showZone" checked> Pace-zone histogram</label>
       <label class="chk" title="How many sub-bands each of the five pace zones splits into in the pace-zone histogram.">Pace-zone bars
-        <input type="number" id="zoneBars" min="1" max="20" step="1" value="5"> per zone
+        <input type="number" id="zoneBars" min="1" max="20" step="1" value="3"> per zone
       </label>
       <label class="chk" title="What the height of each pace-zone bar measures: the time spent at that pace, or the distance covered at it. The hover text always gives both.">Bar height
-        <select id="zoneAxis"><option value="time">time (min)</option><option value="dist">distance (km)</option></select>
+        <select id="zoneAxis"><option value="time">time (min)</option><option value="dist" selected>distance (km)</option></select>
       </label>
       <label class="chk gapLabel" title="Bin each lap by its grade-adjusted pace — its equivalent flat time — instead of the pace actually run. Only moves the laps: the zone boundaries come from the day's VDOT, which has its own grade-adjusted setting under the VDOT panel. Activities the export has no GAP for keep their raw time.">
-        <input type="checkbox" id="gapPace"> Grade-adjusted pace
+        <input type="checkbox" id="gapPace" checked> Grade-adjusted pace
       </label>
     </div>
   </section>
 
   <section class="setgroup">
-    <h2 class="setgroup-title">Verdicts</h2>
-    <div class="legend">
-      <div class="legend-row" id="row-verdicts"><label class="legend-tag"><input type="checkbox" id="colourVerdicts" checked> Verdict</label>
+    <h2 class="setgroup-title">Bar colour</h2>
+    <div class="ctrls">
+      <label class="chk" title="What the colour of each run's bar says: where training stands that day (the verdict), what kind of session it was (the workout type, in the pace-zone colours), or nothing at all.">Colour bars by
+        <select id="barColour"><option value="verdict">verdict</option><option value="workout" selected>workout type</option><option value="none">nothing</option></select>
+      </label>
+    </div>
+    <div class="legend setsub" id="bc-verdict">
+      <div class="legend-row"><span class="legend-tag">Verdict</span>
         <span class="item"><span class="swatch" style="background:var(--v-hp)"></span>▲▲ highly productive</span>
         <span class="item"><span class="swatch" style="background:var(--v-pr)"></span>▲ productive</span>
         <span class="item"><span class="swatch" style="background:var(--v-st)"></span>= steady</span>
@@ -471,6 +482,31 @@
           else <span class="winLabel3">64w</span> is the highest and that is unproductive.
           Same four colours as the window lines above, since that is the same statement.
           A rest day has no verdict.</span>
+      </div>
+    </div>
+    <div class="setsub" id="bc-workout">
+      <div class="legend">
+        <div class="legend-row"><span class="legend-tag">Workout</span>
+          <span class="item"><span class="swatch" style="background:var(--z-repetition)"></span>repetition</span>
+          <span class="item"><span class="swatch" style="background:var(--z-interval)"></span>interval</span>
+          <span class="item"><span class="swatch" style="background:var(--z-threshold)"></span>threshold</span>
+          <span class="item"><span class="swatch" style="background:var(--z-marathon)"></span>marathon</span>
+          <span class="item"><span class="swatch" style="background:var(--z-easy)"></span>easy</span>
+          <span class="item"><span class="swatch wt-recovery"></span>recovery</span>
+          <span class="item"><span class="swatch" style="background:var(--rest)"></span>rest day</span>
+        </div>
+        <span class="legend-dim">Each lap scores its speed (km/h) to the power below, times its
+          distance, towards the zone it was run in. Then, hardest first, each zone is pooled with
+          every faster one, and the first pool to reach the share below is the run&rsquo;s type &mdash;
+          so hard work split across interval and repetition still adds up to an interval session,
+          and a few strides don&rsquo;t turn an easy run into a repetition one. Zones are the
+          pace-zone histogram&rsquo;s own, against that day&rsquo;s VDOT.</span>
+      </div>
+      <div class="ctrls">
+        <label class="chk" title="How much faster laps count for. 0 is plain distance in each zone; higher leans harder towards the fastest laps.">Speed weight
+          <input type="number" id="wtExp" min="0" max="4" step="0.5" value="2"> power</label>
+        <label class="chk" title="How much of the run's score a zone, pooled with every faster zone, needs before it names the run. 50 would be a majority; lower leans towards the harder types.">Wins at
+          <input type="number" id="wtShare" min="1" max="100" step="1" value="35"> % of score</label>
       </div>
     </div>
   </section>
@@ -532,7 +568,7 @@
     <summary>Data table (days currently in view)</summary>
     <div class="tablewrap">
       <table>
-        <thead><tr><th>Date</th><th>Distance (km)</th><th><span class="winVolN">4</span>-week avg (km/day)</th><th>Run days / week</th><th>Runs / week</th><th>Target (km)</th><th>Verdict</th></tr></thead>
+        <thead><tr><th>Date</th><th>Distance (km)</th><th><span class="winVolN">4</span>-week avg (km/day)</th><th>Run days / week</th><th>Runs / week</th><th>Target (km)</th><th>Verdict</th><th>Workout</th></tr></thead>
         <tbody id="tbody"></tbody>
       </table>
     </div>
@@ -578,7 +614,10 @@ const LS_DATA = 'runviz.data.v2', LS_SPORTS = 'runviz.sports.v2';
 // 6: one row per ACTIVITY inside each day (`acts`), each carrying its own time
 //    and its own laps, replacing the day-level `sec`/`gsec`/`laps` totals — a
 //    day's two runs are two efforts, not one long one. See recomputeDayVdot.
-const SCHEMA = 6;
+// 7: each activity also carries its start time `t`, and a day's `acts` are
+//    sorted by it — the export isn't in time order, and the stacked bars and
+//    per-run histograms need first-run-first.
+const SCHEMA = 7;
 
 const lsGet = k => { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); return true; }
@@ -710,7 +749,7 @@ function buildData({ header, rows }, sportIds, fileName) {
     // Each activity is kept as its own row rather than summed into a day total:
     // everything downstream that reads a *pace* has to read one continuous
     // effort, and a day's two runs have a rest in between. See recomputeDayVdot.
-    g.acts.push({ km: dist, sec: secs, gsec: secs / ratio,
+    g.acts.push({ t, km: dist, sec: secs, gsec: secs / ratio,
       laps: header.splits != null && r[header.splits] ? parseSplits(r[header.splits], ratio) : [] });
     per.set(key, g);
     runCount++;
@@ -726,7 +765,8 @@ function buildData({ header, rows }, sportIds, fileName) {
   for (let i = 0; i < days; i++) {
     const g = per.get(new Date(t0 + i * day).toISOString().slice(0, 10));
     values.push(g ? r3(g.sum) : 0); maxRun.push(g ? r3(g.max) : 0); nRuns.push(g ? g.n : 0);
-    acts.push(g ? g.acts.map(a => ({ ...r3s(a), laps: a.laps.map(r3s) })) : []);
+    acts.push(g ? g.acts.sort((a, b) => a.t - b.t)
+      .map(a => ({ t: a.t, ...r3s(a), laps: a.laps.map(r3s) })) : []);
   }
   return { schema: SCHEMA, start, values, maxRun, nRuns, acts, runCount, gapCount,
            fileName, sports: [...sportIds], loadedAt: new Date().toISOString().slice(0, 10) };
@@ -914,20 +954,24 @@ const PREF_DEFAULTS = {
   windowVdot: 350,   // 50 weeks
   minLapM: 1500,     // laps shorter than this can't be trusted for VDOT on their own
   gapVdot: false,    // compute VDOT off Runalyze's grade-adjusted pace instead of the raw one
-  gapPace: false,    // bin the pace-zone histogram by grade-adjusted pace instead of the raw one
+  gapPace: true,     // bin the pace-zone histogram by grade-adjusted pace instead of the raw one
   vdotNearDots: true,  // mark the days that came close to the VDOT ceiling without beating it
-  vdotNearPct: 10,     // how close "close" is, in percent of the peak in force that day
+  vdotNearPct: 5,      // how close "close" is, in percent of the peak in force that day
                        // (0 = only the days that set it, 100 = every run day)
-  colourVerdicts: true,   // colour the bars by verdict at all
-  zoneBars: 5,       // sub-bands per pace zone in the pace-zone histogram
-  zoneAxis: 'time',  // what the pace-zone histogram's bars measure: 'time' (minutes) or 'dist' (km)
+  barColour: 'workout',  // what the bars are coloured by: 'verdict', 'workout' (type) or 'none'
+  // Workout type: each lap scores towards its zone, then zones are pooled from
+  // the hard end and the first pool to reach wtShare% names the run.
+  wtExp: 2,          // each lap scores speed^wtExp x km towards its zone; 0-4
+  wtShare: 35,       // % of the score a zone plus everything faster needs to be the run's type
+  zoneBars: 3,       // sub-bands per pace zone in the pace-zone histogram
+  zoneAxis: 'dist',  // what the pace-zone histogram's bars measure: 'time' (minutes) or 'dist' (km)
   panels: { vol: true, freq: true, runs: true, vdot: true, zone: true },   // which optional panels are shown
   // Which of the five lines each volume/frequency panel actually draws. Hiding
   // one is purely a decluttering move: it still appears in the hover readout and
-  // still counts towards MAX. All shown by default.
-  lines: { max: true, s0: true, s1: true, s2: true, s3: true },
+  // still counts towards MAX. All but MAX shown by default.
+  lines: { max: false, s0: true, s1: true, s2: true, s3: true },
   maxBehind: false,   // draw the max line under the four windows rather than over them
-  fadeWindows: true,  // the four window lines semi-transparent, so the max reads first
+  fadeWindows: false, // the four window lines semi-transparent, so the max reads first
   plan: null,        // null = the what-if box follows real history; {km, days} = edited
 };
 // Slot keys, not week counts — a slot keeps its colour and its show/hide
@@ -949,10 +993,18 @@ function loadPrefs() {
   if (num(raw.zoneBars, 1, 20)) p.zoneBars = Math.round(raw.zoneBars);
   if (raw.zoneAxis === 'time' || raw.zoneAxis === 'dist') p.zoneAxis = raw.zoneAxis;
   if (num(raw.vdotNearPct, 0, 100)) p.vdotNearPct = Math.round(raw.vdotNearPct);
+  // `colourVerdicts: false` was the old on/off for colouring at all — the same
+  // thing 'none' says now.
+  if (raw.colourVerdicts === false) p.barColour = 'none';
+  if (['verdict', 'workout', 'none'].includes(raw.barColour)) p.barColour = raw.barColour;
+  // The old per-zone minute thresholds (wtRepMin...wtEasyPct) are simply
+  // ignored, and dropped on the next save.
+  if (num(raw.wtExp, 0, 4)) p.wtExp = Math.round(raw.wtExp * 2) / 2;
+  if (num(raw.wtShare, 1, 100)) p.wtShare = Math.round(raw.wtShare);
   // `useGap` was one toggle for both before VDOT and the histogram got one each;
   // an entry that still carries it turns both on, until the next save drops it.
   if (typeof raw.useGap === 'boolean') p.gapVdot = p.gapPace = raw.useGap;
-  for (const k of ['colourVerdicts', 'maxBehind', 'fadeWindows', 'gapVdot', 'gapPace', 'vdotNearDots']) {
+  for (const k of ['maxBehind', 'fadeWindows', 'gapVdot', 'gapPace', 'vdotNearDots']) {
     if (typeof raw[k] === 'boolean') p[k] = raw[k];
   }
   if (raw.panels && typeof raw.panels === 'object') {
@@ -986,7 +1038,8 @@ function savePrefs() {
     vdotNearPct,
     maxBehind,
     fadeWindows,
-    colourVerdicts,
+    barColour: barColourMode,
+    ...wt,
     zoneBars: ZONE_BARS,
     zoneAxis,
     panels: { ...visPanels },
@@ -1320,10 +1373,19 @@ function buildRamps() {
 // to carry text, so the two only differ in what they do with a rest day and
 // with colouring switched off.
 const VERDICT_CSS = { hp: '--v-hp', pr: '--v-pr', st: '--v-st', un: '--v-un' };
-function barColour(c) {
-  if (!c) return C('--rest');
-  if (!colourVerdicts) return C('--nocolour');
-  return C(VERDICT_CSS[c.dir]);
+// One entry per run of the day, earliest first: { frac, colour }, where frac
+// is that run's share of the day's distance. The verdict is a statement about
+// the day, so in verdict mode every segment shares its colour; workout type is
+// a statement about each run, so there each gets its own.
+function barSegments(i) {
+  const c = classify(i);
+  if (!c) return [{ frac: 1, colour: C('--rest') }];
+  const acts = dayActs[i] || [];
+  const tot = acts.reduce((a, x) => a + x.km, 0);
+  const ws = barColourMode === 'workout' ? workoutsOf(i) : null;
+  const flat = barColourMode === 'none' ? C('--nocolour') : C(VERDICT_CSS[c.dir]);
+  if (!(tot > 0)) return [{ frac: 1, colour: ws ? workoutColour(ws[0]) : flat }];
+  return acts.map((a, k) => ({ frac: a.km / tot, colour: ws ? workoutColour(ws[k]) : flat }));
 }
 function fullColour(c) {
   if (!c) return C('--rest');
@@ -1394,9 +1456,10 @@ function computeTargets() {
 const VERDICT_DIRS = ['hp', 'pr', 'st', 'un'];   // indexed by that slot
 const DIR_LABEL = { hp: 'highly productive', pr: 'productive', st: 'steady', un: 'unproductive' };
 const DIR_ARROW = { hp: '▲▲', pr: '▲', st: '=', un: '▼' };
-// Switching this off drops the bars to a neutral, which stays distinct from the
-// paler rest-day grey.
-let colourVerdicts = prefs.colourVerdicts;
+// What the bars are coloured by: the verdict, the workout type (see
+// workoutsOf), or nothing — a neutral that stays distinct from the paler
+// rest-day grey. Draw-time only: both classifications always exist.
+let barColourMode = prefs.barColour;
 
 function classify(i) {
   if (daily[i] <= 0) return null;                 // rest day
@@ -1535,37 +1598,137 @@ const STANDING_BIN = 0, WALKING_BIN = 1, RECOVERY_BIN = 2, ZONE_BIN_OFFSET = 3;
 // above); bins ZONE_BIN_OFFSET.. are the 5*ZONE_BARS pace-zone sub-bands. Only
 // meaningful for a day that both has a run and has a defined VDOT yet (there
 // wasn't one before the first-ever logged run), hence the two early-outs.
-function paceHistogramFor(i) {
+// Every lap of day i, per activity — and the fallback to "the whole thing as
+// one lap" is per activity too: one run of the day having splits is no reason
+// to drop the other one's minutes, and no reason to average the two into one pace.
+function lapsOfAct(act) {
+  if (act.laps.length) return act.laps;
+  return act.km > 0 && effortSec(act, gapPace) > 0 ? [act] : [];
+}
+const lapsOfDay = i => (dayActs[i] || []).flatMap(lapsOfAct);
+// Which histogram bin one lap lands in against VDOT v (easy floor `floor`),
+// and for how many minutes. With `gapPace` on, a lap is binned by its
+// equivalent flat pace and counted for that many minutes — the adjusted
+// duration, not the real one, so a bin's height stays the time implied by the
+// pace it is drawn at. Distance needs no adjusting: kilometres run are
+// kilometres run. Shared with the workout-type classifier, so the bar colours
+// and the histogram can never disagree about which zone a lap was in.
+function binLap(lap, v, floor) {
+  const sec = effortSec(lap, gapPace);
+  const vel = lap.km * 1000 / (sec / 60);
+  const mins = sec / 60;
+  if (vel < STANDING_MAX_VEL) return { bin: STANDING_BIN, mins };
+  if (vel < WALKING_MAX_VEL) return { bin: WALKING_BIN, mins };
+  const pct = vo2FromVelocity(vel) / v;
+  if (pct < floor) return { bin: RECOVERY_BIN, mins };
+  return { bin: ZONE_BIN_OFFSET + zoneBandFor(pct, v), mins };
+}
+// `a`, if given, is one activity's index within the day — the histogram for
+// that run alone; otherwise the whole day.
+function paceHistogramFor(i, a) {
   const v = vdot[i];
   if (!(v > 0)) return null;
-  // Per activity, and the fallback to "the whole thing as one lap" is per
-  // activity too: one run of the day having splits is no reason to drop the
-  // other one's minutes, and no reason to average the two into one pace.
-  const laps = [];
-  for (const act of (dayActs[i] || [])) {
-    if (act.laps.length) laps.push(...act.laps);
-    else if (act.km > 0 && effortSec(act, gapPace) > 0) laps.push(act);
-  }
+  const laps = a == null ? lapsOfDay(i) : lapsOfAct(dayActs[i][a]);
   if (!laps.length) return null;
   const nBins = ZONE_BIN_OFFSET + 5 * ZONE_BARS;
   const bins = new Array(nBins).fill(0), kmBins = new Array(nBins).fill(0);
-  const add = (b, mins, km) => { bins[b] += mins; kmBins[b] += km; };
   const floor = easyFloorPct(v);
   for (const lap of laps) {
-    // With `gapPace` on, a lap is binned by its equivalent flat pace and counted
-    // for that many minutes — the adjusted duration, not the real one, so a
-    // bin's height stays the time implied by the pace it is drawn at. Distance
-    // needs no adjusting: kilometres run are kilometres run.
-    const sec = effortSec(lap, gapPace);
-    const vel = lap.km * 1000 / (sec / 60);
-    const mins = sec / 60;
-    if (vel < STANDING_MAX_VEL) { add(STANDING_BIN, mins, lap.km); continue; }
-    if (vel < WALKING_MAX_VEL) { add(WALKING_BIN, mins, lap.km); continue; }
-    const pct = vo2FromVelocity(vel) / v;
-    if (pct < floor) { add(RECOVERY_BIN, mins, lap.km); continue; }
-    add(ZONE_BIN_OFFSET + zoneBandFor(pct, v), mins, lap.km);
+    const { bin, mins } = binLap(lap, v, floor);
+    bins[bin] += mins; kmBins[bin] += lap.km;
   }
   return { mins: bins, km: kmBins };
+}
+
+// ---- workout type, from the same lap binning ------------------------------
+// The other way to colour the bars: what KIND of session each run was, in the
+// pace-zone histogram's own colours. Every lap scores
+//     speed (km/h) ^ wtExp  x  distance (km)
+// towards the zone it falls in. Then, hardest first, each zone's score is
+// pooled with every faster zone's, and the first pool to reach wtShare% of
+// the run's total is its type:
+//     repetition               >= wtShare%  -> repetition
+//     interval + repetition    >= wtShare%  -> interval
+//     threshold + faster       >= wtShare%  -> threshold
+//     marathon + faster        >= wtShare%  -> marathon
+//     easy + faster            >= wtShare%  -> easy
+//     else                                  -> recovery
+// Pooling is what stops a hard session split across two zones losing to the
+// easy running around it: 38% interval + 20% repetition is 58% interval+, and
+// an interval session, even though easy alone (43%) is the biggest single zone.
+// Weighting by speed lets a short hard block count for more than its minutes,
+// without a few strides turning an easy run into a repetition session. At the
+// default exponent of 2 that is speed^3 x time; 0 is plain distance.
+// Recovery competes as a type; Standing and Walking don't, since neither is a
+// kind of run — their minutes just don't score. A run that is nothing but
+// those two falls back to Recovery.
+// Per RUN, not per day: a day with two runs is drawn as two stacked segments,
+// each in its own type's colour, so an interval session and the easy jog home
+// read as the two different things they were.
+const WORKOUT_TYPES = [
+  { key: 'recovery',   label: 'Recovery' },
+  ...ZONES.map(z => ({ key: z.key, label: z.label })),
+];   // index 0 = recovery, 1-5 = ZONES[0-4]
+const wt = { wtExp: prefs.wtExp, wtShare: prefs.wtShare };
+// Score per type per run — [recovery, easy..repetition] — one array per
+// activity of the day, cached, since the bars want it for every day in view on
+// every frame. Keyed on everything that moves where a lap lands or what it
+// scores, so no handler has to remember to invalidate it: the zones hang off
+// VDOT (its window, min lap and GAP), the laps off gapPace.
+let zoneScoreKey = '', zoneScores = null;
+function zoneScoresOf(i) {
+  const key = [WINDOW_VDOT, MIN_LAP_M, gapVdot, gapPace, wt.wtExp].join(':');
+  if (key !== zoneScoreKey) { zoneScoreKey = key; zoneScores = new Array(N); }
+  if (zoneScores[i] !== undefined) return zoneScores[i];
+  const v = vdot[i];
+  const out = (dayActs[i] || []).map(act => {
+    const laps = v > 0 ? lapsOfAct(act) : [];
+    if (!laps.length) return null;
+    const sc = new Array(WORKOUT_TYPES.length).fill(0);
+    const floor = easyFloorPct(v);
+    for (const lap of laps) {
+      const { bin, mins } = binLap(lap, v, floor);
+      if (bin === STANDING_BIN || bin === WALKING_BIN) continue;
+      const t = bin === RECOVERY_BIN ? 0 : 1 + Math.floor((bin - ZONE_BIN_OFFSET) / ZONE_BARS);
+      sc[t] += Math.pow(lap.km / (mins / 60), wt.wtExp) * lap.km;
+    }
+    return sc;
+  });
+  return (zoneScores[i] = out);
+}
+// One entry per run of day i, earliest first: { type: index into
+// WORKOUT_TYPES, why: the winning share of the score }, or null for a run with
+// no timing to judge. An empty array on a rest day.
+const workoutsOf = i => zoneScoresOf(i).map(workoutFromScores);
+function workoutFromScores(sc) {
+  if (!sc) return null;
+  const tot = sc.reduce((a, b) => a + b, 0);
+  if (!(tot > 0)) return { type: 0, why: 'no running laps' };
+  let pool = 0;
+  for (let t = sc.length - 1; t >= 1; t--) {
+    pool += sc[t];
+    const pct = pool / tot * 100;
+    if (pct >= wt.wtShare) {
+      return { type: t, why: `${nf0.format(pct)}% ${WORKOUT_TYPES[t].key}${t < sc.length - 1 ? '+' : ''}` };
+    }
+  }
+  return { type: 0, why: `${nf0.format(sc[0] / tot * 100)}% recovery` };
+}
+// The readout pill in workout mode. Several runs are named in order, each in
+// its own colour, with the figures behind them joined the same way; the
+// pill's border takes the hardest of them.
+function workoutBadge(ws) {
+  const known = ws.filter(Boolean);
+  if (!known.length) return `<span class="badge" style="color:var(--text-secondary)">no timing data<span class="why">&nbsp;</span></span>`;
+  const top = known.reduce((a, b) => b.type > a.type ? b : a);
+  const name = w => w ? `<span style="color:${workoutColour(w)}">${WORKOUT_TYPES[w.type].label}</span>` : '?';
+  return `<span class="badge" style="color:${workoutColour(top)}">${
+    `<span>${ws.map(name).join(' + ')}</span>`}<span class="why">${
+    ws.map(w => w ? w.why : 'no timing').join(' · ')}</span></span>`;
+}
+function workoutColour(w) {
+  if (!w) return C('--nocolour');
+  return w.type === 0 ? leadRamps.recovery : C(ZONES[w.type - 1].strong);
 }
 
 const fmtDate = new Intl.DateTimeFormat(undefined, { weekday:'short', year:'numeric', month:'short', day:'numeric' });
@@ -1901,6 +2064,9 @@ const REST_STUB = 5;   // px, a no-run day
 const MIN_RUN_H = 11;  // px, the shortest a real run is ever drawn
 function drawBars() {
   buildRamps();
+  // Recovery's colour is an OKLab mix, not a custom property, so its legend
+  // swatch has to be painted from here, where it is worked out.
+  for (const el of document.querySelectorAll('.wt-recovery')) el.style.background = leadRamps.recovery;
   const { w, h } = fitCanvas(cv, ctx);
   W = w;
   const isBottom = bottomPanel() === 'bars';
@@ -1956,9 +2122,21 @@ function drawBars() {
     const y = topOf(i);
     const hh = base - y;
     if (hh <= 0) continue;
-    const c = classify(i);
-    ctx.fillStyle = barColour(c);
-    ctx.fillRect(x0, y, bw, hh);
+    // A day with several runs is stacked, first run at the bottom. The axis is
+    // log, so heights don't add: the bar keeps the day's total height and is
+    // split in proportion to each run's share of the distance, rather than the
+    // bottom run being drawn at its own log height (which would squash any run
+    // on top of it into a sliver). A surface-coloured seam marks each join, so
+    // the split shows even where both segments are the same colour.
+    const segs = barSegments(i);
+    let yb = base;
+    segs.forEach((sg, k) => {
+      const top = k === segs.length - 1 ? y : Math.round(yb - hh * sg.frac);
+      ctx.fillStyle = sg.colour;
+      ctx.fillRect(x0, top, bw, yb - top);
+      if (k > 0) { ctx.fillStyle = C('--surface-1'); ctx.fillRect(x0, yb - 1, bw, 1); }
+      yb = top;
+    });
   }
 
 
@@ -2380,19 +2558,24 @@ function setReadout(i, tag) {
     return;
   }
   const c = classify(i);
+  // The pill names whichever classification the bars are painted in; with
+  // colouring off it keeps the verdict, as it always has.
+  const ws = barColourMode === 'workout' && c ? workoutsOf(i) : [];
   ro.className = 'readout';
   ro.innerHTML = `
     <span class="date">${fmtDate.format(dateAt(i))}${tag ? `<span class="pin">${tag}</span>` : ''}</span>
     <span class="pair detail"><span class="k">Distance that day</span><span class="v">${daily[i] > 0 ? km(daily[i]) + ' km' : 'no run'}${nRuns[i] > 1 ? `<span class="sub-v"> in ${nRuns[i]} runs</span>` : ''}</span><span class="v2">${
-      nRuns[i] > 1 ? `<span class="seg">longest ${km(maxRun[i])} km</span>` : ''}</span></span>
+      nRuns[i] > 1 ? seg((dayActs[i] || []).map(a => `${km(a.km)}`)).replaceAll(' · ', ' + ') + ' km' : ''}</span></span>
     <span class="pair"><span class="k">Distance per week</span>${winGrid(volSeries, i, 1, 'km', (w, v) => longerSpans(v))}</span>
     <span class="pair"><span class="k">Run days per week</span>${winGrid(freqSeries, i, 1, '', w => w === null ? '' : `${runDaysIn[w][i]} of ${WINDOWS[w].days} days`)}</span>
     <span class="pair"><span class="k">Runs per week</span>${winGrid(runSeries, i, 1, '', w => w === null ? '' : `${runsIn[w][i]} runs in ${WINDOWS[w].days} days`)}</span>
     <span class="pair"><span class="k">VDOT (peak, trailing ${Math.round(WINDOW_VDOT/7)}w)</span><span class="v">${vdot[i] != null ? vdot[i].toFixed(1) : '—'}</span><span class="v2">${vdotBasisText(i)}</span></span>
-    <span class="badge" style="color:${c ? fullColour(c) : 'var(--text-secondary)'}">${
-      !c ? '— rest day'
-         : `${DIR_ARROW[c.dir]} ${DIR_LABEL[c.dir]}`
-    }<span class="why">${c ? verdictWhy(c) : '&nbsp;'}</span></span>`;
+    ${barColourMode === 'workout' && c
+      ? workoutBadge(ws)
+      : `<span class="badge" style="color:${c ? fullColour(c) : 'var(--text-secondary)'}">${
+          !c ? '— rest day'
+             : `${DIR_ARROW[c.dir]} ${DIR_LABEL[c.dir]}`
+        }<span class="why">${c ? verdictWhy(c) : '&nbsp;'}</span></span>`}`;
 }
 
 // Hover always wins; the pinned day is next, and the most recent run after
@@ -2442,13 +2625,15 @@ function renderZonePanel() {
   // it used to swap in a tiny "no run that day" block instead, which made the
   // whole card shrink and grow on every hover across a rest day — a distracting
   // flicker when scanning quickly through a run of days.
-  const realBins = paceHistogramFor(zoneDay);
+  // One histogram per run on a day with several, earliest first, so an
+  // interval session and the easy jog after it read as two workouts rather
+  // than one blend. They share a y-scale, so their bars compare directly.
+  const acts = dayActs[zoneDay] || [];
+  const hists = acts.length > 1 ? acts.map((_, a) => paceHistogramFor(zoneDay, a)) : [paceHistogramFor(zoneDay)];
   const zeros = () => new Array(ZONE_BIN_OFFSET + 5 * ZONE_BARS).fill(0);
-  const minsBins = realBins ? realBins.mins : zeros(), kmBins = realBins ? realBins.km : zeros();
   const byDist = zoneAxis === 'dist';
-  const bins = byDist ? kmBins : minsBins;   // what the bars are drawn at
-  const emptyMsg = realBins ? null
-    : (daily[zoneDay] > 0 ? 'No VDOT yet this far back in history — nothing to judge the pace against.' : 'No run that day.');
+  const maxVal = Math.max(1, ...hists.flatMap(hh => hh ? (byDist ? hh.km : hh.mins) : []));
+  const ws = workoutsOf(zoneDay);
   const legend = `<span class="item"><span class="swatch" style="background:${leadRamps.standing}"></span>Standing</span>` +
     `<span class="item"><span class="swatch" style="background:${leadRamps.walking}"></span>Walking</span>` +
     `<span class="item"><span class="swatch" style="background:${leadRamps.recovery}"></span>Recovery</span>` +
@@ -2458,18 +2643,42 @@ function renderZonePanel() {
   // autolap, a manual entry), paceHistogramFor() falls back to treating that
   // activity as one lap at its average pace, and all of its minutes land in a
   // single bin no matter how many ZONE_BARS are configured.
-  zoneBody.innerHTML = `<div class="zone-legend">${legend}</div>` +
-    `<div class="zone-hover" id="zoneHoverInfo">${realBins ? 'Hover a bar to see its pace range' : '&nbsp;'}</div>` +
-    `<div class="zone-canvas-wrap">` +
-      `<canvas id="chartZone"></canvas>` +
-      (emptyMsg ? `<div class="zone-empty-overlay">${emptyMsg}</div>` : '') +
-    `</div>`;
-  const cvZ = document.getElementById('chartZone');
+  // Each type's share of the run's score, in the order the histogram lays them
+  // out — recovery (the "misc" end, standing and walking score nothing) then
+  // easy..repetition — each in its own colour, so the winner can be read
+  // against the rest.
+  const scoreShares = sc => {
+    const tot = sc ? sc.reduce((x, y) => x + y, 0) : 0;
+    if (!(tot > 0)) return '';
+    return ` · <span class="zone-shares" title="Share of the workout-type score: recovery / easy / marathon / threshold / interval / repetition">${
+      sc.map((v, t) => `<span style="color:${workoutColour({ type: t })}">${nf0.format(v / tot * 100)}%</span>`).join(' / ')}</span>`;
+  };
+  const runHead = a => {
+    const act = acts[a], w = ws[a];
+    const clock = new Date(act.t * 1000).toISOString().slice(11, 16);   // `t` is local wall clock
+    return `<div class="zone-run">${acts.length > 1 ? `Run ${a + 1} of ${acts.length}` : 'Run'} · ${clock} · ${km(act.km)} km · ${durStr(act.sec)}` +
+      (w ? ` · <span style="color:${workoutColour(w)}">${WORKOUT_TYPES[w.type].label}</span>` : '') +
+      scoreShares(zoneScoresOf(zoneDay)[a]) + `</div>`;
+  };
+  zoneBody.innerHTML = `<div class="zone-legend">${legend}</div>` + hists.map((realBins, a) =>
+    (acts.length ? runHead(a) : '') +
+    `<div class="zone-hover">${realBins ? 'Hover a bar to see its pace range' : '&nbsp;'}</div>` +
+    `<div class="zone-canvas-wrap"><canvas class="chartZone"></canvas></div>`).join('');
+  const cvs = zoneBody.querySelectorAll('.chartZone'), hovers = zoneBody.querySelectorAll('.zone-hover');
+  hists.forEach((realBins, a) => {
+    const emptyMsg = realBins ? null
+      : (daily[zoneDay] > 0 ? 'No VDOT yet this far back in history — nothing to judge the pace against.' : 'No run that day.');
+    if (emptyMsg) cvs[a].insertAdjacentHTML('afterend', `<div class="zone-empty-overlay">${emptyMsg}</div>`);
+    mountZoneHist(cvs[a], hovers[a], realBins ? realBins.mins : zeros(), realBins ? realBins.km : zeros(),
+                  !!realBins, maxVal, byDist, vdotHere);
+  });
+}
+function mountZoneHist(cvZ, hoverInfo, minsBins, kmBins, real, maxVal, byDist, vdotHere) {
+  const bins = byDist ? kmBins : minsBins;   // what the bars are drawn at
   const ctxZ = cvZ.getContext('2d');
   const { w, h } = fitCanvas(cvZ, ctxZ);
   const pad = { l: 40, r: 10, t: 10, b: 22 };
   const pw = w - pad.l - pad.r, ph = h - pad.t - pad.b;
-  const maxVal = Math.max(1, ...bins);
   const ticks = niceTicks(maxVal * 1.12);
   const tickDec = Number.isInteger(ticks.step) ? 0 : 1;   // a 2.5 step shouldn't read "3"
 
@@ -2554,9 +2763,8 @@ function renderZonePanel() {
   // No bin-hover interaction on an empty stand-in day — there's nothing behind
   // the zero-height bars to report (and vdotHere may not even exist), so the
   // canvas just sits there showing the same axes/grid as a real day, quietly.
-  if (!realBins) return;
+  if (!real) return;
 
-  const hoverInfo = document.getElementById('zoneHoverInfo');
   const binAt = px => {
     const slot = Math.floor((px - pad.l) / bw);
     if (slot === STANDING_BIN || slot === WALKING_BIN || slot === RECOVERY_BIN) return slot;
@@ -2585,7 +2793,10 @@ function renderZonePanel() {
     }
     const zb = b - ZONE_BIN_OFFSET, zone = Math.floor(zb / ZONE_BARS), sub = zb % ZONE_BARS;
     const { paceSlow, paceFast, openFast } = paceRangeFor(b);
-    const range = openFast ? `faster than ${paceStr(paceFast)}/km`
+    // The open top bin's only real edge is its slow one: its "fast" edge is the
+    // practical 120% ceiling, not a boundary, so quoting it left a gap after
+    // the bin below ("3:27–3:18", then "faster than 3:10").
+    const range = openFast ? `faster than ${paceStr(paceSlow)}/km`
       : `${paceStr(paceSlow)}–${paceStr(paceFast)}/km`;
     hoverInfo.textContent = `${ZONES[zone].label} ${sub} · ${range} · ${amount}`;
   });
@@ -2599,16 +2810,20 @@ function renderZonePanel() {
 const tbody = document.getElementById('tbody');
 let tableKey = '';
 function renderTable(i0, i1) {
-  const key = i0 + ':' + i1;
+  // Keyed on what's in it, not just which days: the Workout column moves with
+  // every setting behind the scores, so no handler has to remember to clear this.
+  const key = [i0, i1, WINDOW_VDOT, MIN_LAP_M, gapVdot, gapPace, wt.wtExp, wt.wtShare].join(':');
   if (key === tableKey) return;
   tableKey = key;
   const rows = [];
   for (let i = Math.min(i1, i0 + 400); i >= i0; i--) {
     rows.push(`<tr><td>${fmtShort.format(dateAt(i))}</td><td>${daily[i] > 0 ? km(daily[i]) : '—'}</td><td>${km(avg[i])}</td><td>${perWeekAt(i).toFixed(1)}</td><td>${perWeekRunsAt(i).toFixed(1)}</td><td>${target[i] > 0 ? km(target[i]) : '—'}</td><td>${(() => { const c = classify(i);
-        return c ? `<span style="color:${fullColour(c)}">${DIR_ARROW[c.dir]} ${DIR_LABEL[c.dir]}</span> <span style="color:var(--muted)">${verdictWhy(c)}</span>`
-                  : '<span style="color:var(--text-secondary)">— no run</span>'; })()}</td></tr>`);
+        return c ? `<span style="color:${fullColour(c)}">${DIR_ARROW[c.dir]} ${DIR_LABEL[c.dir]}</span><br><span class="why">${verdictWhy(c)}</span>`
+                  : '<span style="color:var(--text-secondary)">— no run</span>'; })()}</td><td>${
+        workoutsOf(i).map(w => w ? `<span style="color:${workoutColour(w)}">${WORKOUT_TYPES[w.type].label}</span> <span style="color:var(--muted)">${w.why}</span>`
+                                 : '<span style="color:var(--text-secondary)">no timing</span>').join('<br>+ ') || '—'}</td></tr>`);
   }
-  if (i1 - i0 > 400) rows.push(`<tr><td colspan="7" style="text-align:left;color:var(--muted)">Showing the most recent 400 of ${i1-i0+1} days in view — zoom in for the rest.</td></tr>`);
+  if (i1 - i0 > 400) rows.push(`<tr><td colspan="8" style="text-align:left;color:var(--muted)">Showing the most recent 400 of ${i1-i0+1} days in view — zoom in for the rest.</td></tr>`);
   tbody.innerHTML = rows.join('');
 }
 
@@ -2739,7 +2954,8 @@ document.getElementById('reset').onclick = () => {
   vdotNearPct = PREF_DEFAULTS.vdotNearPct;
   maxBehind = PREF_DEFAULTS.maxBehind;
   fadeWindows = PREF_DEFAULTS.fadeWindows;
-  colourVerdicts = PREF_DEFAULTS.colourVerdicts;
+  barColourMode = PREF_DEFAULTS.barColour;
+  for (const k of Object.keys(wt)) wt[k] = PREF_DEFAULTS[k];
   ZONE_BARS = PREF_DEFAULTS.zoneBars;
   zoneAxis = PREF_DEFAULTS.zoneAxis;
   visPanels = { ...PREF_DEFAULTS.panels };
@@ -2826,8 +3042,7 @@ function syncControls() {
   zoneAxisSel.value = zoneAxis;
   maxBehindBox.checked = maxBehind;
   fadeWindowsBox.checked = fadeWindows;
-  colourVerdictsBox.checked = colourVerdicts;
-  document.getElementById('row-verdicts').classList.toggle('off', !colourVerdicts);
+  syncBarColour();
   syncPanelVisibility();
   syncLineVisibility();
 }
@@ -2840,13 +3055,37 @@ function applyWindow() {
   drawAll();
 }
 
-const colourVerdictsBox = document.getElementById('colourVerdicts');
-colourVerdictsBox.onchange = () => {
-  colourVerdicts = colourVerdictsBox.checked;
-  document.getElementById('row-verdicts').classList.toggle('off', !colourVerdicts);
+// Only the legend and thresholds for the scheme actually in use are shown, so
+// the sidebar isn't carrying two schemes' worth of explanation at once.
+const barColourSel = document.getElementById('barColour');
+const WT_INPUTS = { wtExp: 'wtExp', wtShare: 'wtShare' };
+const WT_LIMITS = { wtExp: [0, 4, 2], wtShare: [1, 100, 1] };   // lo, hi, steps per unit
+function syncBarColour() {
+  barColourSel.value = barColourMode;
+  document.getElementById('bc-verdict').hidden = barColourMode !== 'verdict';
+  document.getElementById('bc-workout').hidden = barColourMode !== 'workout';
+  for (const k in WT_INPUTS) document.getElementById(WT_INPUTS[k]).value = wt[k];
+}
+barColourSel.onchange = () => {
+  barColourMode = barColourSel.value;
+  syncBarColour();
   savePrefs();
-  drawAll();   // a drawing choice only — the verdicts themselves don't change
+  refreshReadout();
+  drawAll();   // a drawing choice only — neither classification changes
 };
+for (const k in WT_INPUTS) {
+  const el = document.getElementById(WT_INPUTS[k]);
+  el.onchange = el.oninput = () => {
+    const [lo, hi, per] = WT_LIMITS[k];
+    const v = Math.round(Number(el.value) * per) / per;
+    if (el.value === '' || !Number.isFinite(v) || v < lo || v > hi) return;   // ignore half-typed values
+    wt[k] = v;
+    savePrefs();
+    refreshReadout();
+    renderZonePanel();   // its run headings carry the type and score shares
+    drawAll();
+  };
+}
 const fadeWindowsBox = document.getElementById('fadeWindows');
 fadeWindowsBox.onchange = () => {
   fadeWindows = fadeWindowsBox.checked;
@@ -2938,11 +3177,14 @@ gapVdotChk.onchange = () => {
   drawAll();
 };
 // Only re-bins the histogram's laps — VDOT, and so the zones, stay put.
+// Also moves the workout types, so the bars, readout and table follow.
 const gapPaceChk = document.getElementById('gapPace');
 gapPaceChk.onchange = () => {
   gapPace = gapPaceChk.checked;
   savePrefs();
+  refreshReadout();
   renderZonePanel();
+  drawAll();
 };
 // Draw-time only: both measures are already in every histogram.
 const zoneAxisSel = document.getElementById('zoneAxis');

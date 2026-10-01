@@ -119,7 +119,8 @@ rather than by luck.
 The distance row's own sub-line used to spell out the day's target ("target 8.59
 km · weekly ÷ 6.0 · no long runs"). It is gone: the verdict stopped being read
 against that number, so it was a figure with nothing left to explain. All that
-sub-line carries now is "longest 10.55 km" on a day with more than one run. The
+sub-line carries now, on a day with more than one run, is each run's distance in
+the order they were run ("8.06 + 10.52 km"). The
 target itself is still in the data table's Target column and behind the Today's
 target tile.
 
@@ -269,7 +270,9 @@ All of it is derived in-browser from one array of daily distances.
   what you want when comparing two windows against *each other* rather than
   against the max: every crossing is legible at full strength, at the cost of a
   busier panel. It's what makes the max read as the primary line without being
-  any thicker, so it's on by default. No area fill either — the single-line panels this grew
+  any thicker. It was on by default and is now **off** (as is the MAX line
+  itself, `visLines.max`), since with MAX hidden there is nothing for the fade
+  to defer to. No area fill either — the single-line panels this grew
   out of each had one, and the VDOT panel still does, but with five lines
   crossing each other a shaded region under the max only reads as the max line
   having a shadow. **`maxBehind`** flips the z-order: MAX is the upper envelope,
@@ -395,6 +398,112 @@ All of it is derived in-browser from one array of daily distances.
   the rate was computed against a 7-day floor, which was both inconsistent and not
   what the chart is for.
 
+## Workout type (the other bar colouring)
+
+`barColour` (the "Colour bars by" select) picks what a run's bar colour says:
+`'verdict'` (everything above), `'workout'` (**the default**), or `'none'`. Workout type
+paints each run day in the **pace-zone histogram's own strong colours** —
+repetition/interval/threshold/marathon/easy — plus Recovery in the histogram's
+own `leadRamps.recovery` grey-blue. Rest days keep the `--rest` stub either way.
+The readout pill and a new table column name the type and the pooled share
+that decided it ("71% threshold+", "57% interval+").
+
+**Scoring, then pooling from the hard end.** Every lap of a run scores
+**speed (km/h)^`wtExp` × distance (km)** towards the zone it was run in
+(`zoneScoresOf()`). Then `workoutFromScores()` walks from the hardest zone
+down, pooling each zone's score with every faster zone's, and the **first pool
+to reach `wtShare`% of the run's total** is the type:
+
+| pool | type |
+|---|---|
+| repetition | repetition |
+| interval + repetition | interval |
+| threshold + faster | threshold |
+| marathon + faster | marathon |
+| easy + faster | easy |
+| none reached it | recovery |
+
+Two settings, in the sidebar: "Speed weight" `wtExp` (0–4 in halves, default
+**2**; 0 is plain distance in each zone. It used to be × *duration*, which
+at the same exponent is one power of speed weaker: the old default, speed² ×
+minutes, is exactly the new exponent **1**, and gives identical counts) and "Wins at"
+`wtShare` (1–100%, default **35**; 50 would be a strict majority, and 35 was
+picked by use as the point where hard sessions read as hard). Standing and Walking
+laps score nothing. Recovery is what's left when no pool reaches the share.
+
+How this got here, because each step fixed a real run:
+
+1. **A ladder of minute thresholds** (5 min repetition, 10 min interval+, …).
+   It turned on whether a few minutes of strides happened to clear a cut-off
+   rather than on what most of the run was.
+2. **Highest single zone score wins.** It fixed that, but then **30 Sep 2026**
+   (43% easy, 28% interval, 29% repetition under the old × duration score) came out Easy, because the hard
+   work was split across two zones and neither beat the easy running on its own.
+3. **Pooling from the hard end** (now). 30 Sep is Interval at 57% interval+,
+   and **16 Sep 2026** (3 × 8 min threshold, then strides) is Threshold.
+   With × distance at exponent 2 they read 32/0/0/32/36 (Interval) and 22/0/65/0/13
+   (Threshold) across easy/marathon/threshold/interval/repetition.
+
+Stale `wtRepMin`…`wtEasyPct` prefs from the ladder are ignored and dropped on
+the next save. A probe re-deriving every run's scores straight from its laps agrees on all
+665 runs of a real export. Counts by `wtExp` at `wtShare` 50, before `gapPace` became the default
+(recovery/easy/marathon/threshold/interval/repetition). At the current defaults
+(`wtExp` 2, `wtShare` 35, `gapPace` on) they are 4 / 322 / 237 / 52 / 30 / 20.
+
+| `wtExp` | counts |
+|---|---|
+| 0 | 5 / 373 / 226 / 44 / 10 / 7 |
+| 1 | 5 / 364 / 223 / 49 / 16 / 8 |
+| 2 | 5 / 360 / 219 / 52 / 18 / 11 |
+| 3 | 5 / 359 / 214 / 52 / 19 / 16 |
+
+Marathon stays high at every setting. That's this runner's training style (a
+lot of running right at the easy/marathon boundary), not a quirk of the rule.
+
+It reuses the histogram's own lap binning, `binLap()` (split out of
+`paceHistogramFor()` along with `lapsOfAct()`/`lapsOfDay()`), so the bar colour
+and the histogram can't disagree about which zone a lap was in, and it follows
+`gapPace`, the VDOT window, `minLapM` and `gapVdot` exactly as the histogram
+does. `ZONE_BARS` doesn't affect it. **Per run, not per day** (`workoutsOf(i)`,
+one entry per activity): a day with an interval session and an easy jog is both,
+not a blend of them. Scores are cached in `zoneScoresOf()` (one array per
+activity), keyed on those four settings plus `wtExp` (`wtShare` is applied after, so
+it isn't in the key), so handlers don't have
+to invalidate anything.
+
+## Days with more than one run
+
+58 days of a real export have two or more runs (54 with two, 4 with three), and
+37 of those mix workout types. Three places show them apart:
+
+- **Stacked bars.** The day's bar is split into one segment per run, earliest at
+  the bottom, with a 1px `--surface-1` seam at each join. The axis is log, so
+  heights don't add: the bar keeps **the day's total height** and each segment
+  gets its share of the distance as a share of that height (linear inside the
+  bar). The alternative, drawing the bottom run at its own log height, crushes
+  whatever sits on top of it into a sliver. `barSegments(i)` gives the
+  segments. In verdict mode they all share the day's verdict colour (a verdict
+  is about the day), so only the seam shows the split. In workout mode each
+  segment has its own type's colour.
+- **The readout.** Its distance sub-line lists each run, and in workout mode the
+  pill names each run's type in order ("Marathon + Easy") with the figures
+  behind them, the border taking the hardest one.
+- **One pace-zone histogram per run**, stacked in the zone card under a
+  "Run 1 of 2 · 12:12 · 8.06 km · 37:22 · Marathon" heading (on a single-run
+  day, just "Run · 18:05 · …", so the time, distance and type are always there).
+  The heading ends with each type's share of that run's workout score,
+  recovery / easy / marathon / threshold / interval / repetition, each in its
+  own colour ("0% / 29% / 0% / 62% / 0% / 9%"). Recovery stands in for the
+  "misc" end, since Standing and Walking score nothing. They share one
+  y-scale so their bars compare directly. `paceHistogramFor(i, a)` takes an
+  optional activity index. The per-run histograms sum to the day's one to
+  1.4e-14. `mountZoneHist()` is the
+  per-canvas half of `renderZonePanel()`, split out so it can run once per run.
+
+Run order comes from each activity's start time `t`, which is now stored on
+every `acts` entry, with a day's `acts` sorted by it. The CSV isn't in time
+order, so file order says nothing about which run came first.
+
 ## VDOT and pace zones
 
 **VDOT** is Jack Daniels' fitness score, derived here rather than taken from
@@ -444,7 +553,7 @@ ceiling" and "how often am I running" are different-timescale questions). It's a
 close to the ceiling without beating it leaves no mark on it at all: the line
 carries on flat, and a day worth noticing looks exactly like a rest week. The
 dots put those days back. One per run day whose own reading (`dayVdot[i]`) is
-within `vdotNearPct` (default 10%) of the peak in force *that day* (`vdot[i]`),
+within `vdotNearPct` (default 5%) of the peak in force *that day* (`vdot[i]`),
 drawn at **the day's own value**, not on the line — so a near miss sits just
 under the line and a day that set, or re-equalled, the peak sits on it.
 
@@ -461,7 +570,7 @@ Two things the wide range forces:
 
 - **The dot radius follows the crowding**, not the zoom: 2.75px down to 1.2px,
   from the mean spacing between the dots *actually drawn* (`plotW() / n * 0.3`,
-  clamped). At the 10% default a few dozen dots want to look aimable; at 100%
+  clamped). At the 5% default a few dozen dots want to look aimable; at 100%
   a fat dot would be a solid band. The surface-coloured ring is dropped below
   r 2.2, where there is no room for it inside the dot and it only reads as a
   paler dot.
@@ -513,7 +622,8 @@ parsed splits (an older one, or one Runalyze didn't lap) falls back to being
 treated as a single lap — **per activity**, so one run of a day having splits
 never drops the other run's minutes, nor averages the two into one pace.
 
-**Grade-adjusted pace** is **two separate toggles**, both **off by default**, each
+**Grade-adjusted pace** is **two separate toggles** — `gapPace` **on** by
+default, `gapVdot` **off** — each
 swapping the *time* its half of the pace maths reads for the equivalent flat one:
 
 - **`gapVdot`** ("Grade-adjusted pace for VDOT", under VDOT panel) — the VDOT
@@ -529,9 +639,11 @@ swapping the *time* its half of the pace maths reads for the equivalent flat one
 They used to be one `useGap` that did both; a stored entry still carrying it
 turns both on, and is dropped on the next save. Neither moves anything else:
 distances, volume, frequency, targets and
-verdicts are all untouched, because kilometres run are kilometres run. Off by
-default since the raw pace is what was actually run — this is a second opinion on
-it, not a correction.
+verdicts are all untouched, because kilometres run are kilometres run.
+`gapVdot` stays off by default because the raw pace is what was actually run and
+the fitness ceiling should be read off that. `gapPace` is on by default because
+for the histogram and the workout type, how hard a climb was matters more than
+how slow its raw pace looked.
 
 Runalyze's `gap` column is grade-adjusted **speed in km/h**, not a pace and not a
 factor (checked against real activities' own distance/time: a flat run's `gap`
@@ -570,7 +682,7 @@ above) with the boundary between two neighbours at their midpoint, so the bands
 tile the %VDOT axis with no gap or overlap. The fast end (above repetition) is
 still closed off at a practical 120% ceiling purely so the top zone has something
 finite to split into sub-bands — not a physiological limit, just where the binning
-stops mattering. The sub-band count per zone is `ZONE_BARS`, a setting (default 5,
+stops mattering. The sub-band count per zone is `ZONE_BARS`, a setting (default 3,
 adjustable 1–20 — "Pace-zone bars" in the settings sidebar). `zoneBandFor()` maps
 a %VDOT to one of the `5 * ZONE_BARS` bins (`zone*ZONE_BARS + subBand`, continuous
 easy0.. , marathon0.., ...).
@@ -641,19 +753,21 @@ wiring up a `mousemove` listener that would have nothing real to say.
 
 Hovering a bin (this redraws the whole bar canvas — cheap, unlike the lap walk
 above it, which only runs once per triggering event) shows its pace range in
-`#zoneHoverInfo`:
+that histogram's own `.zone-hover` line:
 the two %VDOT bounds either side of the bin, converted back to pace via
 `velocityFromVo2()`. Higher %VDOT is faster (lower min/km), so the bin's *slow*
 edge comes from its *lower* bound and vice versa. Repetition's fastest bin reads
 its open ceiling off `ZONE_BOUND_PCT`'s practical 120% bound (see the comment on
 that constant) rather than a real boundary, so it's reported as open-ended
-("faster than") instead of a two-sided range. Standing, Walking and Recovery
+instead of a two-sided range: "faster than" **its slow edge**, the one real
+boundary it has. It used to quote the fake 120% edge, so the ranges read
+"3:27–3:18", then "faster than 3:10", with a gap between them. Standing, Walking and Recovery
 aren't %VDOT bins at all, so their hover text reports their own fixed or per-day
 pace bounds directly rather than going through `paceRangeFor()`. Every bin's
 hover text ends with **both** measures, "3.2 min · 0.60 km", whichever one the
 bars are drawn at.
 
-**Bar height** (`zoneAxis`, "Bar height" under Pace zones, `'time'` by default)
+**Bar height** (`zoneAxis`, "Bar height" under Pace zones, `'dist'` by default)
 picks whether the bars are the minutes or the kilometres spent in each bin.
 `paceHistogramFor()` returns both — `{ mins, km }`, two arrays of the same
 shape — so the setting is draw-time only and its handler just re-renders the
@@ -757,7 +871,7 @@ for a yellow that passes, because none does.
 `runviz.prefs.v1` holds everything the settings sidebar and the what-if box can be
 set to, so the page opens the way it was left: `windowBase`, `windowMult`,
 `windowVdot`, `minLapM`, `gapVdot`, `gapPace`, `vdotNearDots`, `vdotNearPct`,
-`colourVerdicts`, `zoneBars`, `zoneAxis`, `maxBehind`, `fadeWindows`, `panels` (`{vol, freq, runs, vdot, zone}`, each independently
+`barColour` (`'verdict'`/`'workout'`/`'none'`; a legacy `colourVerdicts: false` reads as `'none'`), `wtExp` (0–4, halves), `wtShare` (1–100), `zoneBars`, `zoneAxis`, `maxBehind`, `fadeWindows`, `panels` (`{vol, freq, runs, vdot, zone}`, each independently
 show/hide — see below), `lines` (`{max, s0, s1, s2, s3}` — slot keys, which of
 the five lines the three window panels draw), and `plan` (`null` = the what-if box follows real
 history, `{km, days}` = edited). Three rules:
@@ -802,9 +916,9 @@ the defaults, and a remembered setting has to overwrite them at boot.
 - **Reset** in the settings sidebar: the window base and multiple, the VDOT
   window, the min-lap distance, both grade-adjusted-pace toggles, the near-max dots
   and their percentage, the pace-zone bar
-  count and bar height, the MAX draw order, the window-line fade, the verdict colour toggle, the
+  count and bar height, the MAX draw order, the window-line fade, the bar-colour mode and the two workout-type settings, the
   five panel show/hide toggles and the five line show/hide toggles back to their
-  defaults (all shown), plus the view back to its default span. It does *not*
+  defaults (all shown except MAX), plus the view back to its default span. It does *not*
   touch the what-if.
 - **reset** in the Today's target tile: clears the what-if back to following real
   history, and nothing else.
@@ -845,7 +959,7 @@ much height:
 | Volume & frequency panels | the five line show/hide swatches, the three panel show/hide boxes, `windowBase`/`windowMult`, `fadeWindows`, `maxBehind` |
 | VDOT panel | its show/hide, `windowVdot`, `minLapM`, `gapVdot`, `vdotNearDots`/`vdotNearPct` |
 | Pace zones | its show/hide, `zoneBars`, `zoneAxis`, `gapPace` |
-| Verdicts | the four-verdict/rest colour legend and `colourVerdicts` |
+| Bar colour | the `barColour` select, then whichever of its two legends is in use: the four-verdict/rest legend, or the workout-type legend plus its five thresholds |
 
 Two placements are worth naming. **The legend is split across two groups**, not
 kept as one block — even though both halves are now literally the same four
@@ -880,7 +994,7 @@ compete as a fifth category. The VDOT panel keeps its own `--vdot` violet; it is
 a single-series panel and not part of this scheme.
 
 Rest days are a pale neutral `--rest` (this is also what the bar panel's rest-day
-stubs are drawn in); with `colourVerdicts` switched off every run falls back to a
+stubs are drawn in); with `barColour` set to `'none'` every run falls back to a
 mid neutral `--nocolour`.
 
 The earlier per-slot hues (`--w1` `#0060a6` blue, `--w4` `#00ab86` green, `--w16`
@@ -959,7 +1073,7 @@ way but on a different basis — see "VDOT and pace zones" above.
   activity starting between 22:00 and midnight — nothing else moves.
 - Each activity is filed under that day. The day gets `values` (total km),
   `maxRun` (longest single run) and `nRuns` (count) — and then **`acts`, one row
-  per activity**, each `{km, sec, gsec, laps}` with its own parsed `splits` (each
+  per activity**, each `{t, km, sec, gsec, laps}` (sorted by start time `t`) with its own parsed `splits` (each
   lap `{km, sec, gsec}` in turn). 57 of my days have more than one run, which is
   why the times are **not** summed into a day total: everything that reads a
   *pace* has to read one continuous effort. See "VDOT and pace zones" above.
@@ -968,14 +1082,14 @@ way but on a different basis — see "VDOT and pace zones" above.
   pre-ticks a guess: the busiest sport with median speed 7.5–17 km/h, plus anything
   comparable in volume. Speed alone over-selects — cross-country skiing at 8.2 km/h
   sits squarely in running range.
-- Parsed data is cached in `localStorage` under `runviz.data.v2` (`SCHEMA = 6`).
+- Parsed data is cached in `localStorage` under `runviz.data.v2` (`SCHEMA = 7`).
   `SCHEMA` guards what the cached numbers *mean*, not only their shape — the day
   attribution fix bumped it to 3 with the shape unchanged, because the cached values
   were wrong and can only be rebuilt from the CSV. It was bumped again to 4 when
   `sec`/`laps` were added for VDOT, to 5 when the grade-adjusted times
   (`gsec` per day, `gsec` per lap, `gapCount`) joined them, and to 6 when the
-  day-level `sec`/`gsec`/`laps` were replaced by per-activity `acts` — every
-  time because the shape itself changed: an older cached copy simply doesn't
+  day-level `sec`/`gsec`/`laps` were replaced by per-activity `acts`, and to 7 when each activity gained its start time `t` —
+  every time because the shape itself changed: an older cached copy simply doesn't
   have those arrays. A stale schema opens the gate
   with `staleCache` set, which says why it is asking for the file again instead of
   doing it silently. Selected sports in `runviz.sports.v2`.
@@ -1005,7 +1119,7 @@ Roughly: `recompute` (the four windows' series + their max + `computeTargets`) �
   *above* that call or the whole script dies on a `const`/`let` TDZ error, which
   surfaces confusingly as "Cannot access 'C' before initialization". `loadPrefs()`
   therefore sits above `WINDOWS`; `savePrefs()` may
-  *reference* things declared later (`colourVerdicts`, `plan`) because it is only ever
+  *reference* things declared later (`barColourMode`, `wt`, `plan`) because it is only ever
   *called* later.
 - **`[hidden]` vs `display`.** An author `display:` rule beats the UA stylesheet
   behind the `hidden` attribute. `.gate[hidden] { display: none }` exists for that
