@@ -427,7 +427,7 @@ All of it is derived in-browser from one array of daily distances.
 `barColour` (the "Colour bars by" select) picks what a run's bar colour says:
 `'verdict'` (everything above), `'workout'` (**the default**), or `'none'`. Workout type
 paints each run day in the **pace-zone histogram's own strong colours** —
-repetition/interval/threshold/marathon/easy — plus Recovery in the histogram's
+repetition/interval/threshold/marathon/endurance — plus Recovery in the histogram's
 own `leadRamps.recovery` grey-blue. Rest days keep the `--rest` stub either way.
 The readout pill and a new table column name the type and the pooled share
 that decided it ("71% threshold+", "57% interval+").
@@ -444,7 +444,7 @@ to reach `wtShare`% of the run's total** is the type:
 | interval + repetition | interval |
 | threshold + faster | threshold |
 | marathon + faster | marathon |
-| easy + faster | easy |
+| endurance + faster | endurance |
 | none reached it | recovery |
 
 Two settings, in the sidebar: "Speed weight" `wtExp` (0–4 in halves, default
@@ -461,18 +461,21 @@ How this got here, because each step fixed a real run:
    It turned on whether a few minutes of strides happened to clear a cut-off
    rather than on what most of the run was.
 2. **Highest single zone score wins.** It fixed that, but then **30 Sep 2026**
-   (43% easy, 28% interval, 29% repetition under the old × duration score) came out Easy, because the hard
-   work was split across two zones and neither beat the easy running on its own.
+   (43% endurance, 28% interval, 29% repetition under the old × duration score) came out Endurance,
+   because the hard work was split across two zones and neither beat the easy
+   running on its own.
 3. **Pooling from the hard end** (now). 30 Sep is Interval at 57% interval+,
    and **16 Sep 2026** (3 × 8 min threshold, then strides) is Threshold.
    With × distance at exponent 2 they read 32/0/0/32/36 (Interval) and 22/0/65/0/13
-   (Threshold) across easy/marathon/threshold/interval/repetition.
+   (Threshold) across endurance/marathon/threshold/interval/repetition.
 
 Stale `wtRepMin`…`wtEasyPct` prefs from the ladder are ignored and dropped on
 the next save. A probe re-deriving every run's scores straight from its laps agrees on all
 665 runs of a real export. Counts by `wtExp` at `wtShare` 50, before `gapPace` became the default
-(recovery/easy/marathon/threshold/interval/repetition). At the current defaults
-(`wtExp` 2, `wtShare` 35, `gapPace` on) they are 4 / 322 / 237 / 52 / 30 / 20.
+(recovery/endurance/marathon/threshold/interval/repetition), and from before the
+Endurance floor moved to 59% — so the Recovery/Endurance split in them is the old
+one. At the current defaults (`wtExp` 2, `wtShare` 35, `gapPace` on) they are
+**31 / 295 / 237 / 52 / 30 / 20**.
 
 | `wtExp` | counts |
 |---|---|
@@ -482,7 +485,7 @@ the next save. A probe re-deriving every run's scores straight from its laps agr
 | 3 | 5 / 359 / 214 / 52 / 19 / 16 |
 
 Marathon stays high at every setting. That's this runner's training style (a
-lot of running right at the easy/marathon boundary), not a quirk of the rule.
+lot of running right at the endurance/marathon boundary), not a quirk of the rule.
 
 It reuses the histogram's own lap binning, `binLap()` (split out of
 `paceHistogramFor()` along with `lapsOfAct()`/`lapsOfDay()`), so the bar colour
@@ -510,13 +513,13 @@ to invalidate anything.
   is about the day), so only the seam shows the split. In workout mode each
   segment has its own type's colour.
 - **The readout.** Its distance sub-line lists each run, and in workout mode the
-  pill names each run's type in order ("Marathon + Easy") with the figures
+  pill names each run's type in order ("Marathon + Endurance") with the figures
   behind them, the border taking the hardest one.
 - **One pace-zone histogram per run**, stacked in the zone card under a
   "Run 1 of 2 · 12:12 · 8.06 km · 37:22 · Marathon" heading (on a single-run
   day, just "Run · 18:05 · …", so the time, distance and type are always there).
   The heading ends with each type's share of that run's workout score,
-  recovery / easy / marathon / threshold / interval / repetition, each in its
+  recovery / endurance / marathon / threshold / interval / repetition, each in its
   own colour ("0% / 29% / 0% / 62% / 0% / 9%"). Recovery stands in for the
   "misc" end, since Standing and Walking score nothing. They share one
   y-scale so their bars compare directly. `paceHistogramFor(i, a)` takes an
@@ -540,7 +543,7 @@ percentage-of-max its duration implies gives that lap's *implied* VDOT — the s
 arithmetic a race calculator uses for a race, generalised to any lap: an easy lap
 implies a low VDOT (low cost, and %max is close to 1 anyway over a long duration),
 a genuinely hard lap implies close to the runner's real ceiling. Verified against
-vdoto2.com's own worked example — VDOT 51.8 round-trips to its quoted easy/marathon/
+vdoto2.com's own worked example — VDOT 51.8 round-trips to its quoted endurance/marathon/
 threshold/interval/repetition paces (5:14/4:23/4:08/3:48/3:33 min/km) within rounding.
 
 A day's own VDOT is the **max implied VDOT over every effort that day**: each
@@ -700,7 +703,7 @@ the figure "grade-adj." when the time behind it has been adjusted, rather than
 quietly disagreeing with what Runalyze and the watch say — on its second line,
 next to the VDOT figure, for the width reason in the readout section above.
 
-**Pace zones** (easy/marathon/threshold/interval/repetition) are five %VDOT bands,
+**Pace zones** (endurance/marathon/threshold/interval/repetition) are five %VDOT bands,
 anchored at 65.7/81.8/88.0/97.6/106.2% (back-solved from the vdoto2.com example
 above) with the boundary between two neighbours at their midpoint, so the bands
 tile the %VDOT axis with no gap or overlap. The fast end (above repetition) is
@@ -709,9 +712,9 @@ finite to split into sub-bands — not a physiological limit, just where the bin
 stops mattering. The sub-band count per zone is `ZONE_BARS`, a setting (default 3,
 adjustable 1–20 — "Pace-zone bars" in the settings sidebar). `zoneBandFor()` maps
 a %VDOT to one of the `5 * ZONE_BARS` bins (`zone*ZONE_BARS + subBand`, continuous
-easy0.. , marathon0.., ...).
+endurance0.., marathon0.., ...).
 
-Easy's slow end used to be closed off the same way, at a practical 40% floor —
+Endurance's slow end used to be closed off the same way, at a practical 40% floor —
 which meant a genuinely slow recovery jog, actual walking, and standing still at
 a red light all landed in the same bin. They no longer do. Three fixed or
 per-day thresholds sort a lap out **before** it ever reaches `zoneBandFor()`:
@@ -722,27 +725,44 @@ per-day thresholds sort a lap out **before** it ever reaches `zoneBandFor()`:
 - **Walking** — between `STANDING_MAX_VEL` and `WALKING_MAX_VEL` (10:00/km),
   also fixed in absolute pace for the same reason: walking speed doesn't scale
   with running fitness.
-- **Recovery** — between `WALKING_MAX_VEL` and easy's real floor (below): a
-  genuine jog, just too slow relative to *this* runner's fitness to call
-  properly "easy".
+- **Recovery** — between `WALKING_MAX_VEL` and endurance's real floor (below): a
+  genuine jog, just too slow relative to *this* runner's fitness to count as
+  endurance training.
 
-Easy's own floor, `EASY_FLOOR_PCT` (45% VDOT, picked so a mid-50s VDOT lands it
-around 7:00/km rather than back-solved from anything), is what separates
-Recovery from real Easy training. `easyFloorPct()` also clamps that floor to
+Endurance's own floor, `ENDURANCE_FLOOR_PCT`, is **59% VDOT** — Daniels' own
+number. He puts the E zone at 59–74% VO₂max, and this page's
+Endurance/Marathon boundary already lands at 73.75% (the midpoint of the 65.7
+and 81.8 anchors), so a 59% floor makes the band *exactly* his E zone rather
+than an approximation of it. `enduranceFloorPct()` also clamps that floor to
 never sit below what `WALKING_MAX_VEL` works out to in %VDOT terms for that
 runner's VDOT — otherwise Recovery would have to cover paces faster than
 walking, which makes no sense — nor above the marathon boundary. For a low
 enough VDOT this collapses Recovery to nothing: if walking pace is already real
-aerobic effort for that runner, there's no slower-than-easy jog left to call
-recovery. Only repetition's fast edge is still reported open-ended; every other
-edge, including easy's floor, is now a real two-sided range.
+aerobic effort for that runner, there's no slower-than-endurance jog left to
+call recovery. That now happens below **VDOT 24.9** (it was 32.6 at the old
+floor), which is clear of this history's lowest rolling VDOT of 27.8 — so
+Recovery is a live bucket on every day of it, where before the earliest days
+had none. Only repetition's fast edge is still reported open-ended; every other
+edge, including endurance's floor, is a real two-sided range.
+
+**The floor was 45% until Oct 2026**, picked by eye so a mid-50s VDOT landed it
+near 7:00/km rather than back-solved from anything, and the zone was called
+Easy. That made the band nearly twice as wide as Daniels' and swept genuine
+recovery jogging into it. What moving to 59% actually did, measured on a real
+1340-day export: at VDOT 52.55 the floor pace goes **6:59 → 5:38/km**, so
+Endurance narrows from 136 s wide to **55 s** — 1.82× the Marathon band rather
+than 4.47×. Over 604 run days, Recovery goes **0.3% → 5.7%** of the kilometres
+and Endurance **56.3% → 50.9%**; nothing at Marathon or above moves at all
+(33.3 / 5.9 / 2.4 / 1.4%, unchanged). Workout types go
+4/322/237/52/30/20 → **31/295/237/52/30/20**: 27 of 665 runs change, every one
+of them Endurance → Recovery, and no run at Marathon or above changes.
 
 Standing, Walking and Recovery are each a single, undivided bar — `ZONE_BARS`
 only ever splits the five real Daniels zones — drawn leftmost (slowest first),
 in that order, separated from the five zones by a bar width of empty space
 rather than a divider line. They're flat neutral greys rather than a zone hue
 (`--nocolour` for Standing, then two steps of an OKLab fade from `--nocolour`
-towards easy's own weak blue for Walking and Recovery — see `leadRamps` in
+towards endurance's own weak blue for Walking and Recovery — see `leadRamps` in
 `buildRamps()`), so the transition visually previews "getting closer to real
 training" without implying they're graded pace zones themselves.
 
@@ -861,7 +881,7 @@ because each broke a different thing the validator can't see:
 The fix for #2 (confirmed against the user with rendered swatches before
 committing, given two wrong guesses already) was letting go of light-mode
 brightness parity with siblings in favour of ramp *direction* parity: keep
-both ends bright/pale rather than pulling strong down to match Easy/
+both ends bright/pale rather than pulling strong down to match Endurance/
 Repetition's darker L≈0.51 cluster, so chroma still climbs from weak to
 strong the same way Marathon/Interval's does.
 
@@ -873,7 +893,7 @@ strong the same way Marathon/Interval's does.
   Interval weak's 2.36, not the worst of the five).
 - **Light**: `--z-threshold` `#cfaa0a` (L 0.75, C at the gamut ceiling for
   that L/hue, H 93° — L sits with the Marathon/Interval cluster at L≈0.70–0.72,
-  not the darker Easy/Repetition one), `--z-threshold-weak` `#ebdeb1` (L 0.90,
+  not the darker Endurance/Repetition one), `--z-threshold-weak` `#ebdeb1` (L 0.90,
   a pale cream — deliberately much paler than strong so the ramp still reads
   as "gaining colour" left→right, at the cost of low contrast against the
   near-white surface, ~1.3, which the user has explicitly accepted here).
@@ -965,11 +985,14 @@ for filled bands.
 
 Each row ends with **the pace that bucket covers** (`zoneBucketPace()`), in the
 same dim 10px as the share next to it: the boundaries `binLap()` sorts a lap by,
-collapsed to whole zones since the readout has no sub-bands, and worded exactly
-as the histogram's own hover line words them — Standing and Walking at their
-fixed absolute paces, Recovery from walking pace up to easy's per-day floor, and
-repetition open-ended, since its fast edge is `ZONE_BOUND_PCT`'s practical 120%
-ceiling and not a real boundary. The bands are read off **the shown day's own
+collapsed to whole zones since the readout has no sub-bands — Standing and
+Walking at their fixed absolute paces, Recovery from walking pace up to
+endurance's per-day floor, and repetition open-ended, since its fast edge is
+`ZONE_BOUND_PCT`'s practical 120% ceiling and not a real boundary. The two
+open-ended ends read "over 20:00" and "under 3:38" rather than the histogram
+hover's "slower/faster than": the hover line has a whole row to itself, this
+column does not, and the longer wording wrapped the Standing row once
+"Endurance" widened the label column (see below). The bands are read off **the shown day's own
 VDOT** (`vdot[i]`), like the histogram below: the figures beside them are a sum
 over weeks, but "what pace is threshold" is only answerable at one fitness
 level. Before the first logged run there is no VDOT and the column is simply
@@ -981,7 +1004,11 @@ That makes the zone rows five columns rather than four, so they carry their own
 the way the amounts' units already do. Measured, not eyeballed — across all
 1339 days × all four `zoneAreaMode` values, nothing overflows the 246px the
 sidebar gives a row and the block is **exactly 151px tall every single time**,
-which is the height-stability rule these tables exist under.
+which is the height-stability rule these tables exist under. That margin is
+thin: renaming Easy → Endurance widened the label column by a few px, which was
+enough to wrap 1666 of those 5360 renders to 165px until "slower than"/"faster
+than" became "over"/"under". Re-measure after touching any of the five
+columns' content.
 
 ## Remembered settings
 
@@ -1178,7 +1205,11 @@ clean, precomputed once per frame. Only the pace-zone histogram needs them now �
 the verdict colours are flat.
 
 The pace-zone histogram is a separate five-hue scheme (`--z-*`), validated the same
-way but on a different basis — see "VDOT and pace zones" above.
+way but on a different basis — see "VDOT and pace zones" above. Its slowest
+zone was renamed Easy → Endurance in Oct 2026; **`--z-easy` / `--z-easy-weak`
+deliberately kept their names**, since they are the colour identity and
+everything above documents them by name. The hex is unchanged and the rename
+moved nothing in this section.
 
 ## Data pipeline
 

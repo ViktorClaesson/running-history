@@ -49,7 +49,7 @@
     --nocolour:       #b5b3aa;   /* a run whose scheme has colouring switched off */
     --rest:           #e7e5dd;   /* no run at all */
     --vdot:           #7444b4;
-    /* Pace-zone histogram: easy/marathon/threshold/interval/repetition, ordered
+    /* Pace-zone histogram: endurance/marathon/threshold/interval/repetition, ordered
        fast→slow around the visible spectrum. Adjacent-pair CVD ΔE validated (not
        all-pairs — this is an ordered bar histogram where neighbours are what
        matters, same basis the skill's validator uses for stacks/bars/lines) for
@@ -69,12 +69,14 @@
        like every other zone — a dark, desaturated yellow reads as olive-brown,
        there's no "deep vivid yellow" the way there's a deep vivid blue or red,
        so light's pair now keeps both ends bright (siding with Marathon/
-       Interval's L≈0.70-0.72 cluster over Easy/Repetition's darker one) so
+       Interval's L≈0.70-0.72 cluster over Endurance/Repetition's darker one) so
        chroma still climbs weak→strong. Each mode's own weak→strong pair still
        shares one hue (avoiding the earlier drift bug: an early light strong,
        #923c00, drifted ~38° towards red, turning a "gold throughout" zone
        red-brown at its fastest sub-bands) even though the two modes no longer
-       share the same hue as each other. */
+       share the same hue as each other.
+       --z-easy/-weak are the Endurance zone: the zone was renamed, the colour
+       identity (and everything documenting it by name) deliberately wasn't. */
     --z-easy-weak:        #869fe3;
     --z-easy:             #3554da;
     --z-marathon-weak:    #80e1bc;
@@ -489,7 +491,7 @@
           <span class="item"><span class="swatch" style="background:var(--z-interval)"></span>interval</span>
           <span class="item"><span class="swatch" style="background:var(--z-threshold)"></span>threshold</span>
           <span class="item"><span class="swatch" style="background:var(--z-marathon)"></span>marathon</span>
-          <span class="item"><span class="swatch" style="background:var(--z-easy)"></span>easy</span>
+          <span class="item"><span class="swatch" style="background:var(--z-easy)"></span>endurance</span>
           <span class="item"><span class="swatch wt-recovery"></span>recovery</span>
           <span class="item"><span class="swatch" style="background:var(--rest)"></span>rest day</span>
         </div>
@@ -516,7 +518,7 @@
         <span class="item"><span class="swatch zs-standing"></span>standing</span>
         <span class="item"><span class="swatch zs-walking"></span>walking</span>
         <span class="item"><span class="swatch zs-recovery"></span>recovery</span>
-        <span class="item"><span class="swatch" style="background:var(--z-easy)"></span>easy</span>
+        <span class="item"><span class="swatch" style="background:var(--z-easy)"></span>endurance</span>
         <span class="item"><span class="swatch" style="background:var(--z-marathon)"></span>marathon</span>
         <span class="item"><span class="swatch" style="background:var(--z-threshold)"></span>threshold</span>
         <span class="item"><span class="swatch" style="background:var(--z-interval)"></span>interval</span>
@@ -1256,7 +1258,7 @@ recompute();
 // a low VDOT (low VO2 cost, and %max is close to 1 over a long duration anyway),
 // while a genuinely hard lap — a tempo, a rep, a race — implies close to the
 // runner's real ceiling. Verified against vdoto2.com's own worked example: VDOT
-// 51.8 round-trips through velocityFromVo2() to the easy/marathon/threshold/
+// 51.8 round-trips through velocityFromVo2() to the endurance/marathon/threshold/
 // interval/repetition paces quoted there, within rounding.
 function vo2FromVelocity(v) { return -4.60 + 0.182258 * v + 0.000104 * v * v; }
 function velocityFromVo2(vo2) {
@@ -1412,8 +1414,8 @@ function buildRamps() {
   });
   // Standing/Walking/Recovery aren't a pace zone, so they don't get a hue — but a
   // flat grey for all three would read as one undifferentiated "junk" block. A
-  // short fade from --nocolour towards easy's own weak blue visually previews
-  // "getting closer to real training" as the buckets approach Easy.
+  // short fade from --nocolour towards endurance's own weak blue visually
+  // previews "getting closer to real training" as the buckets approach Endurance.
   const leadIn = make(C('--nocolour'), C('--z-easy-weak'));
   leadRamps = { standing: C('--nocolour'), walking: leadIn[8], recovery: leadIn[16] };
 }
@@ -1530,19 +1532,19 @@ const verdictWhy = c => c ? `${WINDOWS[c.at].label} highest` : '';
 // ---- pace zones, from a VDOT value --------------------------------------
 // Five Daniels training intensities, each a %VDOT anchor back-solved from
 // vdoto2.com's own worked example (VDOT 51.8 -> 5:14/4:23/4:08/3:48/3:33 min/km):
-//   easy 65.7%, marathon 81.8%, threshold 88.0%, interval 97.6%, repetition 106.2%
+//   endurance 65.7%, marathon 81.8%, threshold 88.0%, interval 97.6%, repetition 106.2%
 // The boundary between two neighbouring zones is the midpoint of their anchors,
 // so the five zones tile the %VDOT axis contiguously with no gap or overlap.
 // The fast end is still open — split into ZONE_BARS sub-bands up to a practical
 // 120% ceiling (faster than anyone sustains even a single stride's worth of
 // "repetition" pace), not a physiological limit, so anything beyond just clamps
 // into repetition's top sub-band. The slow end is a real, deliberately narrow
-// floor rather than an open "slower than" reading — see EASY_FLOOR_PCT and the
-// Standing/Walking/Recovery buckets below, which is where a slow recovery jog,
-// actual walking, and standing still at a light are told apart instead of all
-// three landing in easy's bottom bin.
+// floor rather than an open "slower than" reading — see ENDURANCE_FLOOR_PCT and
+// the Standing/Walking/Recovery buckets below, which is where a slow recovery
+// jog, actual walking, and standing still at a light are told apart instead of
+// all three landing in endurance's bottom bin.
 const ZONES = [
-  { key: 'easy',       label: 'Easy',       weak: '--z-easy-weak',       strong: '--z-easy' },
+  { key: 'endurance',  label: 'Endurance',  weak: '--z-easy-weak',       strong: '--z-easy' },
   { key: 'marathon',   label: 'Marathon',   weak: '--z-marathon-weak',   strong: '--z-marathon' },
   { key: 'threshold',  label: 'Threshold',  weak: '--z-threshold-weak',  strong: '--z-threshold' },
   { key: 'interval',   label: 'Interval',   weak: '--z-interval-weak',   strong: '--z-interval' },
@@ -1552,7 +1554,7 @@ const ZONES = [
 // Nothing earlier in the script touches this, so it's declared right here rather
 // than up with the other prefs (see the declaration-order gotcha). Standing,
 // Walking and Recovery (below) are never sub-divided by this — they're not real
-// training zones, just where non-zone effort gets sorted out of easy's way.
+// training zones, just where non-zone effort gets sorted out of endurance's way.
 let ZONE_BARS = prefs.zoneBars;
 // Whether the histogram's bars are the minutes or the kilometres spent in each
 // bin. Both are always collected and both appear in the hover text; this only
@@ -1580,7 +1582,7 @@ let visLines = { ...prefs.lines };
 // other. Purely a drawing choice — nothing computed depends on it.
 let highlightMax = prefs.highlightMax;
 const ZONE_ANCHOR_PCT = [0.657, 0.818, 0.880, 0.976, 1.062];
-const ZONE_BOUND_PCT = [null,   // easy's floor is per-day now — see easyFloorPct()
+const ZONE_BOUND_PCT = [null,   // the floor is per-day now — see enduranceFloorPct()
   (ZONE_ANCHOR_PCT[0] + ZONE_ANCHOR_PCT[1]) / 2,
   (ZONE_ANCHOR_PCT[1] + ZONE_ANCHOR_PCT[2]) / 2,
   (ZONE_ANCHOR_PCT[2] + ZONE_ANCHOR_PCT[3]) / 2,
@@ -1595,30 +1597,33 @@ const STANDING_MAX_VEL = 1000 / 20;   // m/min, i.e. slower than 20:00/km
 // fitness the way jogging effort does. Between here and STANDING_MAX_VEL is
 // the Walking bucket.
 const WALKING_MAX_VEL = 1000 / 10;   // m/min, i.e. slower than 10:00/km
-// Easy's real floor, in %VDOT — everything from WALKING_MAX_VEL up to this is
-// Recovery: a real jog, just too slow relative to THIS runner's fitness to call
-// genuinely "easy". 45% was picked (not back-solved from anything) so that a
-// mid-50s VDOT lands its Easy floor around 7:00/km — slower reads as recovery,
-// not easy.
-const EASY_FLOOR_PCT = 0.45;
+// Endurance's real floor, in %VDOT — everything from WALKING_MAX_VEL up to this
+// is Recovery: a real jog, just too slow relative to THIS runner's fitness to
+// count as endurance training. 59% is Daniels' own number: he puts the E zone at
+// 59-74% VO2max, and this page's Endurance/Marathon boundary already sits at
+// 73.75%, so a 59% floor makes the band exactly his E zone rather than an
+// approximation of it. (It was 45% before, picked by eye rather than from
+// anything — which made Endurance nearly twice as wide as Daniels' and swept
+// genuine recovery jogging into it.)
+const ENDURANCE_FLOOR_PCT = 0.59;
 // The %VDOT that WALKING_MAX_VEL works out to for THIS runner on THIS day (a
-// fast runner's 10:00/km is a smaller %VDOT than a slow runner's). Easy's actual
-// floor is never allowed below this — otherwise Recovery would have to cover
-// paces faster than walking, which makes no sense — nor above the marathon
+// fast runner's 10:00/km is a smaller %VDOT than a slow runner's). Endurance's
+// actual floor is never allowed below this — otherwise Recovery would have to
+// cover paces faster than walking, which makes no sense — nor above the marathon
 // boundary, so an extremely low VDOT can't invert the range. For a low enough
 // VDOT this collapses Recovery to nothing: if walking pace is already real
-// aerobic effort for this runner, there's no slower-than-easy jog left to call
-// recovery.
-function easyFloorPct(vdotHere) {
+// aerobic effort for this runner, there's no slower-than-endurance jog left to
+// call recovery.
+function enduranceFloorPct(vdotHere) {
   const walkingPct = vo2FromVelocity(WALKING_MAX_VEL) / vdotHere;
-  return Math.min(ZONE_BOUND_PCT[1] - 0.05, Math.max(EASY_FLOOR_PCT, walkingPct));
+  return Math.min(ZONE_BOUND_PCT[1] - 0.05, Math.max(ENDURANCE_FLOOR_PCT, walkingPct));
 }
-// Bin 0-(5*ZONE_BARS-1): zone*ZONE_BARS + sub-band, continuous easy0.. , marathon0.., ...
-// Only ever called for a lap already faster than easyFloorPct(vdotHere) — see
+// Bin 0-(5*ZONE_BARS-1): zone*ZONE_BARS + sub-band, continuous endurance0.., marathon0.., ...
+// Only ever called for a lap already faster than enduranceFloorPct(vdotHere) — see
 // paceHistogramFor, which routes anything slower to the standing/walking/recovery
 // buckets instead.
 function zoneBandFor(pctOfVdot, vdotHere) {
-  const lo0 = easyFloorPct(vdotHere);
+  const lo0 = enduranceFloorPct(vdotHere);
   const p = Math.min(ZONE_BOUND_PCT[5], Math.max(lo0, pctOfVdot));
   for (let z = 0; z < 5; z++) {
     const lo = z === 0 ? lo0 : ZONE_BOUND_PCT[z], hi = ZONE_BOUND_PCT[z + 1];
@@ -1648,7 +1653,7 @@ function lapsOfAct(act) {
   return act.km > 0 && effortSec(act, gapPace) > 0 ? [act] : [];
 }
 const lapsOfDay = i => (dayActs[i] || []).flatMap(lapsOfAct);
-// Which histogram bin one lap lands in against VDOT v (easy floor `floor`),
+// Which histogram bin one lap lands in against VDOT v (endurance floor `floor`),
 // and for how many minutes. With `gapPace` on, a lap is binned by its
 // equivalent flat pace and counted for that many minutes — the adjusted
 // duration, not the real one, so a bin's height stays the time implied by the
@@ -1674,7 +1679,7 @@ function paceHistogramFor(i, a) {
   if (!laps.length) return null;
   const nBins = ZONE_BIN_OFFSET + 5 * ZONE_BARS;
   const bins = new Array(nBins).fill(0), kmBins = new Array(nBins).fill(0);
-  const floor = easyFloorPct(v);
+  const floor = enduranceFloorPct(v);
   for (const lap of laps) {
     const { bin, mins } = binLap(lap, v, floor);
     bins[bin] += mins; kmBins[bin] += lap.km;
@@ -1712,7 +1717,7 @@ function recomputeDayZones() {
   for (let i = 0; i < N; i++) {
     const v = vdot[i];
     if (!(v > 0)) continue;
-    const floor = easyFloorPct(v);
+    const floor = enduranceFloorPct(v);
     for (const lap of lapsOfDay(i)) {
       const { bin, mins } = binLap(lap, v, floor);
       const at = i * N_ZB + zoneBucketOf(bin);
@@ -1766,11 +1771,12 @@ recomputeZones();
 //     interval + repetition    >= wtShare%  -> interval
 //     threshold + faster       >= wtShare%  -> threshold
 //     marathon + faster        >= wtShare%  -> marathon
-//     easy + faster            >= wtShare%  -> easy
+//     endurance + faster       >= wtShare%  -> endurance
 //     else                                  -> recovery
 // Pooling is what stops a hard session split across two zones losing to the
 // easy running around it: 38% interval + 20% repetition is 58% interval+, and
-// an interval session, even though easy alone (43%) is the biggest single zone.
+// an interval session, even though endurance alone (43%) is the biggest single
+// zone.
 // Weighting by speed lets a short hard block count for more than its minutes,
 // without a few strides turning an easy run into a repetition session. At the
 // default exponent of 2 that is speed^3 x time; 0 is plain distance.
@@ -1785,7 +1791,7 @@ const WORKOUT_TYPES = [
   ...ZONES.map(z => ({ key: z.key, label: z.label })),
 ];   // index 0 = recovery, 1-5 = ZONES[0-4]
 const wt = { wtExp: prefs.wtExp, wtShare: prefs.wtShare };
-// Score per type per run — [recovery, easy..repetition] — one array per
+// Score per type per run — [recovery, endurance..repetition] — one array per
 // activity of the day, cached, since the bars want it for every day in view on
 // every frame. Keyed on everything that moves where a lap lands or what it
 // scores, so no handler has to remember to invalidate it: the zones hang off
@@ -1800,7 +1806,7 @@ function zoneScoresOf(i) {
     const laps = v > 0 ? lapsOfAct(act) : [];
     if (!laps.length) return null;
     const sc = new Array(WORKOUT_TYPES.length).fill(0);
-    const floor = easyFloorPct(v);
+    const floor = enduranceFloorPct(v);
     for (const lap of laps) {
       const { bin, mins } = binLap(lap, v, floor);
       if (bin === STANDING_BIN || bin === WALKING_BIN) continue;
@@ -2845,19 +2851,19 @@ const zaReadoutSlot = () => visPanels.zarea ? zoneAreaSlot() : -1;
 // binLap() sorts a lap by, collapsed to whole zones (the readout has no
 // sub-bands) and rendered the way the histogram's own hover line renders them.
 // Standing and Walking are fixed absolute paces; Recovery runs from walking
-// pace up to easy's per-day floor; repetition's fast edge is the practical 120%
+// pace up to endurance's per-day floor; repetition's fast edge is the practical 120%
 // ceiling rather than a real boundary, so it stays open-ended, exactly as the
 // histogram reports it.
 function zoneBucketPace(b, v) {
   if (!(v > 0)) return '';
   const standing = paceStr(1000 / STANDING_MAX_VEL), walking = paceStr(1000 / WALKING_MAX_VEL);
-  if (b === STANDING_BIN) return `slower than ${standing}`;
+  if (b === STANDING_BIN) return `over ${standing}`;
   if (b === WALKING_BIN) return `${standing}\u2013${walking}`;
-  const floor = easyFloorPct(v);
+  const floor = enduranceFloorPct(v);
   if (b === RECOVERY_BIN) return `${walking}\u2013${paceStr(1000 / velocityFromVo2(v * floor))}`;
   const z = b - ZONE_BIN_OFFSET;
   const slow = paceStr(1000 / velocityFromVo2(v * (z === 0 ? floor : ZONE_BOUND_PCT[z])));
-  if (z === 4) return `faster than ${slow}`;
+  if (z === 4) return `under ${slow}`;
   return `${slow}\u2013${paceStr(1000 / velocityFromVo2(v * ZONE_BOUND_PCT[z + 1]))}`;
 }
 function zoneGrid(i, k) {
@@ -2985,12 +2991,12 @@ function renderZonePanel() {
   // single bin no matter how many ZONE_BARS are configured.
   // Each type's share of the run's score, in the order the histogram lays them
   // out — recovery (the "misc" end, standing and walking score nothing) then
-  // easy..repetition — each in its own colour, so the winner can be read
+  // endurance..repetition — each in its own colour, so the winner can be read
   // against the rest.
   const scoreShares = sc => {
     const tot = sc ? sc.reduce((x, y) => x + y, 0) : 0;
     if (!(tot > 0)) return '';
-    return ` · <span class="zone-shares" title="Share of the workout-type score: recovery / easy / marathon / threshold / interval / repetition">${
+    return ` · <span class="zone-shares" title="Share of the workout-type score: recovery / endurance / marathon / threshold / interval / repetition">${
       sc.map((v, t) => `<span style="color:${workoutColour({ type: t })}">${nf0.format(v / tot * 100)}%</span>`).join(' / ')}</span>`;
   };
   const runHead = a => {
@@ -3037,13 +3043,13 @@ function mountZoneHist(cvZ, hoverInfo, minsBins, kmBins, real, maxVal, byDist, v
 
   // The pace *range* a bin covers, from the two %VDOT bounds either side of it —
   // this is what item 3 asked for: what pace is "marathon 3" actually asking for.
-  // Easy's slow edge and repetition's fast edge come from ZONE_BOUND_PCT/easyFloorPct
+  // Endurance's slow edge and repetition's fast edge come from ZONE_BOUND_PCT/enduranceFloorPct
   // — see the comments there for why one is exact and the other stays open.
   // Standing/Walking/Recovery aren't %VDOT bins, so they report their own fixed or
   // per-day pace bounds instead of going through this at all.
   function paceRangeFor(b) {
     const zb = b - ZONE_BIN_OFFSET, zone = Math.floor(zb / ZONE_BARS), sub = zb % ZONE_BARS;
-    const lo = zone === 0 ? easyFloorPct(vdotHere) : ZONE_BOUND_PCT[zone], hi = ZONE_BOUND_PCT[zone + 1];
+    const lo = zone === 0 ? enduranceFloorPct(vdotHere) : ZONE_BOUND_PCT[zone], hi = ZONE_BOUND_PCT[zone + 1];
     const pctLo = lo + sub / ZONE_BARS * (hi - lo), pctHi = lo + (sub + 1) / ZONE_BARS * (hi - lo);
     // higher %VDOT -> faster pace (lower min/km), so the slow edge comes from pctLo
     const paceSlow = 1000 / velocityFromVo2(vdotHere * pctLo);
@@ -3127,7 +3133,7 @@ function mountZoneHist(cvZ, hoverInfo, minsBins, kmBins, real, maxVal, byDist, v
       return;
     }
     if (b === RECOVERY_BIN) {
-      const floorPace = 1000 / velocityFromVo2(vdotHere * easyFloorPct(vdotHere));
+      const floorPace = 1000 / velocityFromVo2(vdotHere * enduranceFloorPct(vdotHere));
       hoverInfo.textContent = `Recovery · ${paceStr(1000 / WALKING_MAX_VEL)}–${paceStr(floorPace)}/km · ${amount}`;
       return;
     }
