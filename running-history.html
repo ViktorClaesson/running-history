@@ -189,6 +189,15 @@
   .tile[hidden] { display: none; }
   .tile.combo.target { min-width: 330px; position: relative; padding-right: 64px; }
   .tile.combo .grid.targets { grid-template-columns: repeat(2, auto); gap: 2px 22px; justify-content: start; }
+  .tile.combo .weekplan { display: grid; grid-template-columns: repeat(7, minmax(44px, 1fr)); gap: 4px; margin-top: 10px; }
+  .weekplan .wd { display: flex; flex-direction: column; align-items: center; padding: 4px 2px;
+    border: 1px solid var(--border); border-radius: 6px; line-height: 1.3; }
+  .weekplan .wd.high { border-color: var(--text-secondary); }
+  .weekplan .wd.long { border-color: var(--accent); }
+  .weekplan .wd.rest { opacity: .45; }
+  .weekplan .dn { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .weekplan .wr { font-size: 10px; color: var(--text-secondary); }
+  .weekplan .wk { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
   .tile.combo.target #plan-reset { position: absolute; top: 8px; right: 10px; font-size: 11px; padding: 1px 7px; }
   .tile.combo .plan { display: flex; align-items: baseline; gap: 4px 6px; margin: 3px 0 1px; flex-wrap: wrap;
     font-size: 12px; color: var(--text-secondary); }
@@ -1123,8 +1132,10 @@ function loadPrefs() {
   if (['km', 'min', 'pctKm', 'pctMin'].includes(raw.zoneAreaMode)) p.zoneAreaMode = raw.zoneAreaMode;
   // An entry from before runs/wk existed has no `runs`; it starts at one run a day.
   if (raw.plan && num(raw.plan.km, 0, 700) && num(raw.plan.days, 0, 7)) {
-    const runs = num(raw.plan.runs, 0, 19) ? Math.max(raw.plan.runs, raw.plan.days) : raw.plan.days;
-    p.plan = { km: raw.plan.km, days: raw.plan.days, runs };
+    // Days and runs are whole numbers in the what-if; an older entry may carry halves.
+    const days = Math.round(raw.plan.days);
+    const runs = num(raw.plan.runs, 0, 19) ? Math.max(Math.round(raw.plan.runs), days) : days;
+    p.plan = { km: raw.plan.km, days, runs };
   }
   return p;
 }
@@ -1979,6 +1990,38 @@ function targetFor({ km, days, runs }) {
 }
 
 const fmtPlan = v => String(+v.toFixed(1));
+
+// --- The template week, shown in what-if mode ------------------------------
+// Monday first. Saturday is the long-run day (a HIGH day when there is no long
+// run), Monday and Wednesday are HIGH, the rest LOW: HIGH days get first call on
+// a second or third run. Fewer run days drop days in the order Fri, Tue, Sun,
+// Thu, Mon, Wed, Sat, so DAY_KEEP — the reverse — is both which days are run on
+// and the order extra runs are handed out in, round-robin, so every day gets a
+// second run before any gets a third. Saturday never takes one while it is the
+// long run, which is always alone on its day.
+const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const DAY_KEEP = [5, 2, 0, 3, 6, 1, 4];   // Sat, Wed, Mon, Thu, Sun, Tue, Fri
+const DAY_HIGH = new Set([0, 2, 5]);
+function weekPlan(t) {
+  const D = Math.round(plan.days), R = Math.max(Math.round(plan.runs), D);
+  const runs = new Array(7).fill(0);
+  const used = DAY_KEEP.slice(0, D);
+  for (const d of used) runs[d] = 1;
+  const takers = t.long ? used.filter(d => d !== 5) : used;
+  for (let extra = R - D, k = 0; extra > 0 && takers.length; extra--, k++) runs[takers[k % takers.length]]++;
+  return WEEKDAYS.map((name, d) => {
+    const long = t.long && d === 5 && runs[d] > 0;
+    return { name, d, runs: runs[d], long, km: long ? t.longKm : runs[d] * t.perRun };
+  });
+}
+function weekPlanHtml(t) {
+  return `<div class="weekplan">${weekPlan(t).map(w => {
+    const what = w.long ? 'long' : w.runs === 0 ? 'rest' : w.runs === 1 ? '1 run' : `${w.runs} runs`;
+    const cls = ['wd', w.long ? 'long' : '', w.runs === 0 ? 'rest' : '', DAY_HIGH.has(w.d) ? 'high' : ''].filter(Boolean).join(' ');
+    return `<div class="${cls}" title="${DAY_HIGH.has(w.d) ? 'HIGH' : 'LOW'} day"><span class="dn">${w.name}</span>` +
+      `<span class="wr">${what}</span><span class="wk">${w.runs ? nf1.format(w.km) : '&ndash;'}</span></div>`;
+  }).join('')}</div>`;
+}
 // The (i) on the box: what it does in words, then the sums with the numbers
 // currently in it, then where the real-history figures come from. Rebuilt with
 // the box, so it always shows the figures actually on screen.
@@ -2017,6 +2060,11 @@ function targetInfo(t, ok) {
           slice of what is left, so a day with two of them is twice a one-run day.</p>`
       : `<p>No long run here (${why}), so every run is an equal share of the week.</p>`) +
     sums +
+    (planEdited && ok ? `<p>The template week lays the ${Math.round(plan.days)} days and ${Math.round(plan.runs)} runs out
+        Monday to Sunday. Days are picked in the order Sat, Wed, Mon, Thu, Sun, Tue, Fri, and extra runs
+        go to them in that same order, one each before any day gets a third${t.long ? `, skipping Saturday,
+        which is the long run and always alone` : ''}. Mon, Wed and Sat are HIGH days (outlined), so they get
+        doubled up first.</p>` : '') +
     `<p>${planEdited ? 'You have edited the numbers. The real history says:' : 'The numbers start from the real history, up to yesterday:'}<br>` +
     `<span class="eq">km/wk = ${nf1.format(kmSum)} km &times; 7 &divide; ${WINDOW_VOL} days = <b>${nf1.format(a.km)}</b><br>` +
     `days/wk = ${rd} run days &times; 7 &divide; ${WINDOW_FREQ} days = <b>${nf1.format(a.days)}</b><br>` +
@@ -2044,10 +2092,11 @@ function renderTarget() {
     (planEdited ? `<button id="plan-reset" title="Back to the real figures">reset</button>` : '') +
     `<div class="plan">` +
       `<input type="number" id="plan-km" min="0" max="700" step="1" value="${fmtPlan(plan.km)}"><span class="u">km/wk</span>` +
-      `<input type="number" id="plan-days" min="0" max="${PLAN_MAX_DAYS}" step="0.5" value="${fmtPlan(plan.days)}"><span class="u">days/wk</span>` +
-      `<input type="number" id="plan-runs" min="0" max="${PLAN_MAX_RUNS}" step="0.5" value="${fmtPlan(plan.runs)}"><span class="u">runs/wk</span>` +
+      `<input type="number" id="plan-days" min="0" max="${PLAN_MAX_DAYS}" step="1" value="${fmtPlan(plan.days)}"><span class="u">days/wk</span>` +
+      `<input type="number" id="plan-runs" min="0" max="${PLAN_MAX_RUNS}" step="1" value="${fmtPlan(plan.runs)}"><span class="u">runs/wk</span>` +
     `</div>` +
-    `<div class="grid targets">${cells}</div>`;
+    `<div class="grid targets">${cells}</div>` +
+    (planEdited && ok ? weekPlanHtml(t) : '');
   wireInfo(tile.querySelector('.info'));
 
   const kmIn = document.getElementById('plan-km');
@@ -2058,7 +2107,9 @@ function renderTarget() {
   const onEdit = which => () => {
     const k = Number(kmIn.value), d = Number(daysIn.value), r = Number(runsIn.value);
     if (![k, d, r].every(Number.isFinite)) return;
-    const next = { km: clamp(k, 700), days: clamp(d, PLAN_MAX_DAYS), runs: clamp(r, PLAN_MAX_RUNS) };
+    // Whole days and runs only: the what-if is a week you could actually run,
+    // and the template week below needs whole numbers to lay out.
+    const next = { km: clamp(k, 700), days: clamp(Math.round(d), PLAN_MAX_DAYS), runs: clamp(Math.round(r), PLAN_MAX_RUNS) };
     if (which === 'days') next.runs = Math.min(PLAN_MAX_RUNS, Math.max(next.runs, next.days));
     if (which === 'runs') next.days = Math.min(next.days, next.runs);
     plan = next;

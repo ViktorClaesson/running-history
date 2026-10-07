@@ -169,7 +169,25 @@ figures currently in the box (and which of the 2-/3-run rows that shows or
 hides), then how the real-history seed values were counted ("360.2 km × 7 ÷ 28
 days = 90.0"). Because the tile is rebuilt on every edit, its (i) is wired by
 `wireInfo()` inside `renderTarget()` rather than by the page-wide loop, which
-skips it. The tile
+skips it.
+
+Days/wk and runs/wk are **whole numbers** in the what-if (step 1, rounded on
+edit and on load); only the un-edited seed from real history is fractional.
+**In what-if mode the tile also shows a template week** (`weekPlan()`), Monday
+to Sunday, each day with its run count and km:
+
+- Run days are picked in `DAY_KEEP` order — **Sat, Wed, Mon, Thu, Sun, Tue,
+  Fri** — so fewer days drop Fri first, then Tue, Sun, Thu, Mon, Wed, Sat.
+- Saturday is the long run when there is one. Mon, Wed and Sat are HIGH days
+  (`DAY_HIGH`, outlined), the rest LOW.
+- Extra runs (runs − days) go round-robin over the run days in that same
+  order, so every day gets a second run before any gets a third, and HIGH days
+  are doubled first. Saturday is skipped while it is the long run, which is
+  always alone; with no long run it is just the first HIGH day.
+
+6 days / 8 runs with a long run gives Mon 2, Tue 1, Wed 2, Thu 1, Fri rest,
+Sat long, Sun 1. The template's km always add up to the weekly figure. The
+tile's (i) explains the layout rule too. The tile
 has a show/hide (`visPanels.target`) and lives with `targetLong` in the "Weekly
 target" settings group. The "Current 4w average" tile that used to sit beside it
 is gone — the hover readout already gives those rates.
