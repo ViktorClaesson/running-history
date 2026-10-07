@@ -49,7 +49,7 @@ Up to six stacked panels sharing one x-axis, one bar/point per calendar day:
    *Which* window is a setting (`zoneAreaWin`, default the 16-week slot); only
    ever one at a time. See "Running volume by pace zone" below.
 
-Panels 2–6 and the pace-zone histogram each have their own show/hide checkbox in
+Panels 2–6, the pace-zone histogram and the data table each have their own show/hide checkbox in
 the settings sidebar (`visPanels`, persisted in `runviz.prefs.v1` as `panels`) —
 panel 1 (the bars) always stays up as the anchor chart. The x-axis date labels
 live on whichever panel is currently the lowest *visible* one (`bottomPanel()`,
@@ -60,7 +60,20 @@ panel used to be the bottom one by construction and so drew the labels
 unconditionally; the stacked-zone panels sit below it, so it now asks like
 everyone else.
 
-## The bar panel's log axis
+## The bar panel's axis: log, linear, and the cap
+
+`barScale` ("Scale" under Distance bars, `'log'` by default) picks the axis.
+**Linear** puts 0 on the floor and uses `niceTicks` like the other linear
+panels; runs still never draw shorter than `MIN_RUN_H`, so they stay above the
+rest stub, and the floor line stays unlabelled. Everything below is about log.
+
+`barCap`/`barCapKm` ("Cap at X km", off, 30 km) draws any day longer than the
+cap at the cap: the axis tops out exactly at it with an "X+" tick (on log too,
+rather than rounding up past it), and each cut-off bar gets two thin
+`--surface-1` breaks across its top, like an axis break. It exists for linear
+mode, where one 80 km ultra would otherwise flatten every other run. Only the
+drawing is capped — the readout, table and every series use the real distance.
+All three are draw-time only (handlers just `drawAll()`).
 
 Zero has no place on a log axis, and a rest day drawn as no bar at all is also
 nothing to aim a pointer at. So the panel is built with a floor *under* the
@@ -130,8 +143,8 @@ km · weekly ÷ 6.0 · no long runs"). It is gone: the verdict stopped being rea
 against that number, so it was a figure with nothing left to explain. All that
 sub-line carries now, on a day with more than one run, is each run's distance in
 the order they were run ("8.06 + 10.52 km"). The
-target itself is still in the data table's Target column and behind the Today's
-target tile.
+target itself is still behind the Today's target tile (the data table's Target
+column was dropped).
 
 The **Today's target** tile is a what-if calculator: both inputs (km/wk and days/wk)
 are editable, so a change in volume or frequency can be tried out, and it shows the
@@ -392,8 +405,8 @@ All of it is derived in-browser from one array of daily distances.
   against the *next one along* rather than against all of them and gave
   423/137/42/**1** — that is a genuinely different function from this one, and
   the one it was replaced by.
-- **Target** — still computed and still shown (the readout's distance line and the
-  data table's Target column), it just no longer colours anything. What a run that
+- **Target** — still computed and still behind the Today's target tile, it just
+  no longer colours anything. What a run that
   day had to be to hold the average steady:
   **weekly volume ÷ (run days per week + 1)** when long runs are active, otherwise
   ÷ run days per week (which is just mean km per *running* day). Weekly volume comes
@@ -1046,7 +1059,8 @@ columns' content.
 `runviz.prefs.v1` holds everything the settings sidebar and the what-if box can be
 set to, so the page opens the way it was left: `windowBase`, `windowMult`,
 `windowVdot`, `minLapM`, `gapVdot`, `gapPace`, `vdotNearDots`, `vdotNearPct`,
-`barColour` (`'verdict'`/`'workout'`/`'none'`; a legacy `colourVerdicts: false` reads as `'none'`), `wtExp` (0–4, halves), `wtShare` (1–100), `zoneBars`, `zoneAxis`, `highlightMax`, `panels` (`{vol, freq, runs, vdot, zone}`, each independently
+`barScale` (`'log'`/`'linear'`), `barCap` (boolean), `barCapKm` (1–500, whole km),
+`barColour` (`'verdict'`/`'workout'`/`'none'`; a legacy `colourVerdicts: false` reads as `'none'`), `wtExp` (0–4, halves), `wtShare` (1–100), `zoneBars`, `zoneAxis`, `highlightMax`, `panels` (`{vol, freq, runs, vdot, zone, zarea, table}`, each independently
 show/hide — see below), `lines` (`{s0, s1, s2, s3}` — slot keys, which of
 the four lines the three window panels draw), `zoneAreaWin` (a slot key: which
 window the stacked-zone panel is over, `'s2'` by default), `zoneAreaMode` (`'km'`/`'min'`/`'pctKm'`/`'pctMin'`), and `plan` (`null` = the what-if box follows real
@@ -1087,15 +1101,15 @@ it) is the one place state is pushed *into* the DOM — the markup carries
 the defaults, and a remembered setting has to overwrite them at boot.
 `syncLabels()` owns the text that *spells out* which four windows are in play:
 `.winsN` (the three panel titles and the legend note), `.winLabel0`–`.winLabel3`
-(each legend item's own "4w") and `.winVolN` (the data table's column header).
+(each legend item's own "4w").
 
 **There are two resets, and each owns only what sits next to it.**
 
 - **Reset** in the settings sidebar: the window base and multiple, the VDOT
   window, the min-lap distance, both grade-adjusted-pace toggles, the near-max dots
   and their percentage, the pace-zone bar
-  count and bar height, the highest-line highlight, the bar-colour mode and the two workout-type settings, the
-  six panel show/hide toggles and the five line show/hide toggles back to their
+  count and bar height, the highest-line highlight, the bar scale and cap, the bar-colour mode and the two workout-type settings, the
+  seven panel show/hide toggles and the five line show/hide toggles back to their
   defaults (every panel shown, all four lines, the highlight on), plus the view back to its
   default span. It does *not*
   touch the what-if.
@@ -1127,7 +1141,7 @@ rather than the horizontal chartcard header row it replaced meant `.ctrls` lost
 its `margin-left: auto` (nothing to push right against in a column) and gained
 `flex-direction: column; align-items: stretch` instead.
 
-It is split into five `.setgroup` sections, **grouped by what each setting
+It is split into six `.setgroup` sections, **grouped by what each setting
 moves** rather than by what kind of control it is — "which panel is this about"
 is the question being asked when someone comes looking for a setting. A 1px
 rule separates them rather than more whitespace, so the grouping doesn't cost
@@ -1135,18 +1149,28 @@ much height:
 
 | Group | Holds |
 |---|---|
+| Distance bars | `barScale`, `barCap`/`barCapKm`, the `barColour` select, then whichever of its two legends is in use: the four-verdict/rest legend, or the workout-type legend plus its two settings |
 | Volume & frequency panels | the four line show/hide swatches, the three panel show/hide boxes, `windowBase`/`windowMult`, `highlightMax` |
 | VDOT panel | its show/hide, `windowVdot`, `minLapM`, `gapVdot`, `vdotNearDots`/`vdotNearPct` |
 | Pace zones | its show/hide, `zoneBars`, `zoneAxis`, `gapPace` |
 | Pace-zone volume | the eight-bucket zone legend, the panel's show/hide, `zoneAreaWin`, `zoneAreaMode` |
-| Bar colour | the `barColour` select, then whichever of its two legends is in use: the four-verdict/rest legend, or the workout-type legend plus its five thresholds |
+| Data table | its show/hide (`visPanels.table`; it used to be a `<details>` collapse). Its columns are km / week (the `WINDOW_VOL` slot's `volSeries`), run days / week and runs / week (the `WINDOW_FREQ` slot), verdict and workout |
 
 Two placements are worth naming. **The legend is split across two groups**, not
 kept as one block — even though both halves are now literally the same four
 colours: the window-line swatches are the show/hide control for those lines, so
 they belong beside the panels they colour, while the verdict swatches belong
 beside the toggle that switches them off. Each half says so in its own note, so
-the repetition reads as the point rather than as an oversight. And **`minLapM` and `gapVdot` sit under
+the repetition reads as the point rather than as an oversight.
+
+**Long explanations sit behind an (i)** (`.info`, holding a hidden
+`.info-text`) next to a group title, the page title and the hint under the
+charts, not as running text. Hovering or focusing one copies its text into the
+one shared `#infoPop`, which is `position: fixed` because the sidebars scroll
+and would clip anything absolutely positioned inside them. A `<p data-when="…">`
+inside is only shown under that `barColour` mode, so the Distance bars note
+explains the scheme actually in use. Short per-control explanations stay as
+`title` tooltips. And **`minLapM` and `gapVdot` sit under
 VDOT** even though both also move the pace-zone histogram — they are VDOT
 inputs, and the histogram's zones are read against the day's VDOT, so that is
 where they come from. `gapPace` is the one that only moves the histogram, so it
