@@ -165,17 +165,30 @@
      never reflows the chart next to it; only wrapping/stacking is a concern now,
      handled by flex-wrap plus turning off sticky once there's no room for two
      side-by-side columns. */
+  .page { display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; align-items: flex-start; }
   /* The bottom padding is scroll room. Without it, a page whose content fits the
      window can't be scrolled at all, so a taller pace-zone card (a day with two
      runs) had nowhere to scroll to; and when that card shrank back, the browser
      clamped the scroll position to the shorter page, jumping everything. Half a
-     window of slack means content below can come and go without moving the view. */
-  .page { display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; align-items: flex-start;
-    padding-bottom: 50vh; }
-  .wrap { max-width: 1120px; flex: 1 1 1120px; min-width: 0; }
+     window of slack means content below can come and go without moving the view.
+     It sits on .wrap, not .page: a sticky sidebar stops at the end of .page's
+     content box, and padding on .page is outside it, so the sidebars scrolled
+     away over the slack. On .wrap it makes .page's content that much taller,
+     and both sidebars stay in view all the way down. The body's own bottom
+     padding goes for the same reason: it would end .page short of the window,
+     and the taller settings sidebar would get pushed up by that much at the end.
+     The 600px flex basis is what lets the chart shrink rather than the readout
+     wrap onto a row of its own: with a 1120px basis the three columns needed
+     ~1770px of window before they'd sit side by side, so anything narrower got
+     the readout parked below the table. Now they stay side by side down to the
+     1300px breakpoint below, where the sidebars stop being sticky anyway. */
+  .wrap { max-width: 1120px; flex: 1 1 600px; min-width: 0; padding-bottom: 50vh; }
+  body { padding-bottom: 0; }
   .sidebar { flex: 0 1 280px; min-width: 240px; position: sticky; top: 20px;
     max-height: calc(100vh - 40px); overflow: auto; }
-  @media (max-width: 1300px) { .sidebar { position: static; max-height: none; } }
+  @media (max-width: 1300px) { .sidebar { position: static; max-height: none; }
+    /* stacked: the slack goes after everything, not between the chart and the readout */
+    .wrap { padding-bottom: 0; } .page { padding-bottom: 50vh; } }
   h1 { font-size: 20px; font-weight: 600; margin: 0 0 24px; letter-spacing: -0.01em; }
   .sub { color: var(--text-secondary); margin: 0 0 24px; font-size: 13px; }
 

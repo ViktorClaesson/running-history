@@ -312,6 +312,23 @@ stacked panels plus the pace-zone histogram to scroll through. It now lives in
 width the sidebar drops `position: sticky` (there's no longer room for two columns
 side by side, so it just falls back to sitting in the normal flow).
 
+**Both sidebars stay in view all the way to the bottom.** A sticky element
+only sticks inside its parent's content box, so two things used to cut that
+short. The 50vh scroll room (see the pace-zone histogram section) sat as
+padding on `.page`, which is outside that box, and the body's own 56px bottom
+padding ended `.page` short of the window. Over that slack both sidebars
+scrolled away, and the settings sidebar (taller than the window, so it scrolls
+inside itself) scrolled away first. The slack now lives on `.wrap` and the body
+has no bottom padding, so `.page` runs to the end of the page. Probe at
+1400/1700/1800/2000px: both sidebars at `top: 20px` when scrolled to the very
+bottom, where they used to be at -473 (settings) and -369 (readout).
+
+`.wrap`'s flex basis is **600px**, not 1120px. With 1120 the three columns
+needed about 1770px of window before they'd fit side by side, so anything
+narrower (1700px, say) put the readout on a row of its own below the table,
+where it only came into view at the very bottom. Now the chart column shrinks
+instead, and the three stay side by side down to the 1300px breakpoint.
+
 Being pulled out of the main flow changes what "fixed height" needs to mean: the
 sidebar's *own* height changing between idle and hovered no longer reflows the
 chart next to it, so the old horizontal layout's flex-basis/max-width engineering
@@ -878,7 +895,8 @@ show at all — panel toggled off, or no run anywhere in history yet. That fixed
 two histograms, so the card was still ~620px on one and ~300px on the next.
 Two things together deal with it:
 
-- **Scroll room.** `.page` has `padding-bottom: 50vh`. Without it, a page that
+- **Scroll room.** `.wrap` has `padding-bottom: 50vh` (`.page` instead
+  below 1300px, where everything stacks). Without it, a page that
   fit the window (say every panel off but the histogram) couldn't be scrolled
   at all, so Run 2 of 2 was off-screen with no way down to it. And when the
   card shrank, the browser clamped the scroll position to the shorter page and
