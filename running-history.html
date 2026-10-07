@@ -186,7 +186,6 @@
   .tile.combo .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 28px; margin-top: 2px; }
   .tile.combo .grid.three { grid-template-columns: repeat(3, auto); gap: 2px 22px; }
   .tile.combo .grid.one { grid-template-columns: auto; }
-  .tile.combo .note { font-size: 11px; color: var(--muted); margin-top: 3px; }
   .tile[hidden] { display: none; }
   .tile.combo.target { min-width: 330px; position: relative; padding-right: 64px; }
   .tile.combo .grid.targets { grid-template-columns: repeat(2, auto); gap: 2px 22px; justify-content: start; }
@@ -316,6 +315,7 @@
   #infoPop[hidden] { display: none; }
   #infoPop p { margin: 0; }
   #infoPop p + p { margin-top: 6px; }
+  #infoPop .eq { font-variant-numeric: tabular-nums; color: var(--text-primary); }
   .legend .item { display: inline-flex; align-items: center; gap: 6px; }
   .swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
   .swatch.ramp { width: 26px; }
@@ -578,13 +578,7 @@
   </section>
 
   <section class="setgroup">
-    <h2 class="setgroup-title">Weekly target<span class="info" tabindex="0">i<span class="info-text">A what-if: type in a weekly distance,
-          run days and runs, and it splits the week into per-day targets. Seeded from the real history
-          (km/wk from the <span class="winLabel1">4w</span> window, days and runs from the <span class="winLabel2">16w</span> one) until edited.
-          With a long run, that run is alone on its day and counts as two: it is
-          2&nbsp;&times;&nbsp;km&nbsp;&divide;&nbsp;(days&nbsp;+&nbsp;1), and the other runs share what is left equally,
-          so a day with two of them is twice one. Without, every run is the same share. A day with two or
-          three runs is only listed when there are more runs than days to put them on.</span></span></h2>
+    <h2 class="setgroup-title">Weekly target<span class="info" tabindex="0">i<span class="info-text">A what-if box that splits a weekly distance into per-day targets. The (i) on the box itself shows the sums, with the numbers currently in it.</span></span></h2>
     <div class="ctrls">
       <label class="chk"><input type="checkbox" id="showTarget" checked> Weekly target box</label>
       <label class="chk" title="Count one run a week as the long run: alone on its day and worth two of the others. Only applies at 3 or more days a week.">
@@ -1985,6 +1979,52 @@ function targetFor({ km, days, runs }) {
 }
 
 const fmtPlan = v => String(+v.toFixed(1));
+// The (i) on the box: what it does in words, then the sums with the numbers
+// currently in it, then where the real-history figures come from. Rebuilt with
+// the box, so it always shows the figures actually on screen.
+function targetInfo(t, ok) {
+  const { km: K, days: D, runs: R } = plan, f = fmtPlan, k2 = v => km(v);
+  const a = planActual();
+  let kmSum = 0, rd = 0, rn = 0;
+  for (let i = Math.max(0, N - 1 - WINDOW_VOL); i < N - 1; i++) kmSum += daily[i];
+  for (let i = Math.max(0, N - 1 - WINDOW_FREQ); i < N - 1; i++) { if (daily[i] > 0) rd++; rn += nRuns[i]; }
+  const ratio = t.restDays > 0 ? t.restRuns / t.restDays : 0;
+  const why = !targetLong ? 'the long run is switched off in the settings'
+    : `the long run needs at least ${LONG_MIN_RUNS_PER_WEEK} days/wk`;
+  const sums = !ok ? '<p class="eq">Nothing to split: there are no runs in the week.</p>'
+    : t.long ? `<p class="eq">long run = 2 &times; km &divide; (days + 1)<br>` +
+        `&emsp;= 2 &times; ${f(K)} &divide; ${f(D + 1)} = <b>${k2(t.longKm)} km</b><br>` +
+        `1-run day = (km &minus; long run) &divide; (runs &minus; 1)<br>` +
+        `&emsp;= (${f(K)} &minus; ${k2(t.longKm)}) &divide; ${f(t.restRuns)} = <b>${k2(t.perRun)} km</b><br>` +
+        `2-run day = 2 &times; ${k2(t.perRun)} = ${k2(2 * t.perRun)} km<br>` +
+        `3-run day = 3 &times; ${k2(t.perRun)} = ${k2(3 * t.perRun)} km</p>` +
+        `<p class="eq">runs per other day = (runs &minus; 1) &divide; (days &minus; 1)<br>` +
+        `&emsp;= ${f(t.restRuns)} &divide; ${f(t.restDays)} = ${t.restDays > 0 ? ratio.toFixed(2) : '&mdash;'}` +
+        `<br>&emsp;${t.two ? '&gt;' : '&le;'} 1, so the 2-run day is ${t.two ? 'shown' : 'hidden'}` +
+        `<br>&emsp;${t.three ? '&gt;' : '&le;'} 2, so the 3-run day is ${t.three ? 'shown' : 'hidden'}</p>`
+    : `<p class="eq">1-run day = km &divide; runs = ${f(K)} &divide; ${f(R)} = <b>${k2(t.perRun)} km</b><br>` +
+        `2-run day = 2 &times; ${k2(t.perRun)} = ${k2(2 * t.perRun)} km<br>` +
+        `3-run day = 3 &times; ${k2(t.perRun)} = ${k2(3 * t.perRun)} km</p>` +
+        `<p class="eq">runs per day = runs &divide; days = ${f(R)} &divide; ${f(D)} = ${D > 0 ? ratio.toFixed(2) : '&mdash;'}` +
+        `<br>&emsp;${t.two ? '&gt;' : '&le;'} 1, so the 2-run day is ${t.two ? 'shown' : 'hidden'}` +
+        `<br>&emsp;${t.three ? '&gt;' : '&le;'} 2, so the 3-run day is ${t.three ? 'shown' : 'hidden'}</p>`;
+  return `<p>A what-if for splitting a week: how long each day&rsquo;s running should be to hit a weekly
+      distance, given how many days you run and how many runs those days hold. Every run day holds at least
+      one run, so runs/wk can&rsquo;t go below days/wk.</p>` +
+    (t.long
+      ? `<p>With a long run, it is alone on its day and counts as two days&rsquo; worth, so the week is split
+          into days&nbsp;+&nbsp;1 shares and the long run takes two of them. Every other run gets an equal
+          slice of what is left, so a day with two of them is twice a one-run day.</p>`
+      : `<p>No long run here (${why}), so every run is an equal share of the week.</p>`) +
+    sums +
+    `<p>${planEdited ? 'You have edited the numbers. The real history says:' : 'The numbers start from the real history, up to yesterday:'}<br>` +
+    `<span class="eq">km/wk = ${nf1.format(kmSum)} km &times; 7 &divide; ${WINDOW_VOL} days = <b>${nf1.format(a.km)}</b><br>` +
+    `days/wk = ${rd} run days &times; 7 &divide; ${WINDOW_FREQ} days = <b>${nf1.format(a.days)}</b><br>` +
+    `runs/wk = ${rn} runs &times; 7 &divide; ${WINDOW_FREQ} days = <b>${nf1.format(a.runs)}</b></span></p>` +
+    `<p>That is the last ${WINDOW_VOL} days (the ${WINDOWS[IV].label} window) for distance and the last
+      ${WINDOW_FREQ} (${WINDOWS[IF].label}) for days and runs, ending yesterday. Editing the box moves
+      nothing else on the page.</p>`;
+}
 function renderTarget() {
   const tile = document.getElementById('target-tile');
   if (!tile) return;
@@ -1998,22 +2038,17 @@ function renderTarget() {
     t.three ? cell(3 * t.perRun, 'day with 3 runs') : '',
     t.long ? cell(t.longKm, 'long run') : '',
   ].join('');
-  const note = !ok ? 'no runs to split the week over'
-    : t.long ? `long run 2 &times; ${fmtPlan(plan.km)} &divide; ${fmtPlan(plan.days + 1)} &middot; ${fmtPlan(t.restRuns)} other runs over ${fmtPlan(t.restDays)} days`
-    : targetLong ? `long runs need &ge;${LONG_MIN_RUNS_PER_WEEK} days/wk &middot; ${fmtPlan(plan.km)} &divide; ${fmtPlan(plan.runs)} runs`
-    : `no long run &middot; ${fmtPlan(plan.km)} &divide; ${fmtPlan(plan.runs)} runs`;
-  const a = planActual();
   tile.innerHTML =
-    `<div class="k">Weekly target${planEdited ? ' <span class="whatif">what-if</span>' : ''}</div>` +
+    `<div class="k">Weekly target<span class="info" tabindex="0">i<span class="info-text">${targetInfo(t, ok)}</span></span>` +
+      `${planEdited ? ' <span class="whatif">what-if</span>' : ''}</div>` +
     (planEdited ? `<button id="plan-reset" title="Back to the real figures">reset</button>` : '') +
     `<div class="plan">` +
       `<input type="number" id="plan-km" min="0" max="700" step="1" value="${fmtPlan(plan.km)}"><span class="u">km/wk</span>` +
       `<input type="number" id="plan-days" min="0" max="${PLAN_MAX_DAYS}" step="0.5" value="${fmtPlan(plan.days)}"><span class="u">days/wk</span>` +
       `<input type="number" id="plan-runs" min="0" max="${PLAN_MAX_RUNS}" step="0.5" value="${fmtPlan(plan.runs)}"><span class="u">runs/wk</span>` +
     `</div>` +
-    `<div class="grid targets">${cells}</div>` +
-    `<div class="note">${note}${planEdited
-      ? ` &middot; actually now ${nf1.format(a.km)} km &middot; ${nf1.format(a.days)} days &middot; ${nf1.format(a.runs)} runs` : ''}</div>`;
+    `<div class="grid targets">${cells}</div>`;
+  wireInfo(tile.querySelector('.info'));
 
   const kmIn = document.getElementById('plan-km');
   const daysIn = document.getElementById('plan-days'), runsIn = document.getElementById('plan-runs');
@@ -3759,12 +3794,18 @@ function showInfo(icon) {
   infoPop.style.left = x + 'px'; infoPop.style.top = y + 'px';
 }
 const hideInfo = () => { infoPop.hidden = true; };
-for (const icon of document.querySelectorAll('.info')) {
+// A declaration, and the listeners wrap hideInfo rather than naming it, because
+// the weekly-target box wires its own (i) every time it is rebuilt — the first
+// time well above this point in the script.
+function wireInfo(icon) {
   icon.addEventListener('mouseenter', () => showInfo(icon));
-  icon.addEventListener('mouseleave', hideInfo);
+  icon.addEventListener('mouseleave', () => hideInfo());
   icon.addEventListener('focus', () => showInfo(icon));
-  icon.addEventListener('blur', hideInfo);
+  icon.addEventListener('blur', () => hideInfo());
   icon.addEventListener('click', e => e.preventDefault());
+}
+for (const icon of document.querySelectorAll('.info')) {
+  if (!icon.closest('#target-tile')) wireInfo(icon);
 }
 window.addEventListener('scroll', hideInfo, true);
 

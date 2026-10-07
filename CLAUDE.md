@@ -162,7 +162,14 @@ It shows "day with 1 run" (one share), "day with 2 runs" only when
 (runs − 1)/(days − 1) > 1 (there are more non-long runs than non-long days), "day
 with 3 runs" only when that ratio is > 2, and the long run. Without a long run the
 same test uses runs/days. Editing it moves nothing else on the page; once touched
-it shows the real figures alongside and a reset in its top-right corner. The tile
+it shows a reset in its top-right corner. There is no note line under the
+numbers any more: the explanation lives behind the tile's own (i)
+(`targetInfo()`), which spells out the rule in words, then the sums with the
+figures currently in the box (and which of the 2-/3-run rows that shows or
+hides), then how the real-history seed values were counted ("360.2 km × 7 ÷ 28
+days = 90.0"). Because the tile is rebuilt on every edit, its (i) is wired by
+`wireInfo()` inside `renderTarget()` rather than by the page-wide loop, which
+skips it. The tile
 has a show/hide (`visPanels.target`) and lives with `targetLong` in the "Weekly
 target" settings group. The "Current 4w average" tile that used to sit beside it
 is gone — the hover readout already gives those rates.
