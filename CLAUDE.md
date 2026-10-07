@@ -188,10 +188,12 @@ to Sunday, each day with its run count and km:
 - **Friday is never doubled** — it is the rest day, run at all only at 7 days.
 - Two-run days need **≥ 4 days/wk** (`MULTI2_MIN_DAYS`), three-run days **≥ 6**
   (`MULTI3_MIN_DAYS`).
+- **At most 3 three-run days a week** (`MAX_TRIPLE`), L+1 counting as one —
+  so only Sat, Mon and Wed ever get a third run.
 
 Together those cap runs per days (`maxRunsFor()`). With a long run: 1→1, 2→2,
-3→3, 4→7, 5→9 (L + 4 × 2), 6→17, 7→18; without: 4→8, 5→10, 6→18, 7→19 (which
-is where `PLAN_MAX_RUNS` 19 comes from). `fitPlan()` keeps the inputs inside
+3→3, 4→7, 5→9 (L + 4 × 2), 6→14 (3+2+3+2+0+(L+1)+2), 7→15; without: 4→8,
+5→10, 6→15, 7→16 (which is where `PLAN_MAX_RUNS` 16 comes from). `fitPlan()` keeps the inputs inside
 that: typing more runs than the cap raises days to the fewest that can hold
 them, fewer runs than days lowers days, and changing days (or toggling the
 long run, which moves the cap) clamps runs. In what-if mode the "day with 2/3

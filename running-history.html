@@ -1971,7 +1971,7 @@ let planEdited = prefs.plan !== null;
 // the week can be looked at without one; below LONG_MIN_RUNS_PER_WEEK days it is
 // off whatever this says, since there is no room for a run to be the long one.
 let targetLong = prefs.targetLong;
-const PLAN_MAX_DAYS = 7, PLAN_MAX_RUNS = 19;   // 19 = 7 days, no long run, Fri single
+const PLAN_MAX_DAYS = 7, PLAN_MAX_RUNS = 16;   // 7 days, no long run: 3 x 3 + 3 x 2 + Fri 1
 
 // With a long run: it is always alone on its day and counts as two, so the week
 // is runs + 1 equal shares... of which the long run takes two — long = 2 x km /
@@ -2001,12 +2001,14 @@ const fmtPlan = v => String(+v.toFixed(1));
 //    the first to get a third — L+1, the long run plus a short one.
 //  - Friday is never doubled: it is the rest day, run at all only at 7 days.
 //  - Two-run days need MULTI2_MIN_DAYS days/wk, three-run days MULTI3_MIN_DAYS.
+//  - At most MAX_TRIPLE three-run days a week, L+1 counting as one.
 // Which caps runs per days — 5 days with a long run is at most L + 4 x 2 = 9.
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const SAT = 5, FRI = 4;
 const DAY_ORDER = [SAT, 0, 2, 3, 6, 1, FRI];   // Sat, Mon, Wed, Thu, Sun, Tue, Fri
 const DAY_NAMES_ORDER = DAY_ORDER.map(d => WEEKDAYS[d]).join(', ');
 const MULTI2_MIN_DAYS = 4, MULTI3_MIN_DAYS = 6;
+const MAX_TRIPLE = 3;   // most three-run days in a week; L+1 counts as one
 const longActive = days => targetLong && days >= LONG_MIN_RUNS_PER_WEEK;
 // The run days, and one entry per extra run in the order they are handed out.
 function weekSlots(days) {
@@ -2014,7 +2016,8 @@ function weekSlots(days) {
   const multi = used.filter(d => d !== FRI);
   const slots = [];
   if (days >= MULTI2_MIN_DAYS) slots.push(...multi.filter(d => !(long && d === SAT)));
-  if (days >= MULTI3_MIN_DAYS) slots.push(...multi);   // Saturday first: L+1
+  // Saturday first (L+1), and at most MAX_TRIPLE days get a third run.
+  if (days >= MULTI3_MIN_DAYS) slots.push(...multi.slice(0, MAX_TRIPLE));
   return { used, slots };
 }
 const maxRunsFor = days => days + weekSlots(days).slots.length;
@@ -2100,7 +2103,9 @@ function targetInfo(t, ok) {
       `4. L already counts as two, so Saturday sits out the second-run round and is the first to get a
         third: L+1, the long run plus a short one.<br>` +
       `5. Friday is never doubled up &mdash; it is the rest day, and is only run at all at 7 days/wk.<br>` +
-      `6. Two-run days need at least ${MULTI2_MIN_DAYS} days/wk, three-run days at least ${MULTI3_MIN_DAYS}.</p>` +
+      `6. Two-run days need at least ${MULTI2_MIN_DAYS} days/wk, three-run days at least ${MULTI3_MIN_DAYS}.<br>` +
+      `7. At most ${MAX_TRIPLE} three-run days a week, L+1 counting as one &mdash; so only Sat, Mon and Wed
+        ever get a third run.</p>` +
       `<p>That caps the runs a week can hold. Most runs/wk at each days/wk${targetLong ? '' : ' (no long run)'}:<br>` +
       `<span class="eq">${Array.from({ length: PLAN_MAX_DAYS }, (_, i) => i + 1)
         .map(d => d === plan.days ? `<b>${d}&nbsp;&rarr;&nbsp;${maxRunsFor(d)}</b>` : `${d}&nbsp;&rarr;&nbsp;${maxRunsFor(d)}`).join(' &middot; ')}</span><br>` +
