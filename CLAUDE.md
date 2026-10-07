@@ -69,7 +69,11 @@ rest stub, and the floor line stays unlabelled. Everything below is about log.
 
 `barCap`/`barCapKm` ("Cap at X km", on, 45 km — past a marathon, so in practice only the odd ultra is ever cut) draws any day longer than the
 cap at the cap: the axis tops out exactly at it with an "X+" tick (on log too,
-rather than rounding up past it), and each cut-off bar gets two thin
+rather than rounding up past it) — and it does so **whenever the axis would
+otherwise reach past the cap**, not only when a run was actually cut: a 42.9 km
+longest run at a 45 km cap used to round the axis up to 50 (log) or 60 (linear),
+a height no bar can ever be drawn at. An axis that tops out *below* the cap is
+left alone. Each cut-off bar gets two thin
 `--surface-1` breaks across its top, like an axis break. It exists for linear
 mode, where one 80 km ultra would otherwise flatten every other run. Only the
 drawing is capped — the readout, table and every series use the real distance.

@@ -2465,11 +2465,19 @@ function drawBars() {
   }
   if (!(vMax > 0)) { vMin = 1; vMax = 10; }            // nothing in view: a plausible empty axis
   const isLog = barScale === 'log';
+  // The axis stops at the cap whenever it would otherwise reach past it: when a
+  // run was cut, and also when rounding the tallest bar up would overshoot the
+  // cap (42 km → 50), since no bar can ever be drawn above it — so the axis
+  // never rounds out to a value no bar can reach. Either way the top tick is
+  // the cap, marked "X+". An axis that tops out below the cap is left alone.
+  let capAxis = false;
+  const capTop = top => {
+    capAxis = capOn && (anyCut || top > barCapKm);
+    return capAxis ? barCapKm : top;
+  };
   let yOf, ticks, yHi, step = 1;
   if (isLog) {
-    // a cut-off run tops out exactly at the cap, so the axis does too, rather
-    // than rounding out past it to a value no bar can reach
-    yHi = anyCut ? barCapKm : logUp(vMax);
+    yHi = capTop(logUp(vMax));
     // at least one full decade of axis, so a view where every run is much the same
     // length doesn't blow that narrow range up across the whole panel
     const yLo = Math.min(logDown(vMin), logUp(vMax) / 10);
@@ -2485,11 +2493,11 @@ function drawBars() {
     // and something you can aim at.
     ticks = niceTicks(vMax);
     step = ticks.step;
-    yHi = anyCut ? barCapKm : ticks[ticks.length - 1];
+    yHi = capTop(ticks[ticks.length - 1]);
     yOf = v => base - plotH * v / yHi;
     ticks = ticks.filter(t => t > 0);
   }
-  if (anyCut) {
+  if (capAxis) {
     ticks = ticks.filter(t => t < yHi * 0.9999 && base - yOf(t) < plotH - 12);
     ticks.push(yHi);
   }
@@ -2503,7 +2511,7 @@ function drawBars() {
     ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(PAD.l, y); ctx.lineTo(w - PAD.r, y); ctx.stroke();
     ctx.fillStyle = C('--muted');
-    const cut = anyCut && t === yHi;
+    const cut = capAxis && t === yHi;
     const txt = isLog ? logTickText(t) : cut ? String(+t.toFixed(1)) : t.toFixed(Number.isInteger(step) ? 0 : 1);
     ctx.fillText(cut ? txt + '+' : txt, PAD.l - 8, y);
   }
