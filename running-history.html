@@ -186,22 +186,28 @@
   .tile.combo .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 28px; margin-top: 2px; }
   .tile.combo .grid.three { grid-template-columns: repeat(3, auto); gap: 2px 22px; }
   .tile.combo .grid.one { grid-template-columns: auto; }
-  .tile.combo .note { font-size: 11px; color: var(--muted); margin-top: 3px; }
-  .tile.combo.target { min-width: 330px; }
-  .tile.combo .plan { display: flex; align-items: baseline; gap: 4px; margin: 3px 0 1px;
+  .tile[hidden] { display: none; }
+  .tile.combo.target { min-width: 330px; position: relative; padding-right: 64px; }
+  .tile.combo .weekempty { font-size: 12px; color: var(--muted); margin-top: 10px; }
+  .tile.combo .weekplan { display: grid; grid-template-columns: repeat(7, minmax(44px, 1fr)); gap: 4px; margin-top: 10px; }
+  .weekplan .wd { display: flex; flex-direction: column; align-items: center; padding: 4px 2px;
+    border: 1px solid var(--border); border-radius: 6px; line-height: 1.3; }
+  .weekplan .wd.long { border-color: var(--accent); }
+  .weekplan .wd.rest { opacity: .45; }
+  .weekplan .dn { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .weekplan .wr { font-size: 10px; color: var(--text-secondary); }
+  .weekplan .wk { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .tile.combo.target #plan-reset { position: absolute; top: 8px; right: 10px; font-size: 11px; padding: 1px 7px; }
+  .tile.combo .plan { display: flex; align-items: baseline; gap: 4px 6px; margin: 3px 0 1px; flex-wrap: wrap;
     font-size: 12px; color: var(--text-secondary); }
   .tile.combo .plan input { font: inherit; font-size: 13px; font-weight: 600; width: 52px;
     text-align: right; color: var(--text-primary); background: transparent;
     border: 0; border-bottom: 1px solid var(--border); padding: 0 2px;
     font-variant-numeric: tabular-nums; }
   .tile.combo .plan input:focus { outline: none; border-bottom-color: var(--accent); }
-  .tile.combo .plan .op { color: var(--muted); margin: 0 2px; }
-  .tile.combo .plan button { font-size: 11px; padding: 1px 7px; margin-left: 4px; }
+  .tile.combo .plan .u { margin-right: 6px; }
   .whatif { font-size: 10px; font-weight: 600; color: var(--accent); border: 1px solid currentColor;
     border-radius: 999px; padding: 0 5px; margin-left: 5px; letter-spacing: 0; text-transform: none; }
-  .tile.combo .cell { display: flex; align-items: baseline; gap: 3px; }
-  .tile.combo .cell .v { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
-  .tile.combo .cell .u { font-size: 12px; font-weight: 400; color: var(--text-secondary); }
 
   /* A vertical list now — one pair per row, in a sidebar rather than inline above
      the chart. The old horizontal layout needed a lot of flex-basis/max-width
@@ -314,6 +320,7 @@
   #infoPop[hidden] { display: none; }
   #infoPop p { margin: 0; }
   #infoPop p + p { margin-top: 6px; }
+  #infoPop .eq { font-variant-numeric: tabular-nums; color: var(--text-primary); }
   .legend .item { display: inline-flex; align-items: center; gap: 6px; }
   .swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
   .swatch.ramp { width: 26px; }
@@ -412,6 +419,24 @@
        group keeps its own legend next to its own controls: the window-line
        swatches belong with the volume/frequency panels they colour, the
        verdict swatches belong with the verdict settings. -->
+  <section class="setgroup">
+    <h2 class="setgroup-title">Weekly target<span class="info" tabindex="0">i<span class="info-text">A what-if box that lays a week out day by day: how far each day should be to hit a weekly distance. It starts from your real history over the window picked below. The (i) on the box itself shows the rules and the sums, with the numbers currently in it.</span></span></h2>
+    <div class="ctrls">
+      <label class="chk"><input type="checkbox" id="showTarget" checked> Weekly target box</label>
+      <label class="chk" title="Count one run a week as the long run: alone on its day and worth two of the others. Only applies at 3 or more days a week.">
+        <input type="checkbox" id="targetLong" checked> Include a long run
+      </label>
+      <label class="chk" title="Which rolling window the box's starting km/wk, days/wk and runs/wk are averaged over, ending on the last day in the data (or the day before, if that is today). Only the starting figures — an edited what-if keeps its own numbers.">Based on
+        <select id="targetWin">
+          <option value="s0" class="winLabel0">1w</option>
+          <option value="s1" class="winLabel1">4w</option>
+          <option value="s2" class="winLabel2" selected>16w</option>
+          <option value="s3" class="winLabel3">64w</option>
+        </select> window
+      </label>
+    </div>
+  </section>
+
   <section class="setgroup">
     <h2 class="setgroup-title">Distance bars<span class="info" tabindex="0">i<span class="info-text"><p>One bar per day, its height that day&rsquo;s own distance. On the <strong>log</strong> axis equal <em>ratios</em> are equal heights &mdash; 5&rarr;10&nbsp;km is the same step as 10&rarr;20 &mdash; so one very long run can&rsquo;t flatten every short one. On the <strong>linear</strong> axis heights are plain kilometres; capping long days there keeps one ultra from squashing the rest: anything longer than the cap is drawn at it, with a break across its top, and the axis reads &ldquo;X+&rdquo;. The readout and the table always give the real distance. A day with no run gets a short grey stub, so it can still be hovered and clicked.</p><p data-when="verdict"><strong>Verdict:</strong> Simply <em>which distance-per-week window is highest that day</em> — the
           shortest one wins a tie. <span class="winLabel0">1w</span> highest is highly productive,
@@ -582,7 +607,7 @@
     </div>
   </section>
 
-  <button id="reset" title="Put every setting in this sidebar back to its default and the view back to the default span. Leaves the what-if target alone — that has its own reset.">Reset</button>
+  <button id="reset" title="Put every setting in this sidebar back to its default and the view back to the default span. Leaves the weekly target's numbers alone — that box has its own reset.">Reset</button>
 </aside>
 <div class="wrap">
   <h1>Running history<span class="info" tabindex="0">i<span class="info-text"><p>One bar per day, height is that day&rsquo;s own distance &mdash; on a logarithmic or linear axis, see
@@ -1039,7 +1064,7 @@ const PREF_DEFAULTS = {
   wtShare: 35,       // % of the score a zone plus everything faster needs to be the run's type
   zoneBars: 3,       // sub-bands per pace zone in the pace-zone histogram
   zoneAxis: 'dist',  // what the pace-zone histogram's bars measure: 'time' (minutes) or 'dist' (km)
-  panels: { vol: true, freq: true, runs: true, vdot: true, zone: true, zarea: true, table: true },   // which optional panels are shown
+  panels: { vol: true, freq: true, runs: true, vdot: true, zone: true, zarea: true, table: true, target: true },   // which optional panels are shown
   // Which window the stacked-zone panel is over — one at a time, since the
   // stack is eight bands deep and four of those at once is a lot of chart. A
   // slot key, so it keeps its meaning when windowBase/windowMult change. s2
@@ -1054,13 +1079,15 @@ const PREF_DEFAULTS = {
   // Draw the highest of the four at full strength along every stretch and fade
   // the rest — which window is on top, seen rather than worked out.
   highlightMax: true,
-  plan: null,        // null = the what-if box follows real history; {km, days} = edited
+  plan: null,        // null = the what-if box follows real history; {km, days, runs} = edited
+  targetLong: true,  // the weekly target counts one run as the long one (only at >= 3 days/wk)
+  targetWin: 's2',   // slot key: the window the weekly target's starting figures are averaged over
 };
 // Slot keys, not week counts — a slot keeps its colour and its show/hide
 // setting when windowBase/windowMult change what it actually measures.
 const SLOT_KEYS = ['s0', 's1', 's2', 's3'];
 // The optional panels, i.e. everything but the bars.
-const PANEL_KEYS = ['vol', 'freq', 'runs', 'vdot', 'zone', 'zarea', 'table'];
+const PANEL_KEYS = ['vol', 'freq', 'runs', 'vdot', 'zone', 'zarea', 'table', 'target'];
 const LINE_KEYS = SLOT_KEYS;
 function loadPrefs() {
   const p = { ...PREF_DEFAULTS, panels: { ...PREF_DEFAULTS.panels }, lines: { ...PREF_DEFAULTS.lines } };
@@ -1093,7 +1120,7 @@ function loadPrefs() {
   if (typeof raw.useGap === 'boolean') p.gapVdot = p.gapPace = raw.useGap;
   // `maxBehind`/`fadeWindows` belonged to the MAX line and are ignored, as is a
   // `lines.max` entry — all dropped on the next save.
-  for (const k of ['highlightMax', 'gapVdot', 'gapPace', 'vdotNearDots', 'barCap']) {
+  for (const k of ['highlightMax', 'gapVdot', 'gapPace', 'vdotNearDots', 'barCap', 'targetLong']) {
     if (typeof raw[k] === 'boolean') p[k] = raw[k];
   }
   if (raw.panels && typeof raw.panels === 'object') {
@@ -1107,9 +1134,14 @@ function loadPrefs() {
     }
   }
   if (SLOT_KEYS.includes(raw.zoneAreaWin)) p.zoneAreaWin = raw.zoneAreaWin;
+  if (SLOT_KEYS.includes(raw.targetWin)) p.targetWin = raw.targetWin;
   if (['km', 'min', 'pctKm', 'pctMin'].includes(raw.zoneAreaMode)) p.zoneAreaMode = raw.zoneAreaMode;
+  // An entry from before runs/wk existed has no `runs`; it starts at one run a day.
   if (raw.plan && num(raw.plan.km, 0, 700) && num(raw.plan.days, 0, 7)) {
-    p.plan = { km: raw.plan.km, days: raw.plan.days };
+    // Days and runs are whole numbers in the what-if; an older entry may carry halves.
+    const days = Math.round(raw.plan.days);
+    const runs = num(raw.plan.runs, 0, 19) ? Math.max(Math.round(raw.plan.runs), days) : days;
+    p.plan = { km: raw.plan.km, days, runs };
   }
   return p;
 }
@@ -1139,7 +1171,9 @@ function savePrefs() {
     lines: { ...visLines },
     zoneAreaWin,
     zoneAreaMode,
-    plan: planEdited ? { km: plan.km, days: plan.days } : null,
+    plan: planEdited ? { km: plan.km, days: plan.days, runs: plan.runs } : null,
+    targetLong,
+    targetWin,
   };
   const changed = Object.keys(PREF_DEFAULTS)
     .some(k => {
@@ -1181,6 +1215,12 @@ const WINDOWS = Array.from({ length: N_WINDOWS }, (_, k) => ({ key: 's' + k, css
 // reason — the verdict compares neighbouring windows directly. See classify.)
 const IV = 1, IF = 2;                 // WINDOWS index: volume / frequency
 let WINDOW_VOL, WINDOW_FREQ;
+// The weekly-target box reads one window for all three of its starting figures
+// (km, run days and runs per week), picked in its settings. A slot key, like
+// zoneAreaWin, so it survives a change to windowBase/windowMult. Declared up
+// here because recompute() -> computeTargets() runs at load.
+let targetWin = prefs.targetWin;
+const targetDays = () => WINDOWS[SLOT_KEYS.indexOf(targetWin)].days;
 // Derives each slot's length from the two numbers. Called before recompute(),
 // and again whenever either setting changes.
 function rebuildWindows() {
@@ -1234,17 +1274,15 @@ const runSeries = blank();
 const runDaysIn = Array.from({ length: WINDOWS.length }, () => new Array(N));
 const runsIn    = Array.from({ length: WINDOWS.length }, () => new Array(N));
 
-const target = new Array(N); // what each day's run had to be to hold the average (see computeTargets)
-const longOn = new Array(N); // was the long-run scheme in play that day at all?
-const rpwPrev = new Array(N); // run days per week as of the day before
-const weeklyPrev = new Array(N); // km per week as of the day before
+// The weekly-target box's starting figures — see computeTargets.
+let targetSeed = null;
 // The single-window views the target maths, the tiles, the table and the readout's
 // distance figures still need. avg is km/day over the volume window; perWeekAt and
 // perWeekRunsAt read the frequency window's rates straight off the series above.
 const avg = new Array(N);
 const perWeekAt = i => freqSeries[IF][i];
 const perWeekRunsAt = i => runSeries[IF][i];
-const LONG_MIN_RUNS_PER_WEEK = 3.0;
+const LONG_MIN_RUNS_PER_WEEK = 3;   // weekly target: fewer run days than this and there is no long run
 function recompute() {
   // Rates are always divided by the FULL window, never by days elapsed, so each
   // window's own first stretch ramps in from zero: one run inside the 64-week
@@ -1476,47 +1514,28 @@ function fullColour(c) {
   if (!c) return C('--rest');
   return C(VERDICT_CSS[c.dir]);
 }
-// What today's run had to be to hold the average steady, judged only on where
-// things stood YESTERDAY — comparing a run against an average it is itself part of
-// is circular, and the raw average also moves when an old run drops out of the
-// window. Holding avg km/day at a frequency of r run days per week means each run
-// has to cover a week's volume spread over those r runs:
-//     target = avg(yesterday) x 7 / runDaysPerWeek(yesterday)
-// which is just the average distance per running day as of yesterday.
+// The rates the weekly-target box is seeded from: km, run days and runs per
+// week over the targetWin window, ending on the last day of the data — unless
+// that day is today, in which case it ends the day before, since today may
+// not have all its runs in yet (an export taken at midday). Only that one
+// window is ever read, so it is summed directly rather than as a series.
+// A declaration, not a const: recompute() calls computeTargets() at load,
+// above this line (the declaration-order gotcha).
+function dayKey(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 function computeTargets() {
-  target[0] = 0;   // nothing behind day one, so any run counts as an increase
-  // Rates over the window ending yesterday, and whether long runs apply at all.
-  // Below 3 run days per week there is no room for a run to be "the long one", so
-  // the long scheme is switched off and everything is read against 1x. This is a
-  // frequency question — how often, not how far — so it runs off WINDOW_FREQ,
-  // the same window the run days/week and runs/week panels use.
-  {
-    let rd = 0;
-    for (let i = 1; i < N; i++) {
-      if (daily[i-1] > 0) rd++;
-      const dropped = i - 1 - WINDOW_FREQ;
-      if (dropped >= 0 && daily[dropped] > 0) rd--;
-      rpwPrev[i] = rd * 7 / WINDOW_FREQ;
-      longOn[i] = rpwPrev[i] >= LONG_MIN_RUNS_PER_WEEK;
-    }
-    rpwPrev[0] = 0; longOn[0] = false; weeklyPrev[0] = 0;
+  const W = targetDays();
+  const lastIsToday = dayKey(dateAt(N - 1)) === dayKey(new Date());
+  const end = lastIsToday ? N - 2 : N - 1;   // inclusive
+  let km = 0, rd = 0, rn = 0;
+  for (let i = Math.max(0, end - W + 1); i <= end; i++) {
+    km += daily[i];
+    if (daily[i] > 0) rd++;
+    rn += nRuns[i];
   }
-
-  // Weekly volume split over the week's runs. Once long runs are in play one of
-  // them is expected to be worth two, so a 3-runs-a-week week is 1+1+2 = 4
-  // target-sized efforts, not 3: divide by runsPerWeek + 1.
-  //
-  let sum = 0;
-  for (let i = 1; i < N; i++) {
-    sum += daily[i-1];
-    const dropped = i - 1 - WINDOW_VOL;
-    if (dropped >= 0) sum -= daily[dropped];
-    if (sum < 1e-9) sum = 0;   // same float-dust snap as recompute() — see there
-    const weekly = sum * 7 / WINDOW_VOL;
-    weeklyPrev[i] = weekly;
-    const divisor = rpwPrev[i] + (longOn[i] ? 1 : 0);
-    target[i] = divisor > 0 ? weekly / divisor : 0;
-  }
+  targetSeed = { km: km * 7 / W, days: rd * 7 / W, runs: rn * 7 / W,
+                 kmSum: km, runDays: rd, nRuns: rn, W, end, lastIsToday };
 }
 
 // The verdict. Judging a run against a target for its own day never really
@@ -1940,8 +1959,8 @@ const seg = parts => parts.filter(Boolean).map(t => `<span class="seg">${t}</spa
 const total = daily.reduce((a,b)=>a+b,0);
 const runDays = daily.filter(v=>v>0).length;
 function renderTiles() {
-  // all-time figures first, then the rolling rate as one box read left-to-right,
-  // top-to-bottom: day, week, month, year
+  // all-time figures first, then the weekly-target what-if (the current rolling
+  // rates used to have a box here too; the hover readout already gives them)
   const totals = [
     ['Total distance', total.toFixed(0), 'km'],
     ['Runs logged', String(DATA.runCount), ''],
@@ -1949,74 +1968,198 @@ function renderTiles() {
     ['All-time avg', (total/N).toFixed(2), 'km/day'],
   ].map(([k,v,u]) => `<div class="tile"><div class="k">${k}</div><div class="v">${v}<span class="u">${u}</span></div></div>`).join('');
 
-  const a = avg[N-1];
-
-  const cells = [
-    [a.toFixed(2), 'km/day'],
-    [nf1.format(perWeekKm(a)), 'km/wk'],
-    [nf0.format(perMonthKm(a)), 'km/mo'],
-    [nf0.format(perYearKm(a)), 'km/yr'],
-  ].map(([v,u]) => `<div class="cell"><span class="v">${v}</span><span class="u">${u}</span></div>`).join('');
-
   document.getElementById('tiles').innerHTML = totals +
-    `<div class="tile combo"><div class="k">Current ${WINDOWS[IV].label} average</div><div class="grid">${cells}</div></div>` +
-    `<div class="tile combo target" id="target-tile"></div>`;
+    `<div class="tile combo target" id="target-tile"${visPanels.target ? '' : ' hidden'}></div>`;
   renderTarget();
 }
 
-// --- Today's target, as a what-if -----------------------------------------
-// Editable so a change in weekly volume or frequency can be tried out. This box
-// only ever describes the inputs in it; the bars keep their own per-day targets
-// from the actual history, which is why it shows the real figure alongside once
-// the numbers have been touched.
-const planActual = () => ({ km: weeklyPrev[N-1], days: rpwPrev[N-1] });
+// --- Weekly target, as a what-if ------------------------------------------
+// Editable so a change in weekly volume, run days or runs can be tried out.
+// Seeded from the real history (see computeTargets) until the numbers are touched, after which it shows
+// the real figures alongside and offers a reset.
+const planActual = () => ({ km: targetSeed.km, days: targetSeed.days, runs: targetSeed.runs });
 let plan = prefs.plan ? { ...prefs.plan } : planActual();
 let planEdited = prefs.plan !== null;
+// Whether one run a week is the long one. A setting rather than a fixed rule so
+// the week can be looked at without one; below LONG_MIN_RUNS_PER_WEEK days it is
+// off whatever this says, since there is no room for a run to be the long one.
+let targetLong = prefs.targetLong;
+const PLAN_MAX_DAYS = 7, PLAN_MAX_RUNS = 16;   // 7 days, no long run: 3 x 3 + 3 x 2 + Fri 1
 
-function targetFor(weeklyKm, runsPerWeek) {
-  const long = runsPerWeek >= LONG_MIN_RUNS_PER_WEEK;
-  const divisor = runsPerWeek + (long ? 1 : 0);
-  return { long, divisor, target: divisor > 0 ? weeklyKm / divisor : 0 };
+// With a long run: it is always alone on its day and counts as two, so the week
+// is runs + 1 equal shares... of which the long run takes two — long = 2 x km /
+// (days + 1) — and the other runs - 1 runs split what is left equally. A day
+// with k runs is k of those. Without one every run is an equal share, km / runs.
+function targetFor({ km, days, runs }) {
+  const long = targetLong && days >= LONG_MIN_RUNS_PER_WEEK;
+  const restRuns = long ? runs - 1 : runs, restDays = long ? days - 1 : days;
+  const longKm = long ? 2 * km / (days + 1) : 0;
+  const perRun = restRuns > 0 ? (km - longKm) / restRuns : 0;
+  return { long, longKm, perRun, restRuns, restDays };
 }
 
+const fmtPlan = v => String(+v.toFixed(1));
+
+// --- The template week, shown in what-if mode ------------------------------
+// Monday first. The rules, all of which the box's (i) spells out too:
+//  - Run days are picked in DAY_ORDER (Sat, Mon, Wed, Thu, Sun, Tue, Fri), so
+//    fewer days drop Fri first, then Tue, Sun, Thu, Wed, Mon.
+//  - Saturday is the long run (L) when there is one.
+//  - Extra runs go out in that same order, a round at a time: every day gets a
+//    second run before any gets a third.
+//  - L already counts as two, so Saturday sits out the second-run round, and is
+//    the first to get a third — L+1, the long run plus a short one.
+//  - Friday is never doubled: it is the rest day, run at all only at 7 days.
+//  - Two-run days need MULTI2_MIN_DAYS days/wk, three-run days MULTI3_MIN_DAYS.
+//  - At most MAX_TRIPLE three-run days a week, L+1 counting as one.
+// Which caps runs per days — 5 days with a long run is at most L + 4 x 2 = 9.
+const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const SAT = 5, FRI = 4;
+const DAY_ORDER = [SAT, 0, 2, 3, 6, 1, FRI];   // Sat, Mon, Wed, Thu, Sun, Tue, Fri
+const DAY_NAMES_ORDER = DAY_ORDER.map(d => WEEKDAYS[d]).join(', ');
+const MULTI2_MIN_DAYS = 4, MULTI3_MIN_DAYS = 6;
+const MAX_TRIPLE = 3;   // most three-run days in a week; L+1 counts as one
+const longActive = days => targetLong && days >= LONG_MIN_RUNS_PER_WEEK;
+// The run days, and one entry per extra run in the order they are handed out.
+function weekSlots(days) {
+  const used = DAY_ORDER.slice(0, days), long = longActive(days);
+  const multi = used.filter(d => d !== FRI);
+  const slots = [];
+  if (days >= MULTI2_MIN_DAYS) slots.push(...multi.filter(d => !(long && d === SAT)));
+  // Saturday first (L+1), and at most MAX_TRIPLE days get a third run.
+  if (days >= MULTI3_MIN_DAYS) slots.push(...multi.slice(0, MAX_TRIPLE));
+  return { used, slots };
+}
+const maxRunsFor = days => days + weekSlots(days).slots.length;
+// Keeps an edited plan inside what a week can hold: runs between days and the
+// cap for those days. Moving runs past either end moves days to fit (fewer runs
+// than days drags days down; more than the cap drags them up to the fewest days
+// that can hold them); moving anything else just clamps runs.
+function fitPlan({ km, days, runs }, which) {
+  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+  days = clamp(Math.round(days), 0, PLAN_MAX_DAYS);
+  runs = clamp(Math.round(runs), 0, PLAN_MAX_RUNS);
+  if (which === 'runs') {
+    if (runs < days) days = runs;
+    while (days < PLAN_MAX_DAYS && runs > maxRunsFor(days)) days++;
+  }
+  runs = clamp(runs, days, maxRunsFor(days));
+  return { km: clamp(km, 0, 700), days, runs };
+}
+function weekPlan(t) {
+  const { used, slots } = weekSlots(plan.days);
+  const runs = new Array(7).fill(0);
+  for (const d of used) runs[d] = 1;
+  for (const d of slots.slice(0, plan.runs - plan.days)) runs[d]++;
+  return WEEKDAYS.map((name, d) => {
+    const long = t.long && d === SAT && runs[d] > 0;
+    return { name, d, runs: runs[d], long,
+      km: long ? t.longKm + (runs[d] - 1) * t.perRun : runs[d] * t.perRun };
+  });
+}
+function weekPlanHtml(week) {
+  return `<div class="weekplan">${week.map(w => {
+    const what = w.long ? (w.runs > 1 ? `L+${w.runs - 1}` : 'L')
+      : w.runs === 0 ? 'rest' : w.runs === 1 ? '1 run' : `${w.runs} runs`;
+    const cls = ['wd', w.long ? 'long' : '', w.runs === 0 ? 'rest' : ''].filter(Boolean).join(' ');
+    return `<div class="${cls}"><span class="dn">${w.name}</span>` +
+      `<span class="wr">${what}</span><span class="wk">${w.runs ? nf1.format(w.km) : '&ndash;'}</span></div>`;
+  }).join('')}</div>`;
+}
+// The (i) on the box: what it does in words, then the sums with the numbers
+// currently in it, then where the real-history figures come from. Rebuilt with
+// the box, so it always shows the figures actually on screen.
+function targetInfo(t, ok) {
+  const { km: K, days: D, runs: R } = plan, f = fmtPlan, k2 = v => km(v);
+  const a = planActual();
+  const { kmSum, runDays: rd, nRuns: rn, W, end, lastIsToday } = targetSeed;
+  const endText = `${fmtDate.format(dateAt(end))}${lastIsToday
+    ? ' &mdash; yesterday, since the data runs to today and today may not have all its runs in yet'
+    : ', the last day in the data'}`;
+  const why = !targetLong ? 'the long run is switched off in the settings'
+    : `the long run needs at least ${LONG_MIN_RUNS_PER_WEEK} days/wk`;
+  const sums = !ok ? '<p class="eq">Nothing to split: there are no runs in the week.</p>'
+    : t.long ? `<p class="eq">long run = 2 &times; km &divide; (days + 1)<br>` +
+        `&emsp;= 2 &times; ${f(K)} &divide; ${f(D + 1)} = <b>${k2(t.longKm)} km</b><br>` +
+        `1-run day = (km &minus; long run) &divide; (runs &minus; 1)<br>` +
+        `&emsp;= (${f(K)} &minus; ${k2(t.longKm)}) &divide; ${f(t.restRuns)} = <b>${k2(t.perRun)} km</b><br>` +
+        `2-run day = 2 &times; ${k2(t.perRun)} = ${k2(2 * t.perRun)} km<br>` +
+        `3-run day = 3 &times; ${k2(t.perRun)} = ${k2(3 * t.perRun)} km</p>`
+    : `<p class="eq">1-run day = km &divide; runs = ${f(K)} &divide; ${f(R)} = <b>${k2(t.perRun)} km</b><br>` +
+        `2-run day = 2 &times; ${k2(t.perRun)} = ${k2(2 * t.perRun)} km<br>` +
+        `3-run day = 3 &times; ${k2(t.perRun)} = ${k2(3 * t.perRun)} km</p>`;
+  return `<p>A what-if for splitting a week: how long each day&rsquo;s running should be to hit a weekly
+      distance, given how many days you run and how many runs those days hold. Every run day holds at least
+      one run, so runs/wk can&rsquo;t go below days/wk.</p>` +
+    (t.long
+      ? `<p>With a long run, it is alone on its day and counts as two days&rsquo; worth, so the week is split
+          into days&nbsp;+&nbsp;1 shares and the long run takes two of them. Every other run gets an equal
+          slice of what is left, so a day with two of them is twice a one-run day.</p>`
+      : `<p>No long run here (${why}), so every run is an equal share of the week.</p>`) +
+    sums +
+    (ok ? `<p>The template week lays the ${plan.days} days and ${plan.runs} runs out Monday to Sunday:<br>` +
+      `1. Run days are picked in the order ${DAY_NAMES_ORDER}, so with fewer days Friday goes first, then
+        Tuesday, Sunday, Thursday, Wednesday and Monday.<br>` +
+      `2. Saturday is the long run (L)${t.long ? '' : ` when there is one &mdash; not this week, so it is just the first day in the order`}.<br>` +
+      `3. Extra runs go out in that same order, a round at a time: every day gets a second run before any
+        day gets a third.<br>` +
+      `4. L already counts as two, so Saturday sits out the second-run round and is the first to get a
+        third: L+1, the long run plus a short one.<br>` +
+      `5. Friday is never doubled up &mdash; it is the rest day, and is only run at all at 7 days/wk.<br>` +
+      `6. Two-run days need at least ${MULTI2_MIN_DAYS} days/wk, three-run days at least ${MULTI3_MIN_DAYS}.<br>` +
+      `7. At most ${MAX_TRIPLE} three-run days a week, L+1 counting as one &mdash; so only Sat, Mon and Wed
+        ever get a third run.</p>` +
+      `<p>That caps the runs a week can hold. Most runs/wk at each days/wk${targetLong ? '' : ' (no long run)'}:<br>` +
+      `<span class="eq">${Array.from({ length: PLAN_MAX_DAYS }, (_, i) => i + 1)
+        .map(d => d === plan.days ? `<b>${d}&nbsp;&rarr;&nbsp;${maxRunsFor(d)}</b>` : `${d}&nbsp;&rarr;&nbsp;${maxRunsFor(d)}`).join(' &middot; ')}</span><br>` +
+      `Typing more runs than the cap raises days/wk to fit; fewer runs than days lowers it.</p>` : '') +
+    `<p>${planEdited ? 'You have edited the numbers. The real history says:'
+      : 'The numbers start from the real history, with days and runs rounded to whole numbers (and kept within the cap above):'}<br>` +
+    `<span class="eq">km/wk = ${nf1.format(kmSum)} km &times; 7 &divide; ${W} days = <b>${nf1.format(a.km)}</b><br>` +
+    `days/wk = ${rd} run days &times; 7 &divide; ${W} days = <b>${nf1.format(a.days)}</b><br>` +
+    `runs/wk = ${rn} runs &times; 7 &divide; ${W} days = <b>${nf1.format(a.runs)}</b></span></p>` +
+    `<p>That is the last ${W} days (the ${WINDOWS[SLOT_KEYS.indexOf(targetWin)].label} window, set in the
+      Weekly target settings), ending ${endText}. Editing the box moves nothing else on the page.</p>`;
+}
 function renderTarget() {
   const tile = document.getElementById('target-tile');
   if (!tile) return;
-  if (!planEdited) plan = planActual();
-  const { long, divisor, target: tg } = targetFor(plan.km, plan.days);
-  const cells = [
-    [tg > 0 ? km(tg) : '—', 'km/run'],
-    ...(long ? [[km(1.5 * tg), 'km long-run floor'], [km(2 * tg), 'km long-run target']] : []),
-  ].map(([v,u]) => `<div class="cell"><span class="v">${v}</span><span class="u">${u}</span></div>`).join('');
-
-  const actual = targetFor(planActual().km, planActual().days).target;
+  // Real history is fractional (5.2 days/wk), but a week is laid out in whole
+  // days and runs, so the seed is rounded — and fitted to the caps — exactly
+  // like an edit. The km stays as it is. fitPlan also catches a stored plan
+  // from before the caps existed.
+  plan = fitPlan(planEdited ? plan : planActual(), 'days');
+  const t = targetFor(plan);
+  const ok = plan.days > 0 && t.perRun > 0;
+  const week = ok ? weekPlan(t) : null;
   tile.innerHTML =
-    `<div class="k">Today&rsquo;s target${planEdited ? ' <span class="whatif">what-if</span>' : ''}</div>` +
+    `<div class="k">Weekly target<span class="info" tabindex="0">i<span class="info-text">${targetInfo(t, ok)}</span></span>` +
+      // The pill says what the numbers are: an edit, or which day the real
+      // history behind them ends on (see computeTargets).
+      ` <span class="whatif">${planEdited ? 'what-if' : targetSeed.lastIsToday ? 'yesterday' : 'most recent'}</span></div>` +
+    (planEdited ? `<button id="plan-reset" title="Back to the real figures">reset</button>` : '') +
     `<div class="plan">` +
-      `<input type="number" id="plan-km" min="0" max="700" step="1" value="${plan.km.toFixed(1)}"><span class="u">km/wk</span>` +
-      `<span class="op">÷</span>` +
-      `<input type="number" id="plan-days" min="0" max="7" step="0.5" value="${plan.days.toFixed(1)}"><span class="u">days/wk</span>` +
-      (long ? `<span class="op">+1</span>` : '') +
-      (planEdited ? `<button id="plan-reset">reset</button>` : '') +
+      `<input type="number" id="plan-km" min="0" max="700" step="1" value="${fmtPlan(plan.km)}"><span class="u">km/wk</span>` +
+      `<input type="number" id="plan-days" min="0" max="${PLAN_MAX_DAYS}" step="1" value="${fmtPlan(plan.days)}"><span class="u">days/wk</span>` +
+      `<input type="number" id="plan-runs" min="0" max="${PLAN_MAX_RUNS}" step="1" value="${fmtPlan(plan.runs)}"><span class="u">runs/wk</span>` +
     `</div>` +
-    `<div class="grid ${long ? 'three' : 'one'}">${cells}</div>` +
-    `<div class="note">${
-      long ? `weekly &divide; ${divisor.toFixed(1)} &mdash; the long run counts twice`
-           : `long runs need &ge;${LONG_MIN_RUNS_PER_WEEK} days/wk, so weekly &divide; ${divisor.toFixed(1)}`
-    }${planEdited ? ` &middot; actually now ${km(actual)} km/run` : ''}</div>`;
+    (week ? weekPlanHtml(week) : `<div class="weekempty">No runs to lay out.</div>`);
+  wireInfo(tile.querySelector('.info'));
 
-  const kmIn = document.getElementById('plan-km'), daysIn = document.getElementById('plan-days');
-  const onEdit = () => {
-    const k = Number(kmIn.value), d = Number(daysIn.value);
-    // capped at 7: the figure is run *days* per week, so two runs in one day is
-    // still one day — there is no eighth day to run on
-    if (!Number.isFinite(k) || !Number.isFinite(d) || k < 0 || d < 0 || d > 7) return;
-    plan = { km: k, days: d };
+  const kmIn = document.getElementById('plan-km');
+  const daysIn = document.getElementById('plan-days'), runsIn = document.getElementById('plan-runs');
+  // Whole days and runs only, kept inside what a week can hold — see fitPlan.
+  const onEdit = which => () => {
+    const k = Number(kmIn.value), d = Number(daysIn.value), r = Number(runsIn.value);
+    if (![k, d, r].every(Number.isFinite)) return;
+    plan = fitPlan({ km: k, days: d, runs: r }, which);
     planEdited = true;
     savePrefs();
     renderTarget();
   };
-  kmIn.onchange = daysIn.onchange = onEdit;
+  kmIn.onchange = onEdit('km');
+  daysIn.onchange = onEdit('days');
+  runsIn.onchange = onEdit('runs');
   const reset = document.getElementById('plan-reset');
   // Scoped the same way round: this clears only the what-if, never the chart
   // settings. savePrefs() keeps whatever those are set to.
@@ -2367,7 +2510,6 @@ function drawBars() {
       ctx.fillRect(x0, y + 7.5, bw, 1.5);
     }
   }
-
 
   // The pinned day is dashed and the hovered one solid, so when both are on
   // screen at once they read as two different things rather than two hovers.
@@ -3419,6 +3561,8 @@ document.getElementById('reset').onclick = () => {
   visLines = { ...PREF_DEFAULTS.lines };
   zoneAreaWin = PREF_DEFAULTS.zoneAreaWin;
   zoneAreaMode = PREF_DEFAULTS.zoneAreaMode;
+  targetLong = PREF_DEFAULTS.targetLong;
+  targetWin = PREF_DEFAULTS.targetWin;
   savePrefs();
   syncControls();
   recomputeDayVdot();
@@ -3450,9 +3594,9 @@ function syncLabels() {
 // attribute — the one place panel visibility is written to the DOM, same idea as
 // syncControls() below.
 const PANEL_CHK = { vol: 'showVol', freq: 'showFreq', runs: 'showRuns', vdot: 'showVdot',
-                    zone: 'showZone', zarea: 'showZarea', table: 'showTable' };
+                    zone: 'showZone', zarea: 'showZarea', table: 'showTable', target: 'showTarget' };
 const PANEL_EL = { vol: 'panel-vol', freq: 'panel-freq', runs: 'panel-runs', vdot: 'panel-vdot',
-                   zone: 'zonecard', zarea: 'panel-zarea', table: 'tablecard' };
+                   zone: 'zonecard', zarea: 'panel-zarea', table: 'tablecard', target: 'target-tile' };
 function syncPanelVisibility() {
   for (const k of PANEL_KEYS) {
     document.getElementById(PANEL_CHK[k]).checked = visPanels[k];
@@ -3535,6 +3679,8 @@ function syncControls() {
   barCapInput.value = barCapKm;
   zoneAreaWinSel.value = zoneAreaWin;
   zoneAreaModeSel.value = zoneAreaMode;
+  targetLongChk.checked = targetLong;
+  targetWinSel.value = targetWin;
   syncBarColour();
   syncPanelVisibility();
   syncLineVisibility();
@@ -3701,6 +3847,28 @@ for (const k of ['vol', 'freq', 'runs', 'vdot', 'zarea', 'table']) {
     drawAll();
   };
 }
+// The weekly target is a tile, not a canvas: showing it is just its hidden flag.
+document.getElementById(PANEL_CHK.target).onchange = e => {
+  visPanels.target = e.target.checked;
+  savePrefs();
+  syncPanelVisibility();
+};
+// Only moves the box's starting figures, so recomputing those and re-rendering
+// the box is the whole job.
+const targetWinSel = document.getElementById('targetWin');
+targetWinSel.onchange = () => {
+  targetWin = targetWinSel.value;
+  savePrefs();
+  computeTargets();
+  renderTarget();
+};
+const targetLongChk = document.getElementById('targetLong');
+targetLongChk.onchange = () => {
+  targetLong = targetLongChk.checked;
+  if (planEdited) plan = fitPlan(plan, 'days');   // the long run moves the runs cap
+  savePrefs();
+  renderTarget();
+};
 document.getElementById(PANEL_CHK.zone).onchange = e => {
   visPanels.zone = e.target.checked;
   savePrefs();
@@ -3728,12 +3896,18 @@ function showInfo(icon) {
   infoPop.style.left = x + 'px'; infoPop.style.top = y + 'px';
 }
 const hideInfo = () => { infoPop.hidden = true; };
-for (const icon of document.querySelectorAll('.info')) {
+// A declaration, and the listeners wrap hideInfo rather than naming it, because
+// the weekly-target box wires its own (i) every time it is rebuilt — the first
+// time well above this point in the script.
+function wireInfo(icon) {
   icon.addEventListener('mouseenter', () => showInfo(icon));
-  icon.addEventListener('mouseleave', hideInfo);
+  icon.addEventListener('mouseleave', () => hideInfo());
   icon.addEventListener('focus', () => showInfo(icon));
-  icon.addEventListener('blur', hideInfo);
+  icon.addEventListener('blur', () => hideInfo());
   icon.addEventListener('click', e => e.preventDefault());
+}
+for (const icon of document.querySelectorAll('.info')) {
+  if (!icon.closest('#target-tile')) wireInfo(icon);
 }
 window.addEventListener('scroll', hideInfo, true);
 

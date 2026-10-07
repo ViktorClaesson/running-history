@@ -142,17 +142,77 @@ The distance row's own sub-line used to spell out the day's target ("target 8.59
 km · weekly ÷ 6.0 · no long runs"). It is gone: the verdict stopped being read
 against that number, so it was a figure with nothing left to explain. All that
 sub-line carries now, on a day with more than one run, is each run's distance in
-the order they were run ("8.06 + 10.52 km"). The
-target itself is still behind the Today's target tile (the data table's Target
-column was dropped).
+the order they were run ("8.06 + 10.52 km"). There is no per-day target any
+more; what is left of the idea is the Weekly target tile.
 
-The **Today's target** tile is a what-if calculator: both inputs (km/wk and days/wk)
-are editable, so a change in volume or frequency can be tried out, and it shows the
-resulting per-run target plus the 1.5× long-run floor and 2× long-run target. It is
-seeded from the exact quantities behind today's real target (`weeklyPrev[N-1]`,
-`rpwPrev[N-1]`) so the default figure matches the chart and the hover readout. Editing
-it never changes the bars — those keep their own per-day targets from actual history —
-and once touched it shows the real figure alongside and offers a reset.
+The **Weekly target** tile is a what-if calculator with three inputs — km/wk,
+days/wk (max 7) and runs/wk (max 16) — seeded from the real history (`targetSeed`, from `computeTargets()`), all
+three over **one window, `targetWin`**, ending on the **last day in the data —
+or the day before it when that last day is today** (local calendar date),
+since an export taken mid-day may not have all of today's runs in yet. An
+export from yesterday or earlier is complete, so its last day counts. The (i)
+names the end date and says which case applied, and the pill by the title says
+it in one word: **"most recent"** or **"yesterday"**, or **"what-if"** once the
+numbers have been edited ("Based on …
+window" in the Weekly target settings; a slot key, default `s2` = 16 weeks, so
+it survives a `windowBase`/`windowMult` change; its handler only recomputes the
+seed and re-renders the tile). **Runs can never be fewer than days**: raising days drags
+runs up to match, lowering runs drags days down. `targetFor()` splits the week:
+
+- **With a long run** (`targetLong`, on by default, and only at
+  ≥ `LONG_MIN_RUNS_PER_WEEK` = 3 days): the long run is alone on its day and
+  counts as two days, so it is **2 × km ÷ (days + 1)**; the other runs − 1 runs
+  share what is left equally over days − 1 days. 60 km / 4 days / 6 runs gives a
+  24 km long run and 7.2 km per other run.
+- **Without**: every run is km ÷ runs.
+
+The tile shows only the inputs and the template week; the per-day-type km rows
+("X km day with 1 run", "… long run") are gone, since the template says the
+same day by day. The sums for each kind of day are still in the (i). Editing it moves nothing else on the page; once touched
+it shows a reset in its top-right corner. There is no note line under the
+numbers any more: the explanation lives behind the tile's own (i)
+(`targetInfo()`), which spells out the rule in words, then the sums with the
+figures currently in the box (and which of the 2-/3-run rows that shows or
+hides), then how the real-history seed values were counted ("360.2 km × 7 ÷ 28
+days = 90.0"). Because the tile is rebuilt on every edit, its (i) is wired by
+`wireInfo()` inside `renderTarget()` rather than by the page-wide loop, which
+skips it.
+
+Days/wk and runs/wk are **whole numbers** everywhere in the tile (step 1,
+rounded on edit and on load). The un-edited seed from real history is
+fractional (5.2 days, 6.8 runs), so `renderTarget()` rounds it and fits it to
+the caps through the same `fitPlan()` an edit goes through; only km/wk keeps
+its real value. **The tile always shows a template week** (`weekPlan()`),
+what-if or not, Monday to Sunday, each day with its run count and km:
+
+- Run days are picked in `DAY_ORDER` — **Sat, Mon, Wed, Thu, Sun, Tue,
+  Fri** — so fewer days drop Fri first, then Tue, Sun, Thu, Wed, Mon.
+- Saturday is the long run (**L**) when there is one.
+- Extra runs (runs − days) go out in that same order **a round at a time**
+  (`weekSlots()`): every day gets a second run before any gets a third.
+- **L already counts as two**, so Saturday sits out the second-run round and
+  is the *first* to get a third: **L+1**, the long run plus a short one. (L+1's
+  km is the long run plus one short-run share.) With no long run Saturday is
+  just the first day in the order.
+- **Friday is never doubled** — it is the rest day, run at all only at 7 days.
+- Two-run days need **≥ 4 days/wk** (`MULTI2_MIN_DAYS`), three-run days **≥ 6**
+  (`MULTI3_MIN_DAYS`).
+- **At most 3 three-run days a week** (`MAX_TRIPLE`), L+1 counting as one —
+  so only Sat, Mon and Wed ever get a third run.
+
+Together those cap runs per days (`maxRunsFor()`). With a long run: 1→1, 2→2,
+3→3, 4→7, 5→9 (L + 4 × 2), 6→14 (3+2+3+2+0+(L+1)+2), 7→15; without: 4→8,
+5→10, 6→15, 7→16 (which is where `PLAN_MAX_RUNS` 16 comes from). `fitPlan()` keeps the inputs inside
+that: typing more runs than the cap raises days to the fewest that can hold
+them, fewer runs than days lowers days, and changing days (or toggling the
+long run, which moves the cap) clamps runs. The "day with 2/3 runs" rows follow
+the template (only the day types it actually uses); the old
+(runs − 1)/(days − 1) ratio test is gone, along with its paragraph in the (i). The km in the template always add up to the weekly figure (checked over
+every days × runs combination, both with and without a long run). All of these
+rules, plus the cap table with the current days/wk in bold, are in the tile's (i). The tile
+has a show/hide (`visPanels.target`) and lives with `targetLong` in the "Weekly
+target" settings group. The "Current 4w average" tile that used to sit beside it
+is gone — the hover readout already gives those rates.
 
 ## The readout: pinning, and why it lives in a sticky sidebar
 
@@ -330,16 +390,13 @@ All of it is derived in-browser from one array of daily distances.
   a line is hidden), and a window's start mark goes with its line (see
   "Window-start marks" above). With *every* line hidden the axis falls back to
   all four and neither a line nor a marker is drawn.
-- **The two windows the target maths needs** — a *target* can only be a single
-  number, so it keeps exactly one volume window and one frequency window:
-  `IV`/`IF`, **slots 1 and 2**, i.e. `WINDOW_VOL` and `WINDOW_FREQ`, which at
-  the defaults are the 4 and 16 weeks that used to be settings of their own.
-  Slots rather than free numbers, so the target is always read against a line
-  that is actually on screen. `avg`, `perWeekAt()` and `perWeekRunsAt()` are the
-  single-window views the tiles, the table and the target maths read.
-  **`windowBase`/`windowMult` therefore move the targets — and, for a separate
-  reason, the bar colours too**, since the verdict is a comparison between the
-  four windows. Deliberate, but worth knowing before wondering why a whole history
+- **The two single windows the table reads** — `IV`/`IF`, **slots 1 and 2**,
+  i.e. `WINDOW_VOL` and `WINDOW_FREQ` (4 and 16 weeks at the defaults). `avg`,
+  `perWeekAt()` and `perWeekRunsAt()` are the single-window views the data
+  table reads. The Weekly target no longer uses them; it has its own
+  `targetWin`. **`windowBase`/`windowMult` move these, the Weekly target's
+  seed, and — for a separate reason — the bar colours too**, since the verdict
+  is a comparison between the four windows. Deliberate, but worth knowing before wondering why a whole history
   changed colour.
 - **Verdict** (`classify`) — the **bar colours**. One line of arithmetic:
   **which window's distance per week is highest that day**, the shortest winning
@@ -405,25 +462,9 @@ All of it is derived in-browser from one array of daily distances.
   against the *next one along* rather than against all of them and gave
   423/137/42/**1** — that is a genuinely different function from this one, and
   the one it was replaced by.
-- **Target** — still computed and still behind the Today's target tile, it just
-  no longer colours anything. What a run that
-  day had to be to hold the average steady:
-  **weekly volume ÷ (run days per week + 1)** when long runs are active, otherwise
-  ÷ run days per week (which is just mean km per *running* day). Weekly volume comes
-  from `WINDOW_VOL`; run days per week comes from `WINDOW_FREQ` — the target blends
-  both windows on purpose, one for "how much" and one for "how often". The `+1` is
-  because one run per week is expected to be the long one, so a 3-days/week week is
-  1+1+2 = 4 target-sized efforts.
-  Computed **only from the window ending yesterday**, never including the day being
-  judged (comparing a run to an average it is part of is circular; and the raw
-  average also moves when an old run drops out of the window).
-  A median-run mode existed briefly and was removed — once the long run is counted
-  as an extra day the mean is no longer skewed the way that was meant to fix.
-  **This is the one place the long-run idea survives**, because it is the maths the
-  Today's target what-if box is built on and that box was kept as it was;
-  `LONG_MIN_RUNS_PER_WEEK` and `longOn` live on for it alone. Keeping the per-day
-  target and the what-if box on the same formula is what stops today's tile
-  disagreeing with today's readout.
+- **Target** — there used to be a per-day target (weekly volume ÷ run days,
+  +1 for the long run) that coloured the bars, then only fed the what-if tile.
+  It is gone; the Weekly target tile (see above) has its own formula and seed.
 - **Everything is divided by its full window, always** — every one of the four
   windows' series, and the target's two. Each window's own first stretch of days
   therefore ramps in from zero rather than being extrapolated: one run on day one
@@ -1060,11 +1101,11 @@ columns' content.
 set to, so the page opens the way it was left: `windowBase`, `windowMult`,
 `windowVdot`, `minLapM`, `gapVdot`, `gapPace`, `vdotNearDots`, `vdotNearPct`,
 `barScale` (`'log'`/`'linear'`), `barCap` (boolean), `barCapKm` (1–500, whole km),
-`barColour` (`'verdict'`/`'workout'`/`'none'`; a legacy `colourVerdicts: false` reads as `'none'`), `wtExp` (0–4, halves), `wtShare` (1–100), `zoneBars`, `zoneAxis`, `highlightMax`, `panels` (`{vol, freq, runs, vdot, zone, zarea, table}`, each independently
+`barColour` (`'verdict'`/`'workout'`/`'none'`; a legacy `colourVerdicts: false` reads as `'none'`), `wtExp` (0–4, halves), `wtShare` (1–100), `zoneBars`, `zoneAxis`, `highlightMax`, `panels` (`{vol, freq, runs, vdot, zone, zarea, table, target}`, each independently
 show/hide — see below), `lines` (`{s0, s1, s2, s3}` — slot keys, which of
 the four lines the three window panels draw), `zoneAreaWin` (a slot key: which
-window the stacked-zone panel is over, `'s2'` by default), `zoneAreaMode` (`'km'`/`'min'`/`'pctKm'`/`'pctMin'`), and `plan` (`null` = the what-if box follows real
-history, `{km, days}` = edited). Three rules:
+window the stacked-zone panel is over, `'s2'` by default), `zoneAreaMode` (`'km'`/`'min'`/`'pctKm'`/`'pctMin'`), `targetWin` (a slot key, `'s2'` by default), and `plan` (`null` = the what-if box follows real
+history, `{km, days, runs}` = edited; an older entry without `runs` gets one run a day), `targetLong` (boolean). Three rules:
 
 - **Read at the very top of the `if (DATA)` block**, above `WINDOWS` and
   `let WINDOW_VDOT`, because `recompute()` runs at load and reads `WINDOWS` — the
@@ -1109,11 +1150,11 @@ the defaults, and a remembered setting has to overwrite them at boot.
   window, the min-lap distance, both grade-adjusted-pace toggles, the near-max dots
   and their percentage, the pace-zone bar
   count and bar height, the highest-line highlight, the bar scale and cap, the bar-colour mode and the two workout-type settings, the
-  seven panel show/hide toggles and the five line show/hide toggles back to their
+  eight panel show/hide toggles, the weekly target's long-run toggle and the four line show/hide toggles back to their
   defaults (every panel shown, all four lines, the highlight on), plus the view back to its
   default span. It does *not*
   touch the what-if.
-- **reset** in the Today's target tile: clears the what-if back to following real
+- **reset** in the Weekly target tile: clears the what-if back to following real
   history, and nothing else.
 
 Neither has to know what the other owns, because both just mutate their own state
@@ -1141,7 +1182,7 @@ rather than the horizontal chartcard header row it replaced meant `.ctrls` lost
 its `margin-left: auto` (nothing to push right against in a column) and gained
 `flex-direction: column; align-items: stretch` instead.
 
-It is split into six `.setgroup` sections, **grouped by what each setting
+It is split into seven `.setgroup` sections, **grouped by what each setting
 moves** rather than by what kind of control it is — "which panel is this about"
 is the question being asked when someone comes looking for a setting. A 1px
 rule separates them rather than more whitespace, so the grouping doesn't cost
@@ -1154,6 +1195,7 @@ much height:
 | VDOT panel | its show/hide, `windowVdot`, `minLapM`, `gapVdot`, `vdotNearDots`/`vdotNearPct` |
 | Pace zones | its show/hide, `zoneBars`, `zoneAxis`, `gapPace` |
 | Pace-zone volume | the eight-bucket zone legend, the panel's show/hide, `zoneAreaWin`, `zoneAreaMode` |
+| Weekly target (first) | the tile's show/hide (`visPanels.target`), `targetLong`, `targetWin` |
 | Data table | its show/hide (`visPanels.table`; it used to be a `<details>` collapse). Its columns are km / week (the `WINDOW_VOL` slot's `volSeries`), run days / week and runs / week (the `WINDOW_FREQ` slot), verdict and workout |
 
 Two placements are worth naming. **The legend is split across two groups**, not
