@@ -551,22 +551,6 @@
   </section>
 
   <section class="setgroup">
-    <h2 class="setgroup-title">Pace zones</h2>
-    <div class="ctrls">
-      <label class="chk"><input type="checkbox" id="showZone" checked> Pace-zone histogram</label>
-      <label class="chk" title="How many sub-bands each of the five pace zones splits into in the pace-zone histogram.">Pace-zone bars
-        <input type="number" id="zoneBars" min="1" max="20" step="1" value="3"> per zone
-      </label>
-      <label class="chk" title="What the height of each pace-zone bar measures: the time spent at that pace, or the distance covered at it. The hover text always gives both.">Bar height
-        <select id="zoneAxis"><option value="time">time (min)</option><option value="dist" selected>distance (km)</option></select>
-      </label>
-      <label class="chk gapLabel" title="Bin each lap by its grade-adjusted pace — its equivalent flat time — instead of the pace actually run. Only moves the laps: the zone boundaries come from the day's VDOT, which has its own grade-adjusted setting under the VDOT panel. Activities the export has no GAP for keep their raw time.">
-        <input type="checkbox" id="gapPace" checked> Grade-adjusted pace
-      </label>
-    </div>
-  </section>
-
-  <section class="setgroup">
     <h2 class="setgroup-title">Pace-zone volume<span class="info" tabindex="0">i<span class="info-text">One rolling window&rsquo;s running, split by which pace zone the
           kilometres were actually run in &mdash; so the bands add up to that window&rsquo;s own
           distance-per-week line, the one drawn in that colour further up. Slowest band at the bottom,
@@ -604,6 +588,22 @@
           <option value="pctKm">% of distance</option>
           <option value="pctMin">% of time</option>
         </select>
+      </label>
+    </div>
+  </section>
+
+  <section class="setgroup">
+    <h2 class="setgroup-title">Pace zones</h2>
+    <div class="ctrls">
+      <label class="chk"><input type="checkbox" id="showZone" checked> Pace-zone histogram</label>
+      <label class="chk" title="How many sub-bands each of the five pace zones splits into in the pace-zone histogram.">Pace-zone bars
+        <input type="number" id="zoneBars" min="1" max="20" step="1" value="3"> per zone
+      </label>
+      <label class="chk" title="What the height of each pace-zone bar measures: the time spent at that pace, or the distance covered at it. The hover text always gives both.">Bar height
+        <select id="zoneAxis"><option value="time">time (min)</option><option value="dist" selected>distance (km)</option></select>
+      </label>
+      <label class="chk gapLabel" title="Bin each lap by its grade-adjusted pace — its equivalent flat time — instead of the pace actually run. Only moves the laps: the zone boundaries come from the day's VDOT, which has its own grade-adjusted setting under the VDOT panel. Activities the export has no GAP for keep their raw time.">
+        <input type="checkbox" id="gapPace" checked> Grade-adjusted pace
       </label>
     </div>
   </section>

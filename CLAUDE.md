@@ -1199,18 +1199,22 @@ its `margin-left: auto` (nothing to push right against in a column) and gained
 
 It is split into seven `.setgroup` sections, **grouped by what each setting
 moves** rather than by what kind of control it is — "which panel is this about"
-is the question being asked when someone comes looking for a setting. A 1px
+is the question being asked when someone comes looking for a setting. The groups run
+**in the same order as what they control appears on the page**, top to
+bottom: the Weekly target tile, the bars, the window panels, VDOT, the
+stacked pace-zone volume, the pace-zone histogram, then the table. Keep it
+that way when a panel moves. A 1px
 rule separates them rather than more whitespace, so the grouping doesn't cost
 much height:
 
 | Group | Holds |
 |---|---|
+| Weekly target | the tile's show/hide (`visPanels.target`), `targetLong`, `targetLongW` (disabled while the long run is off), `targetWin` |
 | Distance bars | `barScale`, `barCap`/`barCapKm`, the `barColour` select, then whichever of its two legends is in use: the four-verdict/rest legend, or the workout-type legend plus its two settings |
 | Volume & frequency panels | the four line show/hide swatches, the three panel show/hide boxes, `windowBase`/`windowMult`, `highlightMax` |
 | VDOT panel | its show/hide, `windowVdot`, `minLapM`, `gapVdot`, `vdotNearDots`/`vdotNearPct` |
-| Pace zones | its show/hide, `zoneBars`, `zoneAxis`, `gapPace` |
 | Pace-zone volume | the eight-bucket zone legend, the panel's show/hide, `zoneAreaWin`, `zoneAreaMode` |
-| Weekly target (first) | the tile's show/hide (`visPanels.target`), `targetLong`, `targetLongW` (disabled while the long run is off), `targetWin` |
+| Pace zones | its show/hide, `zoneBars`, `zoneAxis`, `gapPace` |
 | Data table | its show/hide (`visPanels.table`; it used to be a `<details>` collapse). Newest day at the top; past `TABLE_MAX_ROWS` (400) days in view it drops the *oldest*, so the most recent day in view is always the first row. Its columns are km / week (the `WINDOW_VOL` slot's `volSeries`), run days / week and runs / week (the `WINDOW_FREQ` slot), verdict and workout |
 
 Two placements are worth naming. **The legend is split across two groups**, not
