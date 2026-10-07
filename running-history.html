@@ -3231,31 +3231,13 @@ const refreshReadout = () => {
 const zonecard = document.getElementById('zonecard');
 const zoneTitle = document.getElementById('zone-title');
 const zoneBody = document.getElementById('zone-body');
-// Leaving the chart to scroll down to this card used to swap it straight to the
-// most recent run, so a second run's histogram was gone by the time it was in
-// view. Now the last hovered day lingers for ZONE_SHRINK_MS (the corner bar
-// counts it down) before the fallback takes over. A pin is a deliberate choice,
-// so it shows at once instead.
-let zoneLastHover = null, zoneLinger = null, zoneLingerTimer = null;
 function renderZonePanel() {
-  if (hover !== null || selected !== null) {
-    if (hover !== null) zoneLastHover = hover;
-    clearTimeout(zoneLingerTimer); zoneLingerTimer = null; zoneLinger = null;
-  } else if (zoneLastHover !== null) {
-    zoneLinger = zoneLastHover; zoneLastHover = null;
-    clearTimeout(zoneLingerTimer);
-    zoneLingerTimer = setTimeout(() => {
-      zoneLinger = null; zoneLingerTimer = null;
-      zoneShrinkNow = true; renderZonePanel(); zoneShrinkNow = false;
-    }, ZONE_SHRINK_MS);
-  }
   if (!visPanels.zone) { zonecard.hidden = true; holdZoneHeight(0); return; }
-  const zoneDay = zoneLinger ?? shownDay();
+  const zoneDay = shownDay();
   if (zoneDay === null) { zonecard.hidden = true; holdZoneHeight(0); return; }   // no run anywhere in history yet
   zonecard.hidden = false;
-  const tag = zoneLinger !== null ? 'last hovered' : dayTag();
   zoneTitle.innerHTML = `Pace zones for ${fmtDate.format(dateAt(zoneDay))}` +
-    (tag ? ` <span class="pin">${tag}</span>` : '');
+    (dayTag() ? ` <span class="pin">${dayTag()}</span>` : '');
   buildRamps();   // ensures zoneRamps/leadRamps are built before they're read below
   const vdotHere = vdot[zoneDay];
   // Real bins, or — a day with no run, or one that predates the first-ever
@@ -3313,9 +3295,6 @@ function renderZonePanel() {
                   !!realBins, maxVal, byDist, vdotHere);
   });
   holdZoneHeight(zoneBody.firstElementChild.offsetHeight);
-  // The linger is its own countdown; the bar shows it, and the height hold
-  // stays out of the way until it ends.
-  if (zoneLingerTimer) countdown(true);
 }
 // A day with two runs has two histograms, so the card's height changes with the
 // day — and while following hover, every single-run day between two double-run
@@ -3323,40 +3302,30 @@ function renderZonePanel() {
 // down. So the card grows at once (its content needs the room) but only shrinks
 // once nothing taller has been asked for in ZONE_SHRINK_MS, and then eases down
 // via the CSS transition on min-height. 0 = card hidden: drop the hold outright.
-// Long enough to scroll down to a second run's histogram after the pointer has
-// left the chart; the bar in the corner shows how long is left.
-const ZONE_SHRINK_MS = 5000;
+// Long enough not to flicker while hovering across days to scan workouts, short
+// enough that the card settles soon after; the bar in the corner counts it down.
+const ZONE_SHRINK_MS = 700;
 const zoneShrinkBar = document.getElementById('zone-shrink');
-let zoneHeld = 0, zoneShrink = null, zoneShrinkNow = false, zoneCountdownOn = false;
-// Shows the corner bar, restarting it from full only when it isn't already
-// running (a settings change mid-countdown re-renders, and shouldn't reset it).
-// A fresh element is what restarts the animation; re-setting it would not.
-function countdown(on) {
-  if (!on) { zoneShrinkBar.hidden = true; zoneCountdownOn = false; return; }
-  if (zoneCountdownOn) return;
-  zoneShrinkBar.innerHTML = `<span style="animation-duration:${ZONE_SHRINK_MS}ms"></span>`;
-  zoneShrinkBar.hidden = false;
-  zoneCountdownOn = true;
-}
+let zoneHeld = 0, zoneShrink = null;
 function holdZoneHeight(natural) {
   clearTimeout(zoneShrink); zoneShrink = null;
+  zoneShrinkBar.hidden = true;
   if (natural >= zoneHeld || natural === 0) {
-    countdown(false);
     zoneBody.style.transition = 'none';   // growing must not lag the content
     zoneBody.style.minHeight = natural ? natural + 'px' : '';
     zoneHeld = natural;
     return;
   }
-  const shrink = () => {
-    countdown(false);
+  // A fresh element restarts the countdown from full, which re-setting the
+  // animation on the old one would not.
+  zoneShrinkBar.innerHTML = `<span style="animation-duration:${ZONE_SHRINK_MS}ms"></span>`;
+  zoneShrinkBar.hidden = false;
+  zoneShrink = setTimeout(() => {
+    zoneShrinkBar.hidden = true;
     zoneBody.style.transition = '';       // back to the stylesheet's ease
     zoneBody.style.minHeight = natural + 'px';
     zoneHeld = natural;
-  };
-  // The linger running out has already waited its turn: ease down now.
-  if (zoneShrinkNow) { shrink(); return; }
-  countdown(false); countdown(true);
-  zoneShrink = setTimeout(shrink, ZONE_SHRINK_MS);
+  }, ZONE_SHRINK_MS);
 }
 function mountZoneHist(cvZ, hoverInfo, minsBins, kmBins, real, maxVal, byDist, vdotHere) {
   const bins = byDist ? kmBins : minsBins;   // what the bars are drawn at

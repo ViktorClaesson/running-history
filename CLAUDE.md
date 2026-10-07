@@ -876,32 +876,27 @@ scanning quickly through a run of days while following hover (see above). The
 card is only ever hidden completely (`zonecard.hidden`) when there is no day to
 show at all — panel toggled off, or no run anywhere in history yet. That fixed the rest-day flicker but not the run-count one: a two-run day has
 two histograms, so the card was still ~620px on one and ~300px on the next.
-Three things together deal with it:
+Two things together deal with it:
 
 - **Scroll room.** `.page` has `padding-bottom: 50vh`. Without it, a page that
   fit the window (say every panel off but the histogram) couldn't be scrolled
   at all, so Run 2 of 2 was off-screen with no way down to it. And when the
   card shrank, the browser clamped the scroll position to the shorter page and
   everything jumped. Half a window of slack means the card can grow and shrink
-  without moving the view.
-- **The last hovered day lingers.** Leaving the chart used to swap the card
-  straight to the most recent run (the `shownDay()` fallback), so the second
-  run was gone by the time you'd scrolled to it. Now `renderZonePanel()` keeps
-  showing the last hovered day, tagged "last hovered", for `ZONE_SHRINK_MS`
-  before it falls back. A pin skips the wait: it's a deliberate choice. Only
-  the zone card lingers; the readout still falls back straight away.
+  without moving the view. This turned out to be most of the fix.
 - **The height hold.** `holdZoneHeight()` puts a `min-height` on `#zone-body`:
   it **grows at once** (the content needs the room) but only **shrinks after
-  `ZONE_SHRINK_MS` (5000ms) with nothing taller asked for**, then eases down
-  over a 0.25s CSS transition (none under `prefers-reduced-motion`). So
-  sweeping across days keeps the card at the tallest one recently seen.
-  Hiding the card drops the hold outright.
+  `ZONE_SHRINK_MS` (700ms) with nothing taller asked for**, then eases down
+  over a 0.25s CSS transition (none under `prefers-reduced-motion`). A thin
+  countdown bar in the card's top-right corner (`#zone-shrink`) empties over
+  those 700ms. 700ms is the middle ground: fast to settle, slow enough not to
+  flicker while hovering across days to scan workouts. 5000ms was tried and
+  felt sluggish. Hiding the card drops the hold outright.
 
-Both waits show as one thin countdown bar in the card's top-right corner
-(`#zone-shrink`), which empties over `ZONE_SHRINK_MS` and disappears as soon
-as the card grows or a day is hovered or pinned. When the linger runs out, the
-fallback day shrinks the card straight away rather than starting a second
-countdown. The card also sits 20px below the chart card, the same gap as
+A "last hovered" linger was also tried: leaving the chart kept the card on the
+last hovered day for a few seconds instead of falling back to the most recent
+run. It was dropped, since you can hardly get the pointer off the chart
+without crossing another day anyway. The card also sits 20px below the chart card, the same gap as
 the table below it.
 
 An empty
