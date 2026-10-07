@@ -67,7 +67,7 @@ everyone else.
 panels; runs still never draw shorter than `MIN_RUN_H`, so they stay above the
 rest stub, and the floor line stays unlabelled. Everything below is about log.
 
-`barCap`/`barCapKm` ("Cap at X km", off, 30 km) draws any day longer than the
+`barCap`/`barCapKm` ("Cap at X km", on, 45 km — past a marathon, so in practice only the odd ultra is ever cut) draws any day longer than the
 cap at the cap: the axis tops out exactly at it with an "X+" tick (on log too,
 rather than rounding up past it), and each cut-off bar gets two thin
 `--surface-1` breaks across its top, like an axis break. It exists for linear

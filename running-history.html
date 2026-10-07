@@ -430,8 +430,8 @@
         <select id="barScale"><option value="log" selected>logarithmic</option><option value="linear">linear</option></select>
       </label>
       <label class="chk" title="Draw any day longer than this at this height, marked as cut off, so one very long run doesn't set the scale for every other. The readout and table still give the real distance.">
-        <input type="checkbox" id="barCap"> Cap at
-        <input type="number" id="barCapKm" min="1" max="500" step="1" value="30"> km
+        <input type="checkbox" id="barCap" checked> Cap at
+        <input type="number" id="barCapKm" min="1" max="500" step="1" value="45"> km
       </label>
       <label class="chk" title="What the colour of each run's bar says: where training stands that day (the verdict), what kind of session it was (the workout type, in the pace-zone colours), or nothing at all.">Colour bars by
         <select id="barColour"><option value="verdict">verdict</option><option value="workout" selected>workout type</option><option value="none">nothing</option></select>
@@ -1030,8 +1030,8 @@ const PREF_DEFAULTS = {
   vdotNearPct: 5,      // how close "close" is, in percent of the peak in force that day
                        // (0 = only the days that set it, 100 = every run day)
   barScale: 'log',   // the distance bars' y-axis: 'log' or 'linear'
-  barCap: false,     // draw any day longer than barCapKm at barCapKm, marked "X+"
-  barCapKm: 30,      // ...and that cap, in km, 1-500
+  barCap: true,      // draw any day longer than barCapKm at barCapKm, marked "X+"
+  barCapKm: 45,      // ...and that cap, in km, 1-500 — past a marathon, so only the rare ultra is cut
   barColour: 'workout',  // what the bars are coloured by: 'verdict', 'workout' (type) or 'none'
   // Workout type: each lap scores towards its zone, then zones are pooled from
   // the hard end and the first pool to reach wtShare% names the run.
