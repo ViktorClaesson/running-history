@@ -2134,7 +2134,9 @@ function renderTarget() {
   const week = ok ? weekPlan(t) : null;
   tile.innerHTML =
     `<div class="k">Weekly target<span class="info" tabindex="0">i<span class="info-text">${targetInfo(t, ok)}</span></span>` +
-      `${planEdited ? ' <span class="whatif">what-if</span>' : ''}</div>` +
+      // The pill says what the numbers are: an edit, or which day the real
+      // history behind them ends on (see computeTargets).
+      ` <span class="whatif">${planEdited ? 'what-if' : targetSeed.lastIsToday ? 'yesterday' : 'most recent'}</span></div>` +
     (planEdited ? `<button id="plan-reset" title="Back to the real figures">reset</button>` : '') +
     `<div class="plan">` +
       `<input type="number" id="plan-km" min="0" max="700" step="1" value="${fmtPlan(plan.km)}"><span class="u">km/wk</span>` +

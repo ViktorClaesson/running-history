@@ -151,7 +151,9 @@ three over **one window, `targetWin`**, ending on the **last day in the data —
 or the day before it when that last day is today** (local calendar date),
 since an export taken mid-day may not have all of today's runs in yet. An
 export from yesterday or earlier is complete, so its last day counts. The (i)
-names the end date and says which case applied ("Based on …
+names the end date and says which case applied, and the pill by the title says
+it in one word: **"most recent"** or **"yesterday"**, or **"what-if"** once the
+numbers have been edited ("Based on …
 window" in the Weekly target settings; a slot key, default `s2` = 16 weeks, so
 it survives a `windowBase`/`windowMult` change; its handler only recomputes the
 seed and re-renders the tile). **Runs can never be fewer than days**: raising days drags
