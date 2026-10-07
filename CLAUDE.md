@@ -158,10 +158,8 @@ runs up to match, lowering runs drags days down. `targetFor()` splits the week:
   24 km long run and 7.2 km per other run.
 - **Without**: every run is km ÷ runs.
 
-It shows "day with 1 run" (one share), "day with 2 runs" only when
-(runs − 1)/(days − 1) > 1 (there are more non-long runs than non-long days), "day
-with 3 runs" only when that ratio is > 2, and the long run. Without a long run the
-same test uses runs/days. Editing it moves nothing else on the page; once touched
+It shows "day with 1 run" (one share), "day with 2 runs" and "day with 3 runs"
+only when the template week below has such a day, and the long run. Editing it moves nothing else on the page; once touched
 it shows a reset in its top-right corner. There is no note line under the
 numbers any more: the explanation lives behind the tile's own (i)
 (`targetInfo()`), which spells out the rule in words, then the sums with the
@@ -171,10 +169,12 @@ days = 90.0"). Because the tile is rebuilt on every edit, its (i) is wired by
 `wireInfo()` inside `renderTarget()` rather than by the page-wide loop, which
 skips it.
 
-Days/wk and runs/wk are **whole numbers** in the what-if (step 1, rounded on
-edit and on load); only the un-edited seed from real history is fractional.
-**In what-if mode the tile also shows a template week** (`weekPlan()`), Monday
-to Sunday, each day with its run count and km:
+Days/wk and runs/wk are **whole numbers** everywhere in the tile (step 1,
+rounded on edit and on load). The un-edited seed from real history is
+fractional (5.2 days, 6.8 runs), so `renderTarget()` rounds it and fits it to
+the caps through the same `fitPlan()` an edit goes through; only km/wk keeps
+its real value. **The tile always shows a template week** (`weekPlan()`),
+what-if or not, Monday to Sunday, each day with its run count and km:
 
 - Run days are picked in `DAY_ORDER` — **Sat, Mon, Wed, Thu, Sun, Tue,
   Fri** — so fewer days drop Fri first, then Tue, Sun, Thu, Wed, Mon.
@@ -196,10 +196,9 @@ Together those cap runs per days (`maxRunsFor()`). With a long run: 1→1, 2→2
 5→10, 6→15, 7→16 (which is where `PLAN_MAX_RUNS` 16 comes from). `fitPlan()` keeps the inputs inside
 that: typing more runs than the cap raises days to the fewest that can hold
 them, fewer runs than days lowers days, and changing days (or toggling the
-long run, which moves the cap) clamps runs. In what-if mode the "day with 2/3
-runs" rows follow the template (only the day types it actually uses) rather
-than the runs ÷ days ratio, which only the fractional un-edited seed still
-uses. The km in the template always add up to the weekly figure (checked over
+long run, which moves the cap) clamps runs. The "day with 2/3 runs" rows follow
+the template (only the day types it actually uses); the old
+(runs − 1)/(days − 1) ratio test is gone, along with its paragraph in the (i). The km in the template always add up to the weekly figure (checked over
 every days × runs combination, both with and without a long run). All of these
 rules, plus the cap table with the current days/wk in bold, are in the tile's (i). The tile
 has a show/hide (`visPanels.target`) and lives with `targetLong` in the "Weekly

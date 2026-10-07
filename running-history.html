@@ -2065,7 +2065,6 @@ function targetInfo(t, ok) {
   let kmSum = 0, rd = 0, rn = 0;
   for (let i = Math.max(0, N - 1 - WINDOW_VOL); i < N - 1; i++) kmSum += daily[i];
   for (let i = Math.max(0, N - 1 - WINDOW_FREQ); i < N - 1; i++) { if (daily[i] > 0) rd++; rn += nRuns[i]; }
-  const ratio = t.restDays > 0 ? t.restRuns / t.restDays : 0;
   const why = !targetLong ? 'the long run is switched off in the settings'
     : `the long run needs at least ${LONG_MIN_RUNS_PER_WEEK} days/wk`;
   const sums = !ok ? '<p class="eq">Nothing to split: there are no runs in the week.</p>'
@@ -2074,17 +2073,10 @@ function targetInfo(t, ok) {
         `1-run day = (km &minus; long run) &divide; (runs &minus; 1)<br>` +
         `&emsp;= (${f(K)} &minus; ${k2(t.longKm)}) &divide; ${f(t.restRuns)} = <b>${k2(t.perRun)} km</b><br>` +
         `2-run day = 2 &times; ${k2(t.perRun)} = ${k2(2 * t.perRun)} km<br>` +
-        `3-run day = 3 &times; ${k2(t.perRun)} = ${k2(3 * t.perRun)} km</p>` +
-        (planEdited ? '' : `<p class="eq">runs per other day = (runs &minus; 1) &divide; (days &minus; 1)<br>` +
-        `&emsp;= ${f(t.restRuns)} &divide; ${f(t.restDays)} = ${t.restDays > 0 ? ratio.toFixed(2) : '&mdash;'}` +
-        `<br>&emsp;${t.two ? '&gt;' : '&le;'} 1, so the 2-run day is ${t.two ? 'shown' : 'hidden'}` +
-        `<br>&emsp;${t.three ? '&gt;' : '&le;'} 2, so the 3-run day is ${t.three ? 'shown' : 'hidden'}</p>`)
+        `3-run day = 3 &times; ${k2(t.perRun)} = ${k2(3 * t.perRun)} km</p>`
     : `<p class="eq">1-run day = km &divide; runs = ${f(K)} &divide; ${f(R)} = <b>${k2(t.perRun)} km</b><br>` +
         `2-run day = 2 &times; ${k2(t.perRun)} = ${k2(2 * t.perRun)} km<br>` +
-        `3-run day = 3 &times; ${k2(t.perRun)} = ${k2(3 * t.perRun)} km</p>` +
-        (planEdited ? '' : `<p class="eq">runs per day = runs &divide; days = ${f(R)} &divide; ${f(D)} = ${D > 0 ? ratio.toFixed(2) : '&mdash;'}` +
-        `<br>&emsp;${t.two ? '&gt;' : '&le;'} 1, so the 2-run day is ${t.two ? 'shown' : 'hidden'}` +
-        `<br>&emsp;${t.three ? '&gt;' : '&le;'} 2, so the 3-run day is ${t.three ? 'shown' : 'hidden'}</p>`);
+        `3-run day = 3 &times; ${k2(t.perRun)} = ${k2(3 * t.perRun)} km</p>`;
   return `<p>A what-if for splitting a week: how long each day&rsquo;s running should be to hit a weekly
       distance, given how many days you run and how many runs those days hold. Every run day holds at least
       one run, so runs/wk can&rsquo;t go below days/wk.</p>` +
@@ -2094,7 +2086,7 @@ function targetInfo(t, ok) {
           slice of what is left, so a day with two of them is twice a one-run day.</p>`
       : `<p>No long run here (${why}), so every run is an equal share of the week.</p>`) +
     sums +
-    (planEdited && ok ? `<p>The template week lays the ${plan.days} days and ${plan.runs} runs out Monday to Sunday:<br>` +
+    (ok ? `<p>The template week lays the ${plan.days} days and ${plan.runs} runs out Monday to Sunday:<br>` +
       `1. Run days are picked in the order ${DAY_NAMES_ORDER}, so with fewer days Friday goes first, then
         Tuesday, Sunday, Thursday, Wednesday and Monday.<br>` +
       `2. Saturday is the long run (L)${t.long ? '' : ` when there is one &mdash; not this week, so it is just the first day in the order`}.<br>` +
@@ -2110,7 +2102,8 @@ function targetInfo(t, ok) {
       `<span class="eq">${Array.from({ length: PLAN_MAX_DAYS }, (_, i) => i + 1)
         .map(d => d === plan.days ? `<b>${d}&nbsp;&rarr;&nbsp;${maxRunsFor(d)}</b>` : `${d}&nbsp;&rarr;&nbsp;${maxRunsFor(d)}`).join(' &middot; ')}</span><br>` +
       `Typing more runs than the cap raises days/wk to fit; fewer runs than days lowers it.</p>` : '') +
-    `<p>${planEdited ? 'You have edited the numbers. The real history says:' : 'The numbers start from the real history, up to yesterday:'}<br>` +
+    `<p>${planEdited ? 'You have edited the numbers. The real history says:'
+      : 'The numbers start from the real history, up to yesterday, with days and runs rounded to whole numbers (and kept within the cap above):'}<br>` +
     `<span class="eq">km/wk = ${nf1.format(kmSum)} km &times; 7 &divide; ${WINDOW_VOL} days = <b>${nf1.format(a.km)}</b><br>` +
     `days/wk = ${rd} run days &times; 7 &divide; ${WINDOW_FREQ} days = <b>${nf1.format(a.days)}</b><br>` +
     `runs/wk = ${rn} runs &times; 7 &divide; ${WINDOW_FREQ} days = <b>${nf1.format(a.runs)}</b></span></p>` +
@@ -2121,14 +2114,15 @@ function targetInfo(t, ok) {
 function renderTarget() {
   const tile = document.getElementById('target-tile');
   if (!tile) return;
-  if (!planEdited) plan = planActual();
-  else plan = fitPlan(plan, 'days');   // a stored plan from before the caps existed
+  // Real history is fractional (5.2 days/wk), but a week is laid out in whole
+  // days and runs, so the seed is rounded — and fitted to the caps — exactly
+  // like an edit. The km stays as it is. fitPlan also catches a stored plan
+  // from before the caps existed.
+  plan = fitPlan(planEdited ? plan : planActual(), 'days');
   const t = targetFor(plan);
   const ok = plan.days > 0 && t.perRun > 0;
-  // In what-if mode the 2- and 3-run rows follow the template week (only the
-  // day types it actually uses); the un-edited seed is fractional, so it keeps
-  // the ratio test.
-  const week = planEdited && ok ? weekPlan(t) : null;
+  // The 2- and 3-run rows follow the template week: only the day types it uses.
+  const week = ok ? weekPlan(t) : null;
   if (week) {
     t.two = week.some(w => !w.long && w.runs === 2);
     t.three = week.some(w => !w.long && w.runs === 3);
