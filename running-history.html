@@ -488,7 +488,7 @@
           pace-zone histogram&rsquo;s own, against that day&rsquo;s VDOT.</p></span></span></h2>
     <div class="ctrls">
       <label class="chk" title="Log makes equal ratios equal heights, so short runs stay readable against long ones; linear makes heights plain kilometres.">Scale
-        <select id="barScale"><option value="log" selected>logarithmic</option><option value="linear">linear</option></select>
+        <select id="barScale"><option value="log">logarithmic</option><option value="linear" selected>linear</option></select>
       </label>
       <label class="chk" title="Draw any day longer than this at this height, marked as cut off, so one very long run doesn't set the scale for every other. The readout and table still give the real distance.">
         <input type="checkbox" id="barCap" checked> Cap at
@@ -1091,7 +1091,7 @@ const PREF_DEFAULTS = {
   vdotNearDots: true,  // mark the days that came close to the VDOT ceiling without beating it
   vdotNearPct: 5,      // how close "close" is, in percent of the peak in force that day
                        // (0 = only the days that set it, 100 = every run day)
-  barScale: 'log',   // the distance bars' y-axis: 'log' or 'linear'
+  barScale: 'linear', // the distance bars' y-axis: 'log' or 'linear'
   barCap: true,      // draw any day longer than barCapKm at barCapKm, marked "X+"
   barCapKm: 45,      // ...and that cap, in km, 1-500 — past a marathon, so only the rare ultra is cut
   barColour: 'workout',  // what the bars are coloured by: 'verdict', 'workout' (type) or 'none'

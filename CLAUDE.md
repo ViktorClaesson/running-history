@@ -22,14 +22,16 @@ to refresh). After that the page opens straight into the chart.
 
 Up to six stacked panels sharing one x-axis, one bar/point per calendar day:
 
-1. **Bars** — height is **that day's own distance**, on a **logarithmic** axis.
+1. **Bars** — height is **that day's own distance**, on a **linear** axis by
+   default (`barScale`; logarithmic is the other option).
    Colour is a *verdict on where training stands that day* — not on that one run.
    It is literally **the colour of whichever window line in panel 2 is on top**,
-   because that is what the verdict says; see "Verdict" below. Log, not linear, so equal
-   *ratios* are equal heights: 5→10 km is the same step as 10→20. One 30 km day
-   therefore can't squash every ordinary run onto the baseline, and the gap
-   between a 4 and a 6 km day stays readable. See "The bar panel's log axis"
-   below for how the floor and the rest-day stubs work.
+   because that is what the verdict says; see "Verdict" below. On log, equal
+   *ratios* are equal heights: 5→10 km is the same step as 10→20. Log was the
+   default until Oct 2026; linear took over once the cap (45 km, on by default)
+   stopped one ultra squashing every ordinary run onto the baseline and the axis
+   stopped rounding past it. See "The bar panel's axis" below for how the floor
+   and the rest-day stubs work.
 2. **Lines** — rolling **distance per week**, one line per window (see "The four
    windows" below): the measure the bars used to carry, moved out into a panel of
    its own so the bars could become per-run distance. With `highlightMax` on (the
@@ -62,7 +64,7 @@ everyone else.
 
 ## The bar panel's axis: log, linear, and the cap
 
-`barScale` ("Scale" under Distance bars, `'log'` by default) picks the axis.
+`barScale` ("Scale" under Distance bars, `'linear'` by default) picks the axis.
 **Linear** puts 0 on the floor and uses `niceTicks` like the other linear
 panels; runs still never draw shorter than `MIN_RUN_H`, so they stay above the
 rest stub, and the floor line stays unlabelled. Everything below is about log.
