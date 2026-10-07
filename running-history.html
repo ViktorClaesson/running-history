@@ -488,7 +488,7 @@
           pace-zone histogram&rsquo;s own, against that day&rsquo;s VDOT.</p></span></span></h2>
     <div class="ctrls">
       <label class="chk" title="Log makes equal ratios equal heights, so short runs stay readable against long ones; linear makes heights plain kilometres.">Scale
-        <select id="barScale"><option value="log" selected>logarithmic</option><option value="linear">linear</option></select>
+        <select id="barScale"><option value="log">logarithmic</option><option value="linear" selected>linear</option></select>
       </label>
       <label class="chk" title="Draw any day longer than this at this height, marked as cut off, so one very long run doesn't set the scale for every other. The readout and table still give the real distance.">
         <input type="checkbox" id="barCap" checked> Cap at
@@ -1091,7 +1091,7 @@ const PREF_DEFAULTS = {
   vdotNearDots: true,  // mark the days that came close to the VDOT ceiling without beating it
   vdotNearPct: 5,      // how close "close" is, in percent of the peak in force that day
                        // (0 = only the days that set it, 100 = every run day)
-  barScale: 'log',   // the distance bars' y-axis: 'log' or 'linear'
+  barScale: 'linear', // the distance bars' y-axis: 'log' or 'linear'
   barCap: true,      // draw any day longer than barCapKm at barCapKm, marked "X+"
   barCapKm: 45,      // ...and that cap, in km, 1-500 — past a marathon, so only the rare ultra is cut
   barColour: 'workout',  // what the bars are coloured by: 'verdict', 'workout' (type) or 'none'
@@ -2465,11 +2465,19 @@ function drawBars() {
   }
   if (!(vMax > 0)) { vMin = 1; vMax = 10; }            // nothing in view: a plausible empty axis
   const isLog = barScale === 'log';
+  // The axis stops at the cap whenever it would otherwise reach past it: when a
+  // run was cut, and also when rounding the tallest bar up would overshoot the
+  // cap (42 km → 50), since no bar can ever be drawn above it — so the axis
+  // never rounds out to a value no bar can reach. Either way the top tick is
+  // the cap, marked "X+". An axis that tops out below the cap is left alone.
+  let capAxis = false;
+  const capTop = top => {
+    capAxis = capOn && (anyCut || top > barCapKm);
+    return capAxis ? barCapKm : top;
+  };
   let yOf, ticks, yHi, step = 1;
   if (isLog) {
-    // a cut-off run tops out exactly at the cap, so the axis does too, rather
-    // than rounding out past it to a value no bar can reach
-    yHi = anyCut ? barCapKm : logUp(vMax);
+    yHi = capTop(logUp(vMax));
     // at least one full decade of axis, so a view where every run is much the same
     // length doesn't blow that narrow range up across the whole panel
     const yLo = Math.min(logDown(vMin), logUp(vMax) / 10);
@@ -2485,11 +2493,11 @@ function drawBars() {
     // and something you can aim at.
     ticks = niceTicks(vMax);
     step = ticks.step;
-    yHi = anyCut ? barCapKm : ticks[ticks.length - 1];
+    yHi = capTop(ticks[ticks.length - 1]);
     yOf = v => base - plotH * v / yHi;
     ticks = ticks.filter(t => t > 0);
   }
-  if (anyCut) {
+  if (capAxis) {
     ticks = ticks.filter(t => t < yHi * 0.9999 && base - yOf(t) < plotH - 12);
     ticks.push(yHi);
   }
@@ -2503,7 +2511,7 @@ function drawBars() {
     ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(PAD.l, y); ctx.lineTo(w - PAD.r, y); ctx.stroke();
     ctx.fillStyle = C('--muted');
-    const cut = anyCut && t === yHi;
+    const cut = capAxis && t === yHi;
     const txt = isLog ? logTickText(t) : cut ? String(+t.toFixed(1)) : t.toFixed(Number.isInteger(step) ? 0 : 1);
     ctx.fillText(cut ? txt + '+' : txt, PAD.l - 8, y);
   }

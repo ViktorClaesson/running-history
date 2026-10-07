@@ -22,14 +22,16 @@ to refresh). After that the page opens straight into the chart.
 
 Up to six stacked panels sharing one x-axis, one bar/point per calendar day:
 
-1. **Bars** — height is **that day's own distance**, on a **logarithmic** axis.
+1. **Bars** — height is **that day's own distance**, on a **linear** axis by
+   default (`barScale`; logarithmic is the other option).
    Colour is a *verdict on where training stands that day* — not on that one run.
    It is literally **the colour of whichever window line in panel 2 is on top**,
-   because that is what the verdict says; see "Verdict" below. Log, not linear, so equal
-   *ratios* are equal heights: 5→10 km is the same step as 10→20. One 30 km day
-   therefore can't squash every ordinary run onto the baseline, and the gap
-   between a 4 and a 6 km day stays readable. See "The bar panel's log axis"
-   below for how the floor and the rest-day stubs work.
+   because that is what the verdict says; see "Verdict" below. On log, equal
+   *ratios* are equal heights: 5→10 km is the same step as 10→20. Log was the
+   default until Oct 2026; linear took over once the cap (45 km, on by default)
+   stopped one ultra squashing every ordinary run onto the baseline and the axis
+   stopped rounding past it. See "The bar panel's axis" below for how the floor
+   and the rest-day stubs work.
 2. **Lines** — rolling **distance per week**, one line per window (see "The four
    windows" below): the measure the bars used to carry, moved out into a panel of
    its own so the bars could become per-run distance. With `highlightMax` on (the
@@ -62,14 +64,18 @@ everyone else.
 
 ## The bar panel's axis: log, linear, and the cap
 
-`barScale` ("Scale" under Distance bars, `'log'` by default) picks the axis.
+`barScale` ("Scale" under Distance bars, `'linear'` by default) picks the axis.
 **Linear** puts 0 on the floor and uses `niceTicks` like the other linear
 panels; runs still never draw shorter than `MIN_RUN_H`, so they stay above the
 rest stub, and the floor line stays unlabelled. Everything below is about log.
 
 `barCap`/`barCapKm` ("Cap at X km", on, 45 km — past a marathon, so in practice only the odd ultra is ever cut) draws any day longer than the
 cap at the cap: the axis tops out exactly at it with an "X+" tick (on log too,
-rather than rounding up past it), and each cut-off bar gets two thin
+rather than rounding up past it) — and it does so **whenever the axis would
+otherwise reach past the cap**, not only when a run was actually cut: a 42.9 km
+longest run at a 45 km cap used to round the axis up to 50 (log) or 60 (linear),
+a height no bar can ever be drawn at. An axis that tops out *below* the cap is
+left alone. Each cut-off bar gets two thin
 `--surface-1` breaks across its top, like an axis break. It exists for linear
 mode, where one 80 km ultra would otherwise flatten every other run. Only the
 drawing is capped — the readout, table and every series use the real distance.
