@@ -170,7 +170,7 @@
   .sidebar { flex: 0 1 280px; min-width: 240px; position: sticky; top: 20px;
     max-height: calc(100vh - 40px); overflow: auto; }
   @media (max-width: 1300px) { .sidebar { position: static; max-height: none; } }
-  h1 { font-size: 20px; font-weight: 600; margin: 0 0 4px; letter-spacing: -0.01em; }
+  h1 { font-size: 20px; font-weight: 600; margin: 0 0 24px; letter-spacing: -0.01em; }
   .sub { color: var(--text-secondary); margin: 0 0 24px; font-size: 13px; }
 
   .tiles { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
@@ -296,6 +296,24 @@
   .setgroup-title { margin: 0; font-size: 11px; font-weight: 600; letter-spacing: .06em;
     text-transform: uppercase; color: var(--muted); }
   #settingsSidebar > #reset { margin-top: 2px; }
+  /* The long explanations live behind an (i) next to what they explain, and are
+     shown in one shared popover (#infoPop) on hover or focus. Shared and fixed-
+     position rather than a child of the icon, because the sidebars scroll and
+     would clip anything absolutely positioned inside them. */
+  .info { display: inline-flex; align-items: center; justify-content: center;
+    width: 14px; height: 14px; border-radius: 50%; border: 1px solid currentColor;
+    font: 600 9px/1 system-ui, -apple-system, sans-serif; font-style: normal;
+    text-transform: none; letter-spacing: 0; color: var(--muted); cursor: help;
+    vertical-align: middle; margin-left: 6px; user-select: none; }
+  .info:hover, .info:focus-visible { color: var(--text-primary); outline: none; }
+  .info-text { display: none; }
+  #infoPop { position: fixed; z-index: 30; max-width: 320px; padding: 10px 12px;
+    background: var(--surface-1); color: var(--text-secondary); border: 1px solid var(--border);
+    border-radius: 8px; box-shadow: 0 6px 24px rgba(0,0,0,0.18);
+    font-size: 12px; line-height: 1.5; pointer-events: none; }
+  #infoPop[hidden] { display: none; }
+  #infoPop p { margin: 0; }
+  #infoPop p + p { margin-top: 6px; }
   .legend .item { display: inline-flex; align-items: center; gap: 6px; }
   .swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
   .swatch.ramp { width: 26px; }
@@ -375,9 +393,9 @@
   label.sport:hover { background: var(--ghost); }
   .sport-meta { color: var(--muted); font-size: 11px; }
 
-  details.table { margin-top: 20px; }
-  details.table summary { cursor: pointer; font-size: 13px; color: var(--text-secondary); }
-  .tablewrap { max-height: 340px; overflow: auto; margin-top: 10px; border: 1px solid var(--border); border-radius: 8px; }
+  #tablecard { margin-top: 20px; }
+  #tablecard[hidden] { display: none; }
+  .tablewrap { max-height: 340px; overflow: auto; margin-top: 6px; border: 1px solid var(--border); border-radius: 8px; }
   table { border-collapse: collapse; width: 100%; font-size: 13px; background: var(--surface-1); }
   td .why { color: var(--muted); font-size: 10px; }
   th, td { text-align: right; padding: 6px 12px; border-bottom: 1px solid var(--grid); font-variant-numeric: tabular-nums; }
@@ -395,14 +413,70 @@
        swatches belong with the volume/frequency panels they colour, the
        verdict swatches belong with the verdict settings. -->
   <section class="setgroup">
-    <h2 class="setgroup-title">Volume &amp; frequency panels</h2>
+    <h2 class="setgroup-title">Distance bars<span class="info" tabindex="0">i<span class="info-text"><p>One bar per day, its height that day&rsquo;s own distance. On the <strong>log</strong> axis equal <em>ratios</em> are equal heights &mdash; 5&rarr;10&nbsp;km is the same step as 10&rarr;20 &mdash; so one very long run can&rsquo;t flatten every short one. On the <strong>linear</strong> axis heights are plain kilometres; capping long days there keeps one ultra from squashing the rest: anything longer than the cap is drawn at it, with a break across its top, and the axis reads &ldquo;X+&rdquo;. The readout and the table always give the real distance. A day with no run gets a short grey stub, so it can still be hovered and clicked.</p><p data-when="verdict"><strong>Verdict:</strong> Simply <em>which distance-per-week window is highest that day</em> — the
+          shortest one wins a tie. <span class="winLabel0">1w</span> highest is highly productive,
+          <span class="winLabel1">4w</span> productive, <span class="winLabel2">16w</span> steady,
+          <span class="winLabel3">64w</span> unproductive: the shorter the window on top, the more
+          recent the growth. Same four colours as the window lines above, because it is the same
+          statement — it is the line &ldquo;Highlight the highest line&rdquo; picks out.
+          A rest day has no verdict.</p><p data-when="workout"><strong>Workout type:</strong> Each lap scores its speed (km/h) to the power below, times its
+          distance, towards the zone it was run in. Then, hardest first, each zone is pooled with
+          every faster one, and the first pool to reach the share below is the run&rsquo;s type &mdash;
+          so hard work split across interval and repetition still adds up to an interval session,
+          and a few strides don&rsquo;t turn an easy run into a repetition one. Zones are the
+          pace-zone histogram&rsquo;s own, against that day&rsquo;s VDOT.</p></span></span></h2>
+    <div class="ctrls">
+      <label class="chk" title="Log makes equal ratios equal heights, so short runs stay readable against long ones; linear makes heights plain kilometres.">Scale
+        <select id="barScale"><option value="log" selected>logarithmic</option><option value="linear">linear</option></select>
+      </label>
+      <label class="chk" title="Draw any day longer than this at this height, marked as cut off, so one very long run doesn't set the scale for every other. The readout and table still give the real distance.">
+        <input type="checkbox" id="barCap" checked> Cap at
+        <input type="number" id="barCapKm" min="1" max="500" step="1" value="45"> km
+      </label>
+      <label class="chk" title="What the colour of each run's bar says: where training stands that day (the verdict), what kind of session it was (the workout type, in the pace-zone colours), or nothing at all.">Colour bars by
+        <select id="barColour"><option value="verdict">verdict</option><option value="workout" selected>workout type</option><option value="none">nothing</option></select>
+      </label>
+    </div>
+    <div class="legend setsub" id="bc-verdict">
+      <div class="legend-row"><span class="legend-tag">Verdict</span>
+        <span class="item"><span class="swatch" style="background:var(--v-hp)"></span>▲▲ highly productive</span>
+        <span class="item"><span class="swatch" style="background:var(--v-pr)"></span>▲ productive</span>
+        <span class="item"><span class="swatch" style="background:var(--v-st)"></span>= steady</span>
+        <span class="item"><span class="swatch" style="background:var(--v-un)"></span>▼ unproductive</span>
+      </div>
+      <div class="legend-row"><span class="legend-tag">No run</span>
+        <span class="item"><span class="swatch" style="background:var(--rest)"></span>rest day</span>
+      </div>
+    </div>
+    <div class="setsub" id="bc-workout">
+      <div class="legend">
+        <div class="legend-row"><span class="legend-tag">Workout</span>
+          <span class="item"><span class="swatch" style="background:var(--z-repetition)"></span>repetition</span>
+          <span class="item"><span class="swatch" style="background:var(--z-interval)"></span>interval</span>
+          <span class="item"><span class="swatch" style="background:var(--z-threshold)"></span>threshold</span>
+          <span class="item"><span class="swatch" style="background:var(--z-marathon)"></span>marathon</span>
+          <span class="item"><span class="swatch" style="background:var(--z-easy)"></span>endurance</span>
+          <span class="item"><span class="swatch wt-recovery"></span>recovery</span>
+          <span class="item"><span class="swatch" style="background:var(--rest)"></span>rest day</span>
+        </div>
+      </div>
+      <div class="ctrls">
+        <label class="chk" title="How much faster laps count for. 0 is plain distance in each zone; higher leans harder towards the fastest laps.">Speed weight
+          <input type="number" id="wtExp" min="0" max="4" step="0.5" value="2"> power</label>
+        <label class="chk" title="How much of the run's score a zone, pooled with every faster zone, needs before it names the run. 50 would be a majority; lower leans towards the harder types.">Wins at
+          <input type="number" id="wtShare" min="1" max="100" step="1" value="35"> % of score</label>
+      </div>
+    </div>
+  </section>
+
+  <section class="setgroup">
+    <h2 class="setgroup-title">Volume &amp; frequency panels<span class="info" tabindex="0">i<span class="info-text"><span class="winsN">1 / 4 / 16 / 64</span>-week rolling averages. Each line's colour is also its verdict colour below — whichever line is highest on the day is what the bars are coloured by. Untick one to take it, and its window-start dot, off the panels; it stays in the readout.</span></span></h2>
     <div class="legend">
       <div class="legend-row" id="row-windows" title="Hiding a line takes it off the three panels and takes its window-start dot off every panel — it stays in the hover readout."><span class="legend-tag">Lines</span>
         <label class="item"><input type="checkbox" id="line-s0" checked><span class="swatch line" style="background:var(--v-hp)"></span><span class="winLabel0">1w</span></label>
         <label class="item"><input type="checkbox" id="line-s1" checked><span class="swatch line" style="background:var(--v-pr)"></span><span class="winLabel1">4w</span></label>
         <label class="item"><input type="checkbox" id="line-s2" checked><span class="swatch line" style="background:var(--v-st)"></span><span class="winLabel2">16w</span></label>
         <label class="item"><input type="checkbox" id="line-s3" checked><span class="swatch line" style="background:var(--v-un)"></span><span class="winLabel3">64w</span></label>
-        <span class="legend-dim"><span class="winsN">1 / 4 / 16 / 64</span>-week rolling averages. Each line's colour is also its verdict colour below — whichever line is highest on the day is what the bars are coloured by. Untick one to take it, and its window-start dot, off the panels; it stays in the readout.</span>
       </div>
     </div>
     <div class="ctrls">
@@ -460,59 +534,14 @@
   </section>
 
   <section class="setgroup">
-    <h2 class="setgroup-title">Bar colour</h2>
-    <div class="ctrls">
-      <label class="chk" title="What the colour of each run's bar says: where training stands that day (the verdict), what kind of session it was (the workout type, in the pace-zone colours), or nothing at all.">Colour bars by
-        <select id="barColour"><option value="verdict">verdict</option><option value="workout" selected>workout type</option><option value="none">nothing</option></select>
-      </label>
-    </div>
-    <div class="legend setsub" id="bc-verdict">
-      <div class="legend-row"><span class="legend-tag">Verdict</span>
-        <span class="item"><span class="swatch" style="background:var(--v-hp)"></span>▲▲ highly productive</span>
-        <span class="item"><span class="swatch" style="background:var(--v-pr)"></span>▲ productive</span>
-        <span class="item"><span class="swatch" style="background:var(--v-st)"></span>= steady</span>
-        <span class="item"><span class="swatch" style="background:var(--v-un)"></span>▼ unproductive</span>
-      </div>
-      <div class="legend-row"><span class="legend-tag">No run</span>
-        <span class="item"><span class="swatch" style="background:var(--rest)"></span>rest day</span>
-        <span class="legend-dim">Simply <em>which distance-per-week window is highest that day</em> — the
-          shortest one wins a tie. <span class="winLabel0">1w</span> highest is highly productive,
-          <span class="winLabel1">4w</span> productive, <span class="winLabel2">16w</span> steady,
-          <span class="winLabel3">64w</span> unproductive: the shorter the window on top, the more
-          recent the growth. Same four colours as the window lines above, because it is the same
-          statement — it is the line &ldquo;Highlight the highest line&rdquo; picks out.
-          A rest day has no verdict.</span>
-      </div>
-    </div>
-    <div class="setsub" id="bc-workout">
-      <div class="legend">
-        <div class="legend-row"><span class="legend-tag">Workout</span>
-          <span class="item"><span class="swatch" style="background:var(--z-repetition)"></span>repetition</span>
-          <span class="item"><span class="swatch" style="background:var(--z-interval)"></span>interval</span>
-          <span class="item"><span class="swatch" style="background:var(--z-threshold)"></span>threshold</span>
-          <span class="item"><span class="swatch" style="background:var(--z-marathon)"></span>marathon</span>
-          <span class="item"><span class="swatch" style="background:var(--z-easy)"></span>endurance</span>
-          <span class="item"><span class="swatch wt-recovery"></span>recovery</span>
-          <span class="item"><span class="swatch" style="background:var(--rest)"></span>rest day</span>
-        </div>
-        <span class="legend-dim">Each lap scores its speed (km/h) to the power below, times its
-          distance, towards the zone it was run in. Then, hardest first, each zone is pooled with
-          every faster one, and the first pool to reach the share below is the run&rsquo;s type &mdash;
-          so hard work split across interval and repetition still adds up to an interval session,
-          and a few strides don&rsquo;t turn an easy run into a repetition one. Zones are the
-          pace-zone histogram&rsquo;s own, against that day&rsquo;s VDOT.</span>
-      </div>
-      <div class="ctrls">
-        <label class="chk" title="How much faster laps count for. 0 is plain distance in each zone; higher leans harder towards the fastest laps.">Speed weight
-          <input type="number" id="wtExp" min="0" max="4" step="0.5" value="2"> power</label>
-        <label class="chk" title="How much of the run's score a zone, pooled with every faster zone, needs before it names the run. 50 would be a majority; lower leans towards the harder types.">Wins at
-          <input type="number" id="wtShare" min="1" max="100" step="1" value="35"> % of score</label>
-      </div>
-    </div>
-  </section>
-
-  <section class="setgroup">
-    <h2 class="setgroup-title">Pace-zone volume</h2>
+    <h2 class="setgroup-title">Pace-zone volume<span class="info" tabindex="0">i<span class="info-text">One rolling window&rsquo;s running, split by which pace zone the
+          kilometres were actually run in &mdash; so the bands add up to that window&rsquo;s own
+          distance-per-week line, the one drawn in that colour further up. Slowest band at the bottom,
+          so the hard running is the band on top &mdash; the same order the pace-zone histogram reads
+          left to right. Whole zones only, never the histogram&rsquo;s sub-bands: &ldquo;how much
+          threshold have I been running&rdquo; is not a question about threshold&nbsp;2. Zones come from
+          each day&rsquo;s own VDOT, so a run the export has no recorded time for puts nothing in the
+          stack, which is the one way a total can end up under that line.</span></span></h2>
     <div class="legend">
       <div class="legend-row"><span class="legend-tag">Zones</span>
         <span class="item"><span class="swatch zs-standing"></span>standing</span>
@@ -523,14 +552,6 @@
         <span class="item"><span class="swatch" style="background:var(--z-threshold)"></span>threshold</span>
         <span class="item"><span class="swatch" style="background:var(--z-interval)"></span>interval</span>
         <span class="item"><span class="swatch" style="background:var(--z-repetition)"></span>repetition</span>
-        <span class="legend-dim">One rolling window&rsquo;s running, split by which pace zone the
-          kilometres were actually run in &mdash; so the bands add up to that window&rsquo;s own
-          distance-per-week line, the one drawn in that colour further up. Slowest band at the bottom,
-          so the hard running is the band on top &mdash; the same order the pace-zone histogram reads
-          left to right. Whole zones only, never the histogram&rsquo;s sub-bands: &ldquo;how much
-          threshold have I been running&rdquo; is not a question about threshold&nbsp;2. Zones come from
-          each day&rsquo;s own VDOT, so a run the export has no recorded time for puts nothing in the
-          stack, which is the one way a total can end up under that line.</span>
       </div>
     </div>
     <div class="ctrls">
@@ -554,23 +575,23 @@
     </div>
   </section>
 
+  <section class="setgroup">
+    <h2 class="setgroup-title">Data table</h2>
+    <div class="ctrls">
+      <label class="chk"><input type="checkbox" id="showTable" checked> Data table</label>
+    </div>
+  </section>
+
   <button id="reset" title="Put every setting in this sidebar back to its default and the view back to the default span. Leaves the what-if target alone — that has its own reset.">Reset</button>
 </aside>
 <div class="wrap">
-  <h1>Running history &mdash; every run, on a log scale</h1>
-  <p class="sub">
-    One bar per day, height is that day&rsquo;s own distance on a <strong>logarithmic</strong>
-    axis &mdash; 5&rarr;10&nbsp;km is the same step as 10&rarr;20, so one very long run can&rsquo;t
-    flatten every short one and short runs stay readable against each other. A day with
-    no run gets a tiny grey stub below the axis floor rather than nothing at all, which
-    also keeps it easy to hover and click. The colour is not about that one run: it
-    says <strong>which rolling distance-per-week window is highest that day</strong> &mdash;
-    the shortest one winning is the strongest reading &mdash; so the answer is
+  <h1>Running history<span class="info" tabindex="0">i<span class="info-text"><p>One bar per day, height is that day&rsquo;s own distance &mdash; on a logarithmic or linear axis, see
+    &ldquo;Distance bars&rdquo; in the settings. The colour says what kind of session it was, or, in verdict mode,
+    <strong>which rolling distance-per-week window is highest that day</strong> &mdash; the
+    shortest one winning is the strongest reading &mdash; so the answer is
     &ldquo;is my training trending up&rdquo; rather than &ldquo;was this run long
-    enough&rdquo;. Rolling weekly volume has moved to its own panel just below, in
-    the same four colours.
-  </p>
-
+    enough&rdquo;. Rolling weekly volume has its own panel just below, in
+    the same four colours as the verdicts.</p></span></span></h1>
   <div class="datarow">
     <span id="data-info"></span>
     <button id="data-refresh" hidden>Refresh from file</button>
@@ -601,9 +622,10 @@
       <div class="panel-title"><span class="zaN">Distance per week</span> by pace zone &mdash; <span class="zaWinN">16w</span> rolling</div>
       <canvas id="chartZa"></canvas>
     </div>
-    <div class="hint">Scroll or pinch to zoom — the day under the cursor stays put while both sides scale around it. Drag to pan. Double-click, or press <kbd>r</kbd>, to go back to the default view, the longest window ending on the most recent day.
+    <div class="hint">Zoom, pan, pin a day<span class="info" tabindex="0">i<span class="info-text"><p>Scroll or pinch to zoom — the day under the cursor stays put while both sides scale around it. Drag to pan. Double-click, or press <kbd>r</kbd>, to go back to the default view, the longest window ending on the most recent day.
       Click a day to pin its numbers in the readout above; click it again, or press <kbd>t</kbd> or Esc, to release.
-      The coloured dots along the top of each panel mark where each window reaches back to — filled from the day under the pointer, hollow from the pinned one, and a chevron at the left edge for a window that reaches back past what's drawn.</div>
+      The coloured dots along the top of each panel mark where each window reaches back to — filled from the day under the pointer, hollow from the pinned one, and a chevron at the left edge for a window that reaches back past what's drawn.</p></span></span>
+      &nbsp;<kbd>r</kbd> reset view &middot; <kbd>t</kbd> release pin</div>
   </div>
 
   <div class="chartcard" id="zonecard" hidden>
@@ -611,15 +633,15 @@
     <div id="zone-body"></div>
   </div>
 
-  <details class="table">
-    <summary>Data table (days currently in view)</summary>
+  <div class="chartcard" id="tablecard">
+    <div class="panel-title" style="padding-left:4px">Data table &mdash; days currently in view</div>
     <div class="tablewrap">
       <table>
-        <thead><tr><th>Date</th><th>Distance (km)</th><th><span class="winVolN">4</span>-week avg (km/day)</th><th>Run days / week</th><th>Runs / week</th><th>Target (km)</th><th>Verdict</th><th>Workout</th></tr></thead>
+        <thead><tr><th>Date</th><th>Distance (km)</th><th>km / week</th><th>Run days / week</th><th>Runs / week</th><th>Verdict</th><th>Workout</th></tr></thead>
         <tbody id="tbody"></tbody>
       </table>
     </div>
-  </details>
+  </div>
 </div>
 
 <aside class="sidebar" id="readoutSidebar">
@@ -628,6 +650,8 @@
   </div>
 </aside>
 </div>
+
+  <div id="infoPop" hidden></div>
 
   <div class="gate" id="gate" hidden>
     <div class="gate-card">
@@ -1005,6 +1029,9 @@ const PREF_DEFAULTS = {
   vdotNearDots: true,  // mark the days that came close to the VDOT ceiling without beating it
   vdotNearPct: 5,      // how close "close" is, in percent of the peak in force that day
                        // (0 = only the days that set it, 100 = every run day)
+  barScale: 'log',   // the distance bars' y-axis: 'log' or 'linear'
+  barCap: true,      // draw any day longer than barCapKm at barCapKm, marked "X+"
+  barCapKm: 45,      // ...and that cap, in km, 1-500 — past a marathon, so only the rare ultra is cut
   barColour: 'workout',  // what the bars are coloured by: 'verdict', 'workout' (type) or 'none'
   // Workout type: each lap scores towards its zone, then zones are pooled from
   // the hard end and the first pool to reach wtShare% names the run.
@@ -1012,7 +1039,7 @@ const PREF_DEFAULTS = {
   wtShare: 35,       // % of the score a zone plus everything faster needs to be the run's type
   zoneBars: 3,       // sub-bands per pace zone in the pace-zone histogram
   zoneAxis: 'dist',  // what the pace-zone histogram's bars measure: 'time' (minutes) or 'dist' (km)
-  panels: { vol: true, freq: true, runs: true, vdot: true, zone: true, zarea: true },   // which optional panels are shown
+  panels: { vol: true, freq: true, runs: true, vdot: true, zone: true, zarea: true, table: true },   // which optional panels are shown
   // Which window the stacked-zone panel is over — one at a time, since the
   // stack is eight bands deep and four of those at once is a lot of chart. A
   // slot key, so it keeps its meaning when windowBase/windowMult change. s2
@@ -1033,7 +1060,7 @@ const PREF_DEFAULTS = {
 // setting when windowBase/windowMult change what it actually measures.
 const SLOT_KEYS = ['s0', 's1', 's2', 's3'];
 // The optional panels, i.e. everything but the bars.
-const PANEL_KEYS = ['vol', 'freq', 'runs', 'vdot', 'zone', 'zarea'];
+const PANEL_KEYS = ['vol', 'freq', 'runs', 'vdot', 'zone', 'zarea', 'table'];
 const LINE_KEYS = SLOT_KEYS;
 function loadPrefs() {
   const p = { ...PREF_DEFAULTS, panels: { ...PREF_DEFAULTS.panels }, lines: { ...PREF_DEFAULTS.lines } };
@@ -1053,6 +1080,8 @@ function loadPrefs() {
   if (num(raw.vdotNearPct, 0, 100)) p.vdotNearPct = Math.round(raw.vdotNearPct);
   // `colourVerdicts: false` was the old on/off for colouring at all — the same
   // thing 'none' says now.
+  if (raw.barScale === 'log' || raw.barScale === 'linear') p.barScale = raw.barScale;
+  if (num(raw.barCapKm, 1, 500)) p.barCapKm = Math.round(raw.barCapKm);
   if (raw.colourVerdicts === false) p.barColour = 'none';
   if (['verdict', 'workout', 'none'].includes(raw.barColour)) p.barColour = raw.barColour;
   // The old per-zone minute thresholds (wtRepMin...wtEasyPct) are simply
@@ -1064,7 +1093,7 @@ function loadPrefs() {
   if (typeof raw.useGap === 'boolean') p.gapVdot = p.gapPace = raw.useGap;
   // `maxBehind`/`fadeWindows` belonged to the MAX line and are ignored, as is a
   // `lines.max` entry — all dropped on the next save.
-  for (const k of ['highlightMax', 'gapVdot', 'gapPace', 'vdotNearDots']) {
+  for (const k of ['highlightMax', 'gapVdot', 'gapPace', 'vdotNearDots', 'barCap']) {
     if (typeof raw[k] === 'boolean') p[k] = raw[k];
   }
   if (raw.panels && typeof raw.panels === 'object') {
@@ -1099,6 +1128,9 @@ function savePrefs() {
     vdotNearDots,
     vdotNearPct,
     highlightMax,
+    barScale,
+    barCap,
+    barCapKm,
     barColour: barColourMode,
     ...wt,
     zoneBars: ZONE_BARS,
@@ -1581,6 +1613,11 @@ let visLines = { ...prefs.lines };
 // Off draws all four at full strength, for comparing two windows against each
 // other. Purely a drawing choice — nothing computed depends on it.
 let highlightMax = prefs.highlightMax;
+// The distance bars' axis, and the optional cap on how tall one day can be
+// drawn. Draw-time only, like highlightMax.
+let barScale = prefs.barScale;
+let barCap = prefs.barCap;
+let barCapKm = prefs.barCapKm;
 const ZONE_ANCHOR_PCT = [0.657, 0.818, 0.880, 0.976, 1.062];
 const ZONE_BOUND_PCT = [null,   // the floor is per-day now — see enduranceFloorPct()
   (ZONE_ANCHOR_PCT[0] + ZONE_ANCHOR_PCT[1]) / 2,
@@ -2226,31 +2263,65 @@ function drawBars() {
   const base = BARS.t + plotH;
   const [i0, i1] = visibleRange();
 
-  let vMax = 0, vMin = Infinity;
-  for (let i = i0; i <= i1; i++) if (daily[i] > 0) { if (daily[i] > vMax) vMax = daily[i]; if (daily[i] < vMin) vMin = daily[i]; }
+  // With the cap on, anything longer than barCapKm is drawn at barCapKm and
+  // marked as cut off, so one ultra can't set the scale for every other run —
+  // which matters most on the linear axis, where it would flatten the rest.
+  const capOn = barCap && barCapKm > 0;
+  const shown = i => capOn ? Math.min(daily[i], barCapKm) : daily[i];
+  const isCut = i => capOn && daily[i] > barCapKm;
+  let vMax = 0, vMin = Infinity, anyCut = false;
+  for (let i = i0; i <= i1; i++) if (daily[i] > 0) {
+    const v = shown(i);
+    if (v > vMax) vMax = v;
+    if (v < vMin) vMin = v;
+    if (isCut(i)) anyCut = true;
+  }
   if (!(vMax > 0)) { vMin = 1; vMax = 10; }            // nothing in view: a plausible empty axis
-  const yHi = logUp(vMax);
-  // at least one full decade of axis, so a view where every run is much the same
-  // length doesn't blow that narrow range up across the whole panel
-  const yLo = Math.min(logDown(vMin), yHi / 10);
-  const L0 = Math.log(yLo), L1 = Math.log(yHi);
-  const usable = plotH - MIN_RUN_H;
-  // yLo lands MIN_RUN_H above the floor, so the shortest run in view still has a
-  // bar you can see and click, and the rest stub stays visibly shorter than it
-  const yOf = v => base - MIN_RUN_H - usable * (Math.log(v) - L0) / (L1 - L0);
-  const topOf = i => daily[i] > 0 ? Math.min(yOf(daily[i]), base - MIN_RUN_H) : base - REST_STUB;
+  const isLog = barScale === 'log';
+  let yOf, ticks, yHi, step = 1;
+  if (isLog) {
+    // a cut-off run tops out exactly at the cap, so the axis does too, rather
+    // than rounding out past it to a value no bar can reach
+    yHi = anyCut ? barCapKm : logUp(vMax);
+    // at least one full decade of axis, so a view where every run is much the same
+    // length doesn't blow that narrow range up across the whole panel
+    const yLo = Math.min(logDown(vMin), logUp(vMax) / 10);
+    const L0 = Math.log(yLo), L1 = Math.log(yHi);
+    const usable = plotH - MIN_RUN_H;
+    // yLo lands MIN_RUN_H above the floor, so the shortest run in view still has a
+    // bar you can see and click, and the rest stub stays visibly shorter than it
+    yOf = v => base - MIN_RUN_H - usable * (Math.log(v) - L0) / (L1 - L0);
+    ticks = logTicks(yLo, yHi);
+  } else {
+    // Linear: 0 sits on the floor, as on every other linear panel. A run is
+    // still never drawn shorter than MIN_RUN_H, so it stays above the rest stub
+    // and something you can aim at.
+    ticks = niceTicks(vMax);
+    step = ticks.step;
+    yHi = anyCut ? barCapKm : ticks[ticks.length - 1];
+    yOf = v => base - plotH * v / yHi;
+    ticks = ticks.filter(t => t > 0);
+  }
+  if (anyCut) {
+    ticks = ticks.filter(t => t < yHi * 0.9999 && base - yOf(t) < plotH - 12);
+    ticks.push(yHi);
+  }
+  const topOf = i => daily[i] > 0 ? Math.min(yOf(shown(i)), base - MIN_RUN_H) : base - REST_STUB;
 
   ctx.font = '11px system-ui, -apple-system, sans-serif';
   ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
-  for (const t of logTicks(yLo, yHi)) {
+  for (const t of ticks) {
     const y = Math.round(yOf(t)) + 0.5;
     ctx.strokeStyle = C('--grid');
     ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(PAD.l, y); ctx.lineTo(w - PAD.r, y); ctx.stroke();
     ctx.fillStyle = C('--muted');
-    ctx.fillText(logTickText(t), PAD.l - 8, y);
+    const cut = anyCut && t === yHi;
+    const txt = isLog ? logTickText(t) : cut ? String(+t.toFixed(1)) : t.toFixed(Number.isInteger(step) ? 0 : 1);
+    ctx.fillText(cut ? txt + '+' : txt, PAD.l - 8, y);
   }
-  // the floor the rest stubs stand on — not a zero line, there isn't one here
+  // the floor the rest stubs stand on — on the log axis not a zero line, there
+  // isn't one there; on the linear one it is zero, but stays unlabelled the same
   {
     const y = Math.round(base) + 0.5;
     ctx.strokeStyle = C('--baseline'); ctx.lineWidth = 1;
@@ -2259,7 +2330,7 @@ function drawBars() {
   ctx.save();
   ctx.translate(13, BARS.t + plotH/2); ctx.rotate(-Math.PI/2);
   ctx.textAlign = 'center'; ctx.fillStyle = C('--muted');
-  ctx.fillText('km (log)', 0, 0);
+  ctx.fillText(isLog ? 'km (log)' : 'km', 0, 0);
   ctx.restore();
 
   // Bars butt up against each other at every zoom level: each bar spans from its
@@ -2288,6 +2359,13 @@ function drawBars() {
       if (k > 0) { ctx.fillStyle = C('--surface-1'); ctx.fillRect(x0, yb - 1, bw, 1); }
       yb = top;
     });
+    // A run cut off at the cap gets a break across its top, like an axis break,
+    // so it reads as "more than this" rather than as a run of exactly the cap.
+    if (isCut(i) && hh > 14) {
+      ctx.fillStyle = C('--surface-1');
+      ctx.fillRect(x0, y + 4, bw, 1.5);
+      ctx.fillRect(x0, y + 7.5, bw, 1.5);
+    }
   }
 
 
@@ -2797,8 +2875,9 @@ function drawAll() {
   if (visPanels.runs) drawRuns();
   if (visPanels.vdot) drawVdot();
   if (visPanels.zarea) drawZoneArea();
-  const [i0, i1] = visibleRange();
-  renderTable(i0, i1);
+  // Nothing to keep current while it's hidden; tableKey makes the first
+  // render after showing it again a real one.
+  if (visPanels.table) { const [i0, i1] = visibleRange(); renderTable(i0, i1); }
 }
 const draw = drawAll;
 
@@ -3193,13 +3272,13 @@ function renderTable(i0, i1) {
   tableKey = key;
   const rows = [];
   for (let i = Math.min(i1, i0 + 400); i >= i0; i--) {
-    rows.push(`<tr><td>${fmtShort.format(dateAt(i))}</td><td>${daily[i] > 0 ? km(daily[i]) : '—'}</td><td>${km(avg[i])}</td><td>${perWeekAt(i).toFixed(1)}</td><td>${perWeekRunsAt(i).toFixed(1)}</td><td>${target[i] > 0 ? km(target[i]) : '—'}</td><td>${(() => { const c = classify(i);
+    rows.push(`<tr><td>${fmtShort.format(dateAt(i))}</td><td>${daily[i] > 0 ? km(daily[i]) : '—'}</td><td>${volSeries[IV][i].toFixed(1)}</td><td>${perWeekAt(i).toFixed(1)}</td><td>${perWeekRunsAt(i).toFixed(1)}</td><td>${(() => { const c = classify(i);
         return c ? `<span style="color:${fullColour(c)}">${DIR_ARROW[c.dir]} ${DIR_LABEL[c.dir]}</span><br><span class="why">${verdictWhy(c)}</span>`
                   : '<span style="color:var(--text-secondary)">— no run</span>'; })()}</td><td>${
         workoutsOf(i).map(w => w ? `<span style="color:${workoutColour(w)}">${WORKOUT_TYPES[w.type].label}</span> <span style="color:var(--muted)">${w.why}</span>`
                                  : '<span style="color:var(--text-secondary)">no timing</span>').join('<br>+ ') || '—'}</td></tr>`);
   }
-  if (i1 - i0 > 400) rows.push(`<tr><td colspan="8" style="text-align:left;color:var(--muted)">Showing the most recent 400 of ${i1-i0+1} days in view — zoom in for the rest.</td></tr>`);
+  if (i1 - i0 > 400) rows.push(`<tr><td colspan="7" style="text-align:left;color:var(--muted)">Showing the most recent 400 of ${i1-i0+1} days in view — zoom in for the rest.</td></tr>`);
   tbody.innerHTML = rows.join('');
 }
 
@@ -3329,6 +3408,9 @@ document.getElementById('reset').onclick = () => {
   vdotNearDots = PREF_DEFAULTS.vdotNearDots;
   vdotNearPct = PREF_DEFAULTS.vdotNearPct;
   highlightMax = PREF_DEFAULTS.highlightMax;
+  barScale = PREF_DEFAULTS.barScale;
+  barCap = PREF_DEFAULTS.barCap;
+  barCapKm = PREF_DEFAULTS.barCapKm;
   barColourMode = PREF_DEFAULTS.barColour;
   for (const k of Object.keys(wt)) wt[k] = PREF_DEFAULTS[k];
   ZONE_BARS = PREF_DEFAULTS.zoneBars;
@@ -3350,13 +3432,11 @@ function syncLabels() {
   for (const el of document.querySelectorAll('.winVdotN')) el.textContent = WINDOW_VDOT;
   // Everything that spells out which four windows are in play: the panel
   // titles, the legend notes (including the verdict legend, which names the
-  // windows it compares), each legend item's own label, and the data table's
-  // column header for the volume window.
+  // windows it compares) and each legend item's own label.
   for (const el of document.querySelectorAll('.winsN')) el.textContent = WINDOWS.map(w => w.weeks).join(' / ');
   WINDOWS.forEach((w, k) => {
     for (const el of document.querySelectorAll('.winLabel' + k)) el.textContent = w.label;
   });
-  for (const el of document.querySelectorAll('.winVolN')) el.textContent = WINDOWS[IV].weeks;
   // The stacked-zone panel's title says which measure it's stacked at and
   // which window it's over.
   for (const el of document.querySelectorAll('.zaN')) el.textContent = zaMeasureTitle();
@@ -3370,9 +3450,9 @@ function syncLabels() {
 // attribute — the one place panel visibility is written to the DOM, same idea as
 // syncControls() below.
 const PANEL_CHK = { vol: 'showVol', freq: 'showFreq', runs: 'showRuns', vdot: 'showVdot',
-                    zone: 'showZone', zarea: 'showZarea' };
+                    zone: 'showZone', zarea: 'showZarea', table: 'showTable' };
 const PANEL_EL = { vol: 'panel-vol', freq: 'panel-freq', runs: 'panel-runs', vdot: 'panel-vdot',
-                   zone: 'zonecard', zarea: 'panel-zarea' };
+                   zone: 'zonecard', zarea: 'panel-zarea', table: 'tablecard' };
 function syncPanelVisibility() {
   for (const k of PANEL_KEYS) {
     document.getElementById(PANEL_CHK[k]).checked = visPanels[k];
@@ -3450,6 +3530,9 @@ function syncControls() {
   zoneBarsInput.value = ZONE_BARS;
   zoneAxisSel.value = zoneAxis;
   highlightMaxBox.checked = highlightMax;
+  barScaleSel.value = barScale;
+  barCapChk.checked = barCap;
+  barCapInput.value = barCapKm;
   zoneAreaWinSel.value = zoneAreaWin;
   zoneAreaModeSel.value = zoneAreaMode;
   syncBarColour();
@@ -3610,7 +3693,7 @@ zoneBarsInput.onchange = zoneBarsInput.oninput = () => {
   savePrefs();
   renderZonePanel();
 };
-for (const k of ['vol', 'freq', 'runs', 'vdot', 'zarea']) {
+for (const k of ['vol', 'freq', 'runs', 'vdot', 'zarea', 'table']) {
   document.getElementById(PANEL_CHK[k]).onchange = e => {
     visPanels[k] = e.target.checked;
     savePrefs();
@@ -3623,6 +3706,49 @@ document.getElementById(PANEL_CHK.zone).onchange = e => {
   savePrefs();
   syncPanelVisibility();
   renderZonePanel();
+};
+// ---- info popovers --------------------------------------------------------
+// The long explanations sit in a hidden .info-text inside each (i), and are
+// copied into the one shared #infoPop on hover or keyboard focus. Paragraphs
+// marked data-when only apply under that bar-colour mode, so the Distance bars
+// note explains the scheme actually on screen rather than both.
+const infoPop = document.getElementById('infoPop');
+function showInfo(icon) {
+  const src = icon.querySelector('.info-text');
+  infoPop.innerHTML = src.innerHTML;
+  for (const el of infoPop.querySelectorAll('[data-when]')) {
+    if (el.dataset.when !== barColourMode) el.remove();
+  }
+  infoPop.hidden = false;
+  const r = icon.getBoundingClientRect(), pr = infoPop.getBoundingClientRect();
+  const gap = 6, vw = innerWidth, vh = innerHeight;
+  let x = Math.min(Math.max(8, r.left - 10), vw - pr.width - 8);
+  let y = r.bottom + gap;
+  if (y + pr.height > vh - 8) y = Math.max(8, r.top - gap - pr.height);
+  infoPop.style.left = x + 'px'; infoPop.style.top = y + 'px';
+}
+const hideInfo = () => { infoPop.hidden = true; };
+for (const icon of document.querySelectorAll('.info')) {
+  icon.addEventListener('mouseenter', () => showInfo(icon));
+  icon.addEventListener('mouseleave', hideInfo);
+  icon.addEventListener('focus', () => showInfo(icon));
+  icon.addEventListener('blur', hideInfo);
+  icon.addEventListener('click', e => e.preventDefault());
+}
+window.addEventListener('scroll', hideInfo, true);
+
+// Draw-time only: nothing computed depends on how the bars are scaled.
+const barScaleSel = document.getElementById('barScale');
+barScaleSel.onchange = () => { barScale = barScaleSel.value; savePrefs(); drawAll(); };
+const barCapChk = document.getElementById('barCap');
+barCapChk.onchange = () => { barCap = barCapChk.checked; savePrefs(); drawAll(); };
+const barCapInput = document.getElementById('barCapKm');
+barCapInput.onchange = barCapInput.oninput = () => {
+  const v = Math.round(Number(barCapInput.value));
+  if (!Number.isFinite(v) || v < 1 || v > 500) return;   // ignore half-typed values
+  barCapKm = v;
+  savePrefs();
+  drawAll();
 };
 syncControls();
 syncLabels();
