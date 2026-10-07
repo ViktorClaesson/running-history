@@ -161,9 +161,14 @@ runs up to match, lowering runs drags days down. `targetFor()` splits the week:
 
 - **With a long run** (`targetLong`, on by default, and only at
   ≥ `LONG_MIN_RUNS_PER_WEEK` = 3 days): the long run is alone on its day and
-  counts as two days, so it is **2 × km ÷ (days + 1)**; the other runs − 1 runs
-  share what is left equally over days − 1 days. 60 km / 4 days / 6 runs gives a
-  24 km long run and 7.2 km per other run.
+  counts as **w** one-run days (`targetLongW`, "Long run counts as", 1.5–2.5 in
+  tenths, default 2), so it is **w × km ÷ (days − 1 + w)** — 2 × km ÷ (days + 1)
+  at the default; the other runs − 1 runs share what is left equally. 60 km / 4
+  days / 6 runs gives a 24 km long run and 7.2 km per other run at w = 2, and
+  20 / 8 km at w = 1.5. Only the km move with w: the runs cap and the template
+  layout don't (L is still alone on Saturday). Probe: every days × runs combo ×
+  every w × long on/off sums to the weekly km within 1.4e-14, and long ÷ one
+  run is exactly w whenever runs = days.
 - **Without**: every run is km ÷ runs.
 
 The tile shows only the inputs and the template week; the per-day-type km rows
@@ -190,7 +195,7 @@ what-if or not, Monday to Sunday, each day with its run count and km:
 - Saturday is the long run (**L**) when there is one.
 - Extra runs (runs − days) go out in that same order **a round at a time**
   (`weekSlots()`): every day gets a second run before any gets a third.
-- **L already counts as two**, so Saturday sits out the second-run round and
+- **L is alone on its day**, so Saturday sits out the second-run round and
   is the *first* to get a third: **L+1**, the long run plus a short one. (L+1's
   km is the long run plus one short-run share.) With no long run Saturday is
   just the first day in the order.
@@ -306,6 +311,23 @@ stacked panels plus the pace-zone histogram to scroll through. It now lives in
 `.page` wraps both as `display: flex; flex-wrap: wrap`; below **1300px** viewport
 width the sidebar drops `position: sticky` (there's no longer room for two columns
 side by side, so it just falls back to sitting in the normal flow).
+
+**Both sidebars stay in view all the way to the bottom.** A sticky element
+only sticks inside its parent's content box, so two things used to cut that
+short. The 50vh scroll room (see the pace-zone histogram section) sat as
+padding on `.page`, which is outside that box, and the body's own 56px bottom
+padding ended `.page` short of the window. Over that slack both sidebars
+scrolled away, and the settings sidebar (taller than the window, so it scrolls
+inside itself) scrolled away first. The slack now lives on `.wrap` and the body
+has no bottom padding, so `.page` runs to the end of the page. Probe at
+1400/1700/1800/2000px: both sidebars at `top: 20px` when scrolled to the very
+bottom, where they used to be at -473 (settings) and -369 (readout).
+
+`.wrap`'s flex basis is **600px**, not 1120px. With 1120 the three columns
+needed about 1770px of window before they'd fit side by side, so anything
+narrower (1700px, say) put the readout on a row of its own below the table,
+where it only came into view at the very bottom. Now the chart column shrinks
+instead, and the three stay side by side down to the 1300px breakpoint.
 
 Being pulled out of the main flow changes what "fixed height" needs to mean: the
 sidebar's *own* height changing between idle and hovered no longer reflows the
@@ -869,7 +891,33 @@ over the empty canvas via `.zone-empty-overlay`. It used to swap in a small
 every rest day and grew it back on every run day — a distracting flicker when
 scanning quickly through a run of days while following hover (see above). The
 card is only ever hidden completely (`zonecard.hidden`) when there is no day to
-show at all — panel toggled off, or no run anywhere in history yet. An empty
+show at all — panel toggled off, or no run anywhere in history yet. That fixed the rest-day flicker but not the run-count one: a two-run day has
+two histograms, so the card was still ~620px on one and ~300px on the next.
+Two things together deal with it:
+
+- **Scroll room.** `.wrap` has `padding-bottom: 50vh` (`.page` instead
+  below 1300px, where everything stacks). Without it, a page that
+  fit the window (say every panel off but the histogram) couldn't be scrolled
+  at all, so Run 2 of 2 was off-screen with no way down to it. And when the
+  card shrank, the browser clamped the scroll position to the shorter page and
+  everything jumped. Half a window of slack means the card can grow and shrink
+  without moving the view. This turned out to be most of the fix.
+- **The height hold.** `holdZoneHeight()` puts a `min-height` on `#zone-body`:
+  it **grows at once** (the content needs the room) but only **shrinks after
+  `ZONE_SHRINK_MS` (700ms) with nothing taller asked for**, then eases down
+  over a 0.25s CSS transition (none under `prefers-reduced-motion`). A thin
+  countdown bar in the card's top-right corner (`#zone-shrink`) empties over
+  those 700ms. 700ms is the middle ground: fast to settle, slow enough not to
+  flicker while hovering across days to scan workouts. 5000ms was tried and
+  felt sluggish. Hiding the card drops the hold outright.
+
+A "last hovered" linger was also tried: leaving the chart kept the card on the
+last hovered day for a few seconds instead of falling back to the most recent
+run. It was dropped, since you can hardly get the pointer off the chart
+without crossing another day anyway. The card also sits 20px below the chart card, the same gap as
+the table below it.
+
+An empty
 day also skips the bin-hover interaction entirely (there's nothing behind the
 zero-height bars to report, and `vdotHere` may not even exist) rather than
 wiring up a `mousemove` listener that would have nothing real to say.
@@ -1105,7 +1153,7 @@ set to, so the page opens the way it was left: `windowBase`, `windowMult`,
 show/hide — see below), `lines` (`{s0, s1, s2, s3}` — slot keys, which of
 the four lines the three window panels draw), `zoneAreaWin` (a slot key: which
 window the stacked-zone panel is over, `'s2'` by default), `zoneAreaMode` (`'km'`/`'min'`/`'pctKm'`/`'pctMin'`), `targetWin` (a slot key, `'s2'` by default), and `plan` (`null` = the what-if box follows real
-history, `{km, days, runs}` = edited; an older entry without `runs` gets one run a day), `targetLong` (boolean). Three rules:
+history, `{km, days, runs}` = edited; an older entry without `runs` gets one run a day), `targetLong` (boolean), `targetLongW` (1.5–2.5, tenths). Three rules:
 
 - **Read at the very top of the `if (DATA)` block**, above `WINDOWS` and
   `let WINDOW_VDOT`, because `recompute()` runs at load and reads `WINDOWS` — the
@@ -1184,19 +1232,23 @@ its `margin-left: auto` (nothing to push right against in a column) and gained
 
 It is split into seven `.setgroup` sections, **grouped by what each setting
 moves** rather than by what kind of control it is — "which panel is this about"
-is the question being asked when someone comes looking for a setting. A 1px
+is the question being asked when someone comes looking for a setting. The groups run
+**in the same order as what they control appears on the page**, top to
+bottom: the Weekly target tile, the bars, the window panels, VDOT, the
+stacked pace-zone volume, the pace-zone histogram, then the table. Keep it
+that way when a panel moves. A 1px
 rule separates them rather than more whitespace, so the grouping doesn't cost
 much height:
 
 | Group | Holds |
 |---|---|
+| Weekly target | the tile's show/hide (`visPanels.target`), `targetLong`, `targetLongW` (disabled while the long run is off), `targetWin` |
 | Distance bars | `barScale`, `barCap`/`barCapKm`, the `barColour` select, then whichever of its two legends is in use: the four-verdict/rest legend, or the workout-type legend plus its two settings |
 | Volume & frequency panels | the four line show/hide swatches, the three panel show/hide boxes, `windowBase`/`windowMult`, `highlightMax` |
 | VDOT panel | its show/hide, `windowVdot`, `minLapM`, `gapVdot`, `vdotNearDots`/`vdotNearPct` |
-| Pace zones | its show/hide, `zoneBars`, `zoneAxis`, `gapPace` |
 | Pace-zone volume | the eight-bucket zone legend, the panel's show/hide, `zoneAreaWin`, `zoneAreaMode` |
-| Weekly target (first) | the tile's show/hide (`visPanels.target`), `targetLong`, `targetWin` |
-| Data table | its show/hide (`visPanels.table`; it used to be a `<details>` collapse). Its columns are km / week (the `WINDOW_VOL` slot's `volSeries`), run days / week and runs / week (the `WINDOW_FREQ` slot), verdict and workout |
+| Pace zones | its show/hide, `zoneBars`, `zoneAxis`, `gapPace` |
+| Data table | its show/hide (`visPanels.table`; it used to be a `<details>` collapse). Newest day at the top; past `TABLE_MAX_ROWS` (400) days in view it drops the *oldest*, so the most recent day in view is always the first row. Its columns are km / week (the `WINDOW_VOL` slot's `volSeries`), run days / week and runs / week (the `WINDOW_FREQ` slot), verdict and workout |
 
 Two placements are worth naming. **The legend is split across two groups**, not
 kept as one block — even though both halves are now literally the same four
