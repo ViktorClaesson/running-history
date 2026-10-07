@@ -367,6 +367,11 @@
      rather than replacing it. Keeping the canvas up avoids the whole card
      growing/shrinking on every hover while scanning quickly through days. */
   .zone-canvas-wrap { position: relative; }
+  /* Grows at once, shrinks only after a pause and then eases down (see
+     holdZoneHeight), so sweeping across days with different run counts doesn't
+     make everything below jump on every hover. */
+  #zone-body { transition: min-height .25s ease; }
+  @media (prefers-reduced-motion: reduce) { #zone-body { transition: none; } }
   .zone-empty-overlay { position: absolute; inset: 0; display: flex; align-items: center;
     justify-content: center; text-align: center; padding: 0 24px;
     color: var(--muted); font-size: 13px; pointer-events: none; }
@@ -400,7 +405,7 @@
   label.sport:hover { background: var(--ghost); }
   .sport-meta { color: var(--muted); font-size: 11px; }
 
-  #tablecard { margin-top: 20px; }
+  #zonecard, #tablecard { margin-top: 20px; }
   #tablecard[hidden] { display: none; }
   .tablewrap { max-height: 340px; overflow: auto; margin-top: 6px; border: 1px solid var(--border); border-radius: 8px; }
   table { border-collapse: collapse; width: 100%; font-size: 13px; background: var(--surface-1); }
@@ -423,8 +428,11 @@
     <h2 class="setgroup-title">Weekly target<span class="info" tabindex="0">i<span class="info-text">A what-if box that lays a week out day by day: how far each day should be to hit a weekly distance. It starts from your real history over the window picked below. The (i) on the box itself shows the rules and the sums, with the numbers currently in it.</span></span></h2>
     <div class="ctrls">
       <label class="chk"><input type="checkbox" id="showTarget" checked> Weekly target box</label>
-      <label class="chk" title="Count one run a week as the long run: alone on its day and worth two of the others. Only applies at 3 or more days a week.">
+      <label class="chk" title="Count one run a week as the long run: alone on its day and worth more than one of the others (see below). Only applies at 3 or more days a week.">
         <input type="checkbox" id="targetLong" checked> Include a long run
+      </label>
+      <label class="chk" title="How many ordinary run days the long run is worth, 1.5-2.5. At 2 it is twice a one-run day.">Long run counts as
+        <input type="number" id="targetLongW" min="1.5" max="2.5" step="0.1" value="2"> days
       </label>
       <label class="chk" title="Which rolling window the box's starting km/wk, days/wk and runs/wk are averaged over, ending on the last day in the data (or the day before, if that is today). Only the starting figures — an edited what-if keeps its own numbers.">Based on
         <select id="targetWin">
@@ -1081,6 +1089,7 @@ const PREF_DEFAULTS = {
   highlightMax: true,
   plan: null,        // null = the what-if box follows real history; {km, days, runs} = edited
   targetLong: true,  // the weekly target counts one run as the long one (only at >= 3 days/wk)
+  targetLongW: 2,    // ...worth this many one-run days, 1.5-2.5 in tenths
   targetWin: 's2',   // slot key: the window the weekly target's starting figures are averaged over
 };
 // Slot keys, not week counts — a slot keeps its colour and its show/hide
@@ -1134,6 +1143,7 @@ function loadPrefs() {
     }
   }
   if (SLOT_KEYS.includes(raw.zoneAreaWin)) p.zoneAreaWin = raw.zoneAreaWin;
+  if (num(raw.targetLongW, 1.5, 2.5)) p.targetLongW = Math.round(raw.targetLongW * 10) / 10;
   if (SLOT_KEYS.includes(raw.targetWin)) p.targetWin = raw.targetWin;
   if (['km', 'min', 'pctKm', 'pctMin'].includes(raw.zoneAreaMode)) p.zoneAreaMode = raw.zoneAreaMode;
   // An entry from before runs/wk existed has no `runs`; it starts at one run a day.
@@ -1173,6 +1183,7 @@ function savePrefs() {
     zoneAreaMode,
     plan: planEdited ? { km: plan.km, days: plan.days, runs: plan.runs } : null,
     targetLong,
+    targetLongW,
     targetWin,
   };
   const changed = Object.keys(PREF_DEFAULTS)
@@ -1984,16 +1995,19 @@ let planEdited = prefs.plan !== null;
 // the week can be looked at without one; below LONG_MIN_RUNS_PER_WEEK days it is
 // off whatever this says, since there is no room for a run to be the long one.
 let targetLong = prefs.targetLong;
+// How many one-run days the long run is worth (2 = twice one). Only moves the km.
+let targetLongW = prefs.targetLongW;
 const PLAN_MAX_DAYS = 7, PLAN_MAX_RUNS = 16;   // 7 days, no long run: 3 x 3 + 3 x 2 + Fri 1
 
-// With a long run: it is always alone on its day and counts as two, so the week
-// is runs + 1 equal shares... of which the long run takes two — long = 2 x km /
-// (days + 1) — and the other runs - 1 runs split what is left equally. A day
-// with k runs is k of those. Without one every run is an equal share, km / runs.
+// With a long run: it is always alone on its day and counts as targetLongW days
+// (w), so the week is days - 1 + w equal day-shares, of which the long run takes
+// w — long = w x km / (days - 1 + w), which at w = 2 is 2 x km / (days + 1) —
+// and the other runs - 1 runs split what is left equally. A day with k runs is
+// k of those. Without one every run is an equal share, km / runs.
 function targetFor({ km, days, runs }) {
   const long = targetLong && days >= LONG_MIN_RUNS_PER_WEEK;
   const restRuns = long ? runs - 1 : runs, restDays = long ? days - 1 : days;
-  const longKm = long ? 2 * km / (days + 1) : 0;
+  const longKm = long ? targetLongW * km / (days - 1 + targetLongW) : 0;
   const perRun = restRuns > 0 ? (km - longKm) / restRuns : 0;
   return { long, longKm, perRun, restRuns, restDays };
 }
@@ -2007,7 +2021,7 @@ const fmtPlan = v => String(+v.toFixed(1));
 //  - Saturday is the long run (L) when there is one.
 //  - Extra runs go out in that same order, a round at a time: every day gets a
 //    second run before any gets a third.
-//  - L already counts as two, so Saturday sits out the second-run round, and is
+//  - L is alone on its day, so Saturday sits out the second-run round, and is
 //    the first to get a third — L+1, the long run plus a short one.
 //  - Friday is never doubled: it is the rest day, run at all only at 7 days.
 //  - Two-run days need MULTI2_MIN_DAYS days/wk, three-run days MULTI3_MIN_DAYS.
@@ -2070,7 +2084,7 @@ function weekPlanHtml(week) {
 // currently in it, then where the real-history figures come from. Rebuilt with
 // the box, so it always shows the figures actually on screen.
 function targetInfo(t, ok) {
-  const { km: K, days: D, runs: R } = plan, f = fmtPlan, k2 = v => km(v);
+  const { km: K, days: D, runs: R } = plan, f = fmtPlan, k2 = v => km(v), LW = targetLongW;
   const a = planActual();
   const { kmSum, runDays: rd, nRuns: rn, W, end, lastIsToday } = targetSeed;
   const endText = `${fmtDate.format(dateAt(end))}${lastIsToday
@@ -2079,8 +2093,8 @@ function targetInfo(t, ok) {
   const why = !targetLong ? 'the long run is switched off in the settings'
     : `the long run needs at least ${LONG_MIN_RUNS_PER_WEEK} days/wk`;
   const sums = !ok ? '<p class="eq">Nothing to split: there are no runs in the week.</p>'
-    : t.long ? `<p class="eq">long run = 2 &times; km &divide; (days + 1)<br>` +
-        `&emsp;= 2 &times; ${f(K)} &divide; ${f(D + 1)} = <b>${k2(t.longKm)} km</b><br>` +
+    : t.long ? `<p class="eq">long run = ${f(LW)} &times; km &divide; (days &minus; 1 + ${f(LW)})<br>` +
+        `&emsp;= ${f(LW)} &times; ${f(K)} &divide; ${f(D - 1 + LW)} = <b>${k2(t.longKm)} km</b><br>` +
         `1-run day = (km &minus; long run) &divide; (runs &minus; 1)<br>` +
         `&emsp;= (${f(K)} &minus; ${k2(t.longKm)}) &divide; ${f(t.restRuns)} = <b>${k2(t.perRun)} km</b><br>` +
         `2-run day = 2 &times; ${k2(t.perRun)} = ${k2(2 * t.perRun)} km<br>` +
@@ -2092,9 +2106,10 @@ function targetInfo(t, ok) {
       distance, given how many days you run and how many runs those days hold. Every run day holds at least
       one run, so runs/wk can&rsquo;t go below days/wk.</p>` +
     (t.long
-      ? `<p>With a long run, it is alone on its day and counts as two days&rsquo; worth, so the week is split
-          into days&nbsp;+&nbsp;1 shares and the long run takes two of them. Every other run gets an equal
-          slice of what is left, so a day with two of them is twice a one-run day.</p>`
+      ? `<p>With a long run, it is alone on its day and counts as ${f(LW)} days&rsquo; worth (set in the
+          Weekly target settings), so the week is split into days&nbsp;&minus;&nbsp;1&nbsp;+&nbsp;${f(LW)} shares
+          and the long run takes ${f(LW)} of them. Every other run gets an equal slice of what is left, so a
+          day with two of them is twice a one-run day.</p>`
       : `<p>No long run here (${why}), so every run is an equal share of the week.</p>`) +
     sums +
     (ok ? `<p>The template week lays the ${plan.days} days and ${plan.runs} runs out Monday to Sunday:<br>` +
@@ -2103,7 +2118,7 @@ function targetInfo(t, ok) {
       `2. Saturday is the long run (L)${t.long ? '' : ` when there is one &mdash; not this week, so it is just the first day in the order`}.<br>` +
       `3. Extra runs go out in that same order, a round at a time: every day gets a second run before any
         day gets a third.<br>` +
-      `4. L already counts as two, so Saturday sits out the second-run round and is the first to get a
+      `4. L is alone on its day, so Saturday sits out the second-run round and is the first to get a
         third: L+1, the long run plus a short one.<br>` +
       `5. Friday is never doubled up &mdash; it is the rest day, and is only run at all at 7 days/wk.<br>` +
       `6. Two-run days need at least ${MULTI2_MIN_DAYS} days/wk, three-run days at least ${MULTI3_MIN_DAYS}.<br>` +
@@ -3201,9 +3216,9 @@ const zonecard = document.getElementById('zonecard');
 const zoneTitle = document.getElementById('zone-title');
 const zoneBody = document.getElementById('zone-body');
 function renderZonePanel() {
-  if (!visPanels.zone) { zonecard.hidden = true; return; }
+  if (!visPanels.zone) { zonecard.hidden = true; holdZoneHeight(0); return; }
   const zoneDay = shownDay();
-  if (zoneDay === null) { zonecard.hidden = true; return; }   // no run anywhere in history yet
+  if (zoneDay === null) { zonecard.hidden = true; holdZoneHeight(0); return; }   // no run anywhere in history yet
   zonecard.hidden = false;
   zoneTitle.innerHTML = `Pace zones for ${fmtDate.format(dateAt(zoneDay))}` +
     (dayTag() ? ` <span class="pin">${dayTag()}</span>` : '');
@@ -3251,10 +3266,10 @@ function renderZonePanel() {
       (w ? ` · <span style="color:${workoutColour(w)}">${WORKOUT_TYPES[w.type].label}</span>` : '') +
       scoreShares(zoneScoresOf(zoneDay)[a]) + `</div>`;
   };
-  zoneBody.innerHTML = `<div class="zone-legend">${legend}</div>` + hists.map((realBins, a) =>
+  zoneBody.innerHTML = `<div class="zone-inner"><div class="zone-legend">${legend}</div>` + hists.map((realBins, a) =>
     (acts.length ? runHead(a) : '') +
     `<div class="zone-hover">${realBins ? 'Hover a bar to see its pace range' : '&nbsp;'}</div>` +
-    `<div class="zone-canvas-wrap"><canvas class="chartZone"></canvas></div>`).join('');
+    `<div class="zone-canvas-wrap"><canvas class="chartZone"></canvas></div>`).join('') + `</div>`;
   const cvs = zoneBody.querySelectorAll('.chartZone'), hovers = zoneBody.querySelectorAll('.zone-hover');
   hists.forEach((realBins, a) => {
     const emptyMsg = realBins ? null
@@ -3263,6 +3278,29 @@ function renderZonePanel() {
     mountZoneHist(cvs[a], hovers[a], realBins ? realBins.mins : zeros(), realBins ? realBins.km : zeros(),
                   !!realBins, maxVal, byDist, vdotHere);
   });
+  holdZoneHeight(zoneBody.firstElementChild.offsetHeight);
+}
+// A day with two runs has two histograms, so the card's height changes with the
+// day — and while following hover, every single-run day between two double-run
+// days collapsed it and the next one grew it back, shoving the table up and
+// down. So the card grows at once (its content needs the room) but only shrinks
+// once nothing taller has been asked for in ZONE_SHRINK_MS, and then eases down
+// via the CSS transition on min-height. 0 = card hidden: drop the hold outright.
+const ZONE_SHRINK_MS = 700;
+let zoneHeld = 0, zoneShrink = null;
+function holdZoneHeight(natural) {
+  clearTimeout(zoneShrink); zoneShrink = null;
+  if (natural >= zoneHeld || natural === 0) {
+    zoneBody.style.transition = 'none';   // growing must not lag the content
+    zoneBody.style.minHeight = natural ? natural + 'px' : '';
+    zoneHeld = natural;
+    return;
+  }
+  zoneShrink = setTimeout(() => {
+    zoneBody.style.transition = '';       // back to the stylesheet's ease
+    zoneBody.style.minHeight = natural + 'px';
+    zoneHeld = natural;
+  }, ZONE_SHRINK_MS);
 }
 function mountZoneHist(cvZ, hoverInfo, minsBins, kmBins, real, maxVal, byDist, vdotHere) {
   const bins = byDist ? kmBins : minsBins;   // what the bars are drawn at
@@ -3406,6 +3444,7 @@ function mountZoneHist(cvZ, hoverInfo, minsBins, kmBins, real, maxVal, byDist, v
 // ---- table ---------------------------------------------------------------
 const tbody = document.getElementById('tbody');
 let tableKey = '';
+const TABLE_MAX_ROWS = 400;
 function renderTable(i0, i1) {
   // Keyed on what's in it, not just which days: the Workout column moves with
   // every setting behind the scores, so no handler has to remember to clear this.
@@ -3413,14 +3452,15 @@ function renderTable(i0, i1) {
   if (key === tableKey) return;
   tableKey = key;
   const rows = [];
-  for (let i = Math.min(i1, i0 + 400); i >= i0; i--) {
+  // Newest at the top, so the cap cuts the oldest days off rather than the newest.
+  for (let i = i1; i >= Math.max(i0, i1 - TABLE_MAX_ROWS + 1); i--) {
     rows.push(`<tr><td>${fmtShort.format(dateAt(i))}</td><td>${daily[i] > 0 ? km(daily[i]) : '—'}</td><td>${volSeries[IV][i].toFixed(1)}</td><td>${perWeekAt(i).toFixed(1)}</td><td>${perWeekRunsAt(i).toFixed(1)}</td><td>${(() => { const c = classify(i);
         return c ? `<span style="color:${fullColour(c)}">${DIR_ARROW[c.dir]} ${DIR_LABEL[c.dir]}</span><br><span class="why">${verdictWhy(c)}</span>`
                   : '<span style="color:var(--text-secondary)">— no run</span>'; })()}</td><td>${
         workoutsOf(i).map(w => w ? `<span style="color:${workoutColour(w)}">${WORKOUT_TYPES[w.type].label}</span> <span style="color:var(--muted)">${w.why}</span>`
                                  : '<span style="color:var(--text-secondary)">no timing</span>').join('<br>+ ') || '—'}</td></tr>`);
   }
-  if (i1 - i0 > 400) rows.push(`<tr><td colspan="7" style="text-align:left;color:var(--muted)">Showing the most recent 400 of ${i1-i0+1} days in view — zoom in for the rest.</td></tr>`);
+  if (i1 - i0 + 1 > TABLE_MAX_ROWS) rows.push(`<tr><td colspan="7" style="text-align:left;color:var(--muted)">Showing the most recent ${TABLE_MAX_ROWS} of ${i1-i0+1} days in view — zoom in for the rest.</td></tr>`);
   tbody.innerHTML = rows.join('');
 }
 
@@ -3562,6 +3602,7 @@ document.getElementById('reset').onclick = () => {
   zoneAreaWin = PREF_DEFAULTS.zoneAreaWin;
   zoneAreaMode = PREF_DEFAULTS.zoneAreaMode;
   targetLong = PREF_DEFAULTS.targetLong;
+  targetLongW = PREF_DEFAULTS.targetLongW;
   targetWin = PREF_DEFAULTS.targetWin;
   savePrefs();
   syncControls();
@@ -3680,6 +3721,8 @@ function syncControls() {
   zoneAreaWinSel.value = zoneAreaWin;
   zoneAreaModeSel.value = zoneAreaMode;
   targetLongChk.checked = targetLong;
+  targetLongWInput.value = fmtPlan(targetLongW);
+  targetLongWInput.disabled = !targetLong;
   targetWinSel.value = targetWin;
   syncBarColour();
   syncPanelVisibility();
@@ -3865,10 +3908,22 @@ targetWinSel.onchange = () => {
 const targetLongChk = document.getElementById('targetLong');
 targetLongChk.onchange = () => {
   targetLong = targetLongChk.checked;
+  targetLongWInput.disabled = !targetLong;
   if (planEdited) plan = fitPlan(plan, 'days');   // the long run moves the runs cap
   savePrefs();
   renderTarget();
 };
+// Only the km split moves: the runs cap and the template's layout don't depend
+// on how much the long run is worth.
+const targetLongWInput = document.getElementById('targetLongW');
+targetLongWInput.onchange = targetLongWInput.oninput = () => {
+  const v = Math.round(Number(targetLongWInput.value) * 10) / 10;
+  if (!(v >= 1.5 && v <= 2.5)) return;
+  targetLongW = v;
+  savePrefs();
+  renderTarget();
+};
+targetLongWInput.addEventListener('change', () => { targetLongWInput.value = fmtPlan(targetLongW); });
 document.getElementById(PANEL_CHK.zone).onchange = e => {
   visPanels.zone = e.target.checked;
   savePrefs();

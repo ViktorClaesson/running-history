@@ -161,9 +161,14 @@ runs up to match, lowering runs drags days down. `targetFor()` splits the week:
 
 - **With a long run** (`targetLong`, on by default, and only at
   ≥ `LONG_MIN_RUNS_PER_WEEK` = 3 days): the long run is alone on its day and
-  counts as two days, so it is **2 × km ÷ (days + 1)**; the other runs − 1 runs
-  share what is left equally over days − 1 days. 60 km / 4 days / 6 runs gives a
-  24 km long run and 7.2 km per other run.
+  counts as **w** one-run days (`targetLongW`, "Long run counts as", 1.5–2.5 in
+  tenths, default 2), so it is **w × km ÷ (days − 1 + w)** — 2 × km ÷ (days + 1)
+  at the default; the other runs − 1 runs share what is left equally. 60 km / 4
+  days / 6 runs gives a 24 km long run and 7.2 km per other run at w = 2, and
+  20 / 8 km at w = 1.5. Only the km move with w: the runs cap and the template
+  layout don't (L is still alone on Saturday). Probe: every days × runs combo ×
+  every w × long on/off sums to the weekly km within 1.4e-14, and long ÷ one
+  run is exactly w whenever runs = days.
 - **Without**: every run is km ÷ runs.
 
 The tile shows only the inputs and the template week; the per-day-type km rows
@@ -190,7 +195,7 @@ what-if or not, Monday to Sunday, each day with its run count and km:
 - Saturday is the long run (**L**) when there is one.
 - Extra runs (runs − days) go out in that same order **a round at a time**
   (`weekSlots()`): every day gets a second run before any gets a third.
-- **L already counts as two**, so Saturday sits out the second-run round and
+- **L is alone on its day**, so Saturday sits out the second-run round and
   is the *first* to get a third: **L+1**, the long run plus a short one. (L+1's
   km is the long run plus one short-run share.) With no long run Saturday is
   just the first day in the order.
@@ -869,7 +874,17 @@ over the empty canvas via `.zone-empty-overlay`. It used to swap in a small
 every rest day and grew it back on every run day — a distracting flicker when
 scanning quickly through a run of days while following hover (see above). The
 card is only ever hidden completely (`zonecard.hidden`) when there is no day to
-show at all — panel toggled off, or no run anywhere in history yet. An empty
+show at all — panel toggled off, or no run anywhere in history yet. That fixed the rest-day flicker but not the run-count one: a two-run day has
+two histograms, so the card was still ~620px on one and ~300px on the next.
+`holdZoneHeight()` puts a `min-height` on `#zone-body`: it **grows at once**
+(the content needs the room) but only **shrinks after `ZONE_SHRINK_MS`
+(700ms) with nothing taller asked for**, then eases down over a 0.25s CSS
+transition (none under `prefers-reduced-motion`). So sweeping across days
+keeps the card at the tallest one recently seen. Hiding the card drops the
+hold outright. The card also sits 20px below the chart card, the same gap as
+the table below it.
+
+An empty
 day also skips the bin-hover interaction entirely (there's nothing behind the
 zero-height bars to report, and `vdotHere` may not even exist) rather than
 wiring up a `mousemove` listener that would have nothing real to say.
@@ -1105,7 +1120,7 @@ set to, so the page opens the way it was left: `windowBase`, `windowMult`,
 show/hide — see below), `lines` (`{s0, s1, s2, s3}` — slot keys, which of
 the four lines the three window panels draw), `zoneAreaWin` (a slot key: which
 window the stacked-zone panel is over, `'s2'` by default), `zoneAreaMode` (`'km'`/`'min'`/`'pctKm'`/`'pctMin'`), `targetWin` (a slot key, `'s2'` by default), and `plan` (`null` = the what-if box follows real
-history, `{km, days, runs}` = edited; an older entry without `runs` gets one run a day), `targetLong` (boolean). Three rules:
+history, `{km, days, runs}` = edited; an older entry without `runs` gets one run a day), `targetLong` (boolean), `targetLongW` (1.5–2.5, tenths). Three rules:
 
 - **Read at the very top of the `if (DATA)` block**, above `WINDOWS` and
   `let WINDOW_VDOT`, because `recompute()` runs at load and reads `WINDOWS` — the
@@ -1195,8 +1210,8 @@ much height:
 | VDOT panel | its show/hide, `windowVdot`, `minLapM`, `gapVdot`, `vdotNearDots`/`vdotNearPct` |
 | Pace zones | its show/hide, `zoneBars`, `zoneAxis`, `gapPace` |
 | Pace-zone volume | the eight-bucket zone legend, the panel's show/hide, `zoneAreaWin`, `zoneAreaMode` |
-| Weekly target (first) | the tile's show/hide (`visPanels.target`), `targetLong`, `targetWin` |
-| Data table | its show/hide (`visPanels.table`; it used to be a `<details>` collapse). Its columns are km / week (the `WINDOW_VOL` slot's `volSeries`), run days / week and runs / week (the `WINDOW_FREQ` slot), verdict and workout |
+| Weekly target (first) | the tile's show/hide (`visPanels.target`), `targetLong`, `targetLongW` (disabled while the long run is off), `targetWin` |
+| Data table | its show/hide (`visPanels.table`; it used to be a `<details>` collapse). Newest day at the top; past `TABLE_MAX_ROWS` (400) days in view it drops the *oldest*, so the most recent day in view is always the first row. Its columns are km / week (the `WINDOW_VOL` slot's `volSeries`), run days / week and runs / week (the `WINDOW_FREQ` slot), verdict and workout |
 
 Two placements are worth naming. **The legend is split across two groups**, not
 kept as one block — even though both halves are now literally the same four
