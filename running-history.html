@@ -426,7 +426,7 @@
       <label class="chk" title="Count one run a week as the long run: alone on its day and worth two of the others. Only applies at 3 or more days a week.">
         <input type="checkbox" id="targetLong" checked> Include a long run
       </label>
-      <label class="chk" title="Which rolling window the box's starting km/wk, days/wk and runs/wk are averaged over, ending yesterday. Only the starting figures — an edited what-if keeps its own numbers.">Based on
+      <label class="chk" title="Which rolling window the box's starting km/wk, days/wk and runs/wk are averaged over, ending on the last day in the data (or the day before, if that is today). Only the starting figures — an edited what-if keeps its own numbers.">Based on
         <select id="targetWin">
           <option value="s0" class="winLabel0">1w</option>
           <option value="s1" class="winLabel1">4w</option>
@@ -1274,9 +1274,8 @@ const runSeries = blank();
 const runDaysIn = Array.from({ length: WINDOWS.length }, () => new Array(N));
 const runsIn    = Array.from({ length: WINDOWS.length }, () => new Array(N));
 
-const rpwPrev = new Array(N); // run days per week as of the day before
-const runsPrev = new Array(N); // runs per week as of the day before (a two-run day counts twice)
-const weeklyPrev = new Array(N); // km per week as of the day before
+// The weekly-target box's starting figures — see computeTargets.
+let targetSeed = null;
 // The single-window views the target maths, the tiles, the table and the readout's
 // distance figures still need. avg is km/day over the volume window; perWeekAt and
 // perWeekRunsAt read the frequency window's rates straight off the series above.
@@ -1516,27 +1515,27 @@ function fullColour(c) {
   return C(VERDICT_CSS[c.dir]);
 }
 // The rates the weekly-target box is seeded from: km, run days and runs per
-// week over the targetWin window ending YESTERDAY, so today's run (possibly
-// half done) doesn't move them.
+// week over the targetWin window, ending on the last day of the data — unless
+// that day is today, in which case it ends the day before, since today may
+// not have all its runs in yet (an export taken at midday). Only that one
+// window is ever read, so it is summed directly rather than as a series.
+// A declaration, not a const: recompute() calls computeTargets() at load,
+// above this line (the declaration-order gotcha).
+function dayKey(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 function computeTargets() {
   const W = targetDays();
-  rpwPrev[0] = 0; runsPrev[0] = 0; weeklyPrev[0] = 0;
-  let rd = 0, rn = 0, sum = 0;
-  for (let i = 1; i < N; i++) {
-    if (daily[i-1] > 0) rd++;
-    rn += nRuns[i-1];
-    sum += daily[i-1];
-    const dropped = i - 1 - W;
-    if (dropped >= 0) {
-      if (daily[dropped] > 0) rd--;
-      rn -= nRuns[dropped];
-      sum -= daily[dropped];
-    }
-    if (sum < 1e-9) sum = 0;   // same float-dust snap as recompute() — see there
-    rpwPrev[i] = rd * 7 / W;
-    runsPrev[i] = rn * 7 / W;
-    weeklyPrev[i] = sum * 7 / W;
+  const lastIsToday = dayKey(dateAt(N - 1)) === dayKey(new Date());
+  const end = lastIsToday ? N - 2 : N - 1;   // inclusive
+  let km = 0, rd = 0, rn = 0;
+  for (let i = Math.max(0, end - W + 1); i <= end; i++) {
+    km += daily[i];
+    if (daily[i] > 0) rd++;
+    rn += nRuns[i];
   }
+  targetSeed = { km: km * 7 / W, days: rd * 7 / W, runs: rn * 7 / W,
+                 kmSum: km, runDays: rd, nRuns: rn, W, end, lastIsToday };
 }
 
 // The verdict. Judging a run against a target for its own day never really
@@ -1976,10 +1975,9 @@ function renderTiles() {
 
 // --- Weekly target, as a what-if ------------------------------------------
 // Editable so a change in weekly volume, run days or runs can be tried out.
-// Seeded from the real history (the volume window and the frequency window,
-// both ending yesterday) until the numbers are touched, after which it shows
+// Seeded from the real history (see computeTargets) until the numbers are touched, after which it shows
 // the real figures alongside and offers a reset.
-const planActual = () => ({ km: weeklyPrev[N-1], days: rpwPrev[N-1], runs: runsPrev[N-1] });
+const planActual = () => ({ km: targetSeed.km, days: targetSeed.days, runs: targetSeed.runs });
 let plan = prefs.plan ? { ...prefs.plan } : planActual();
 let planEdited = prefs.plan !== null;
 // Whether one run a week is the long one. A setting rather than a fixed rule so
@@ -2074,9 +2072,10 @@ function weekPlanHtml(week) {
 function targetInfo(t, ok) {
   const { km: K, days: D, runs: R } = plan, f = fmtPlan, k2 = v => km(v);
   const a = planActual();
-  let kmSum = 0, rd = 0, rn = 0;
-  const W = targetDays();
-  for (let i = Math.max(0, N - 1 - W); i < N - 1; i++) { kmSum += daily[i]; if (daily[i] > 0) rd++; rn += nRuns[i]; }
+  const { kmSum, runDays: rd, nRuns: rn, W, end, lastIsToday } = targetSeed;
+  const endText = `${fmtDate.format(dateAt(end))}${lastIsToday
+    ? ' &mdash; yesterday, since the data runs to today and today may not have all its runs in yet'
+    : ', the last day in the data'}`;
   const why = !targetLong ? 'the long run is switched off in the settings'
     : `the long run needs at least ${LONG_MIN_RUNS_PER_WEEK} days/wk`;
   const sums = !ok ? '<p class="eq">Nothing to split: there are no runs in the week.</p>'
@@ -2115,12 +2114,12 @@ function targetInfo(t, ok) {
         .map(d => d === plan.days ? `<b>${d}&nbsp;&rarr;&nbsp;${maxRunsFor(d)}</b>` : `${d}&nbsp;&rarr;&nbsp;${maxRunsFor(d)}`).join(' &middot; ')}</span><br>` +
       `Typing more runs than the cap raises days/wk to fit; fewer runs than days lowers it.</p>` : '') +
     `<p>${planEdited ? 'You have edited the numbers. The real history says:'
-      : 'The numbers start from the real history, up to yesterday, with days and runs rounded to whole numbers (and kept within the cap above):'}<br>` +
+      : 'The numbers start from the real history, with days and runs rounded to whole numbers (and kept within the cap above):'}<br>` +
     `<span class="eq">km/wk = ${nf1.format(kmSum)} km &times; 7 &divide; ${W} days = <b>${nf1.format(a.km)}</b><br>` +
     `days/wk = ${rd} run days &times; 7 &divide; ${W} days = <b>${nf1.format(a.days)}</b><br>` +
     `runs/wk = ${rn} runs &times; 7 &divide; ${W} days = <b>${nf1.format(a.runs)}</b></span></p>` +
     `<p>That is the last ${W} days (the ${WINDOWS[SLOT_KEYS.indexOf(targetWin)].label} window, set in the
-      Weekly target settings), ending yesterday. Editing the box moves nothing else on the page.</p>`;
+      Weekly target settings), ending ${endText}. Editing the box moves nothing else on the page.</p>`;
 }
 function renderTarget() {
   const tile = document.getElementById('target-tile');

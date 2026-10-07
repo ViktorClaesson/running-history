@@ -146,9 +146,12 @@ the order they were run ("8.06 + 10.52 km"). There is no per-day target any
 more; what is left of the idea is the Weekly target tile.
 
 The **Weekly target** tile is a what-if calculator with three inputs — km/wk,
-days/wk (max 7) and runs/wk (max 16) — seeded from the real history ending
-yesterday (`weeklyPrev[N-1]`, `rpwPrev[N-1]`, `runsPrev[N-1]` from
-`computeTargets()`), all three over **one window, `targetWin`** ("Based on …
+days/wk (max 7) and runs/wk (max 16) — seeded from the real history (`targetSeed`, from `computeTargets()`), all
+three over **one window, `targetWin`**, ending on the **last day in the data —
+or the day before it when that last day is today** (local calendar date),
+since an export taken mid-day may not have all of today's runs in yet. An
+export from yesterday or earlier is complete, so its last day counts. The (i)
+names the end date and says which case applied ("Based on …
 window" in the Weekly target settings; a slot key, default `s2` = 16 weeks, so
 it survives a `windowBase`/`windowMult` change; its handler only recomputes the
 seed and re-renders the tile). **Runs can never be fewer than days**: raising days drags
@@ -459,8 +462,7 @@ All of it is derived in-browser from one array of daily distances.
   the one it was replaced by.
 - **Target** — there used to be a per-day target (weekly volume ÷ run days,
   +1 for the long run) that coloured the bars, then only fed the what-if tile.
-  It is gone; the Weekly target tile (see above) has its own formula, read off
-  the windows ending yesterday.
+  It is gone; the Weekly target tile (see above) has its own formula and seed.
 - **Everything is divided by its full window, always** — every one of the four
   windows' series, and the target's two. Each window's own first stretch of days
   therefore ramps in from zero rather than being extrapolated: one run on day one
