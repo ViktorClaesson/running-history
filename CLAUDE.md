@@ -167,7 +167,7 @@ runs up to match, lowering runs drags days down. `targetFor()` splits the week:
 
 - **With a long run** (`targetLong`, on by default, and only at
   ≥ `LONG_MIN_RUNS_PER_WEEK` = 3 days): the long run is alone on its day and
-  counts as **w** one-run days (`targetLongW`, "Long run counts as", 1.5–2.5 in
+  counts as **w** one-run days (`targetLongW`, "Long run counts as", 1.0–3.0 in
   tenths, default 2), so it is **w × km ÷ (days − 1 + w)** — 2 × km ÷ (days + 1)
   at the default; the other runs − 1 runs share what is left equally. 60 km / 4
   days / 6 runs gives a 24 km long run and 7.2 km per other run at w = 2, and
@@ -627,6 +627,14 @@ implies a low VDOT (low cost, and %max is close to 1 anyway over a long duration
 a genuinely hard lap implies close to the runner's real ceiling. Verified against
 vdoto2.com's own worked example — VDOT 51.8 round-trips to its quoted endurance/marathon/
 threshold/interval/repetition paces (5:14/4:23/4:08/3:48/3:33 min/km) within rounding.
+
+**VDOT correction** (`vdotCorr`, "VDOT correction ×" under VDOT panel, 0.90–1.00
+in steps of 0.01, default **0.98**): every day's reading is multiplied by it in
+`recomputeDayVdot()`, because the watch tends to read a little fast and the
+implied VDOT comes out high. Applied at the source, so the panel, the near-max
+dots, the readout figure and the pace zones (and through them the workout types)
+all see the corrected number. `vdotVsPeak()` doesn't move, since both sides
+scale. It is in the `zoneScoresOf()` and table cache keys.
 
 A day's own VDOT is the **max implied VDOT over every effort that day**: each
 **activity treated whole**, plus each of its **laps that are at least `MIN_LAP_M`
@@ -1153,13 +1161,13 @@ columns' content.
 
 `runviz.prefs.v1` holds everything the settings sidebar and the what-if box can be
 set to, so the page opens the way it was left: `windowBase`, `windowMult`,
-`windowVdot`, `minLapM`, `gapVdot`, `gapPace`, `vdotNearDots`, `vdotNearPct`,
+`windowVdot`, `minLapM`, `vdotCorr`, `gapVdot`, `gapPace`, `vdotNearDots`, `vdotNearPct`,
 `barScale` (`'log'`/`'linear'`), `barCap` (boolean), `barCapKm` (1–500, whole km),
 `barColour` (`'verdict'`/`'workout'`/`'none'`; a legacy `colourVerdicts: false` reads as `'none'`), `wtExp` (0–4, halves), `wtShare` (1–100), `zoneBars`, `zoneAxis`, `highlightMax`, `panels` (`{vol, freq, runs, vdot, zone, zarea, table, target}`, each independently
 show/hide — see below), `lines` (`{s0, s1, s2, s3}` — slot keys, which of
 the four lines the three window panels draw), `zoneAreaWin` (a slot key: which
 window the stacked-zone panel is over, `'s2'` by default), `zoneAreaMode` (`'km'`/`'min'`/`'pctKm'`/`'pctMin'`), `targetWin` (a slot key, `'s2'` by default), and `plan` (`null` = the what-if box follows real
-history, `{km, days, runs}` = edited; an older entry without `runs` gets one run a day), `targetLong` (boolean), `targetLongW` (1.5–2.5, tenths). Three rules:
+history, `{km, days, runs}` = edited; an older entry without `runs` gets one run a day), `targetLong` (boolean), `targetLongW` (1.0–3.0, tenths), `vdotCorr` (0.90–1.00, hundredths). Three rules:
 
 - **Read at the very top of the `if (DATA)` block**, above `WINDOWS` and
   `let WINDOW_VDOT`, because `recompute()` runs at load and reads `WINDOWS` — the
@@ -1201,7 +1209,7 @@ the defaults, and a remembered setting has to overwrite them at boot.
 **There are two resets, and each owns only what sits next to it.**
 
 - **Reset** in the settings sidebar: the window base and multiple, the VDOT
-  window, the min-lap distance, both grade-adjusted-pace toggles, the near-max dots
+  window, the min-lap distance, the VDOT correction, both grade-adjusted-pace toggles, the near-max dots
   and their percentage, the pace-zone bar
   count and bar height, the highest-line highlight, the bar scale and cap, the bar-colour mode and the two workout-type settings, the
   eight panel show/hide toggles, the weekly target's long-run toggle and the four line show/hide toggles back to their
@@ -1251,7 +1259,7 @@ much height:
 | Weekly target | the tile's show/hide (`visPanels.target`), `targetLong`, `targetLongW` (disabled while the long run is off), `targetWin` |
 | Distance bars | `barScale`, `barCap`/`barCapKm`, the `barColour` select, then whichever of its two legends is in use: the four-verdict/rest legend, or the workout-type legend plus its two settings |
 | Volume & frequency panels | the four line show/hide swatches, the three panel show/hide boxes, `windowBase`/`windowMult`, `highlightMax` |
-| VDOT panel | its show/hide, `windowVdot`, `minLapM`, `gapVdot`, `vdotNearDots`/`vdotNearPct` |
+| VDOT panel | its show/hide, `windowVdot`, `minLapM`, `vdotCorr`, `gapVdot`, `vdotNearDots`/`vdotNearPct` |
 | Pace-zone volume | the eight-bucket zone legend, the panel's show/hide, `zoneAreaWin`, `zoneAreaMode` |
 | Pace zones | its show/hide, `zoneBars`, `zoneAxis`, `gapPace` |
 | Data table | its show/hide (`visPanels.table`; it used to be a `<details>` collapse). Newest day at the top; past `TABLE_MAX_ROWS` (400) days in view it drops the *oldest*, so the most recent day in view is always the first row. Its columns are km / week (the `WINDOW_VOL` slot's `volSeries`), run days / week and runs / week (the `WINDOW_FREQ` slot), verdict and workout |
@@ -1382,6 +1390,13 @@ moved nothing in this section.
   22–31 Aug 2026: unshifted agrees on all ten days activity by activity, shifted
   disagrees on three. If this ever looks wrong again, the discriminator is an
   activity starting between 22:00 and midnight — nothing else moves.
+- **The day arrays run to today**, not to the last logged run: right after
+  `const DATA` the app pads `values`/`maxRun`/`nRuns`/`acts` with rest days up
+  to today's local date, so a break shows as falling lines rather than a chart
+  frozen on the last run day. Done at load, not in `buildData()`, because the
+  cached copy would otherwise freeze on the day it was parsed. A side effect:
+  the last day is always today, so the Weekly target's seed always ends
+  yesterday and its pill reads "yesterday".
 - Each activity is filed under that day. The day gets `values` (total km),
   `maxRun` (longest single run) and `nRuns` (count) — and then **`acts`, one row
   per activity**, each `{t, km, sec, gsec, laps}` (sorted by start time `t`) with its own parsed `splits` (each
