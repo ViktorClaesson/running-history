@@ -459,8 +459,8 @@
       <label class="chk" title="Count one run a week as the long run: alone on its day and worth more than one of the others (see below). Only applies at 3 or more days a week.">
         <input type="checkbox" id="targetLong" checked> Include a long run
       </label>
-      <label class="chk" title="How many ordinary run days the long run is worth, 1.5-2.5. At 2 it is twice a one-run day.">Long run counts as
-        <input type="number" id="targetLongW" min="1.5" max="2.5" step="0.1" value="2"> days
+      <label class="chk" title="How many ordinary run days the long run is worth, 1-3. At 2 it is twice a one-run day.">Long run counts as
+        <input type="number" id="targetLongW" min="1" max="3" step="0.1" value="2"> days
       </label>
       <label class="chk" title="Which rolling window the box's starting km/wk, days/wk and runs/wk are averaged over, ending on the last day in the data (or the day before, if that is today). Only the starting figures — an edited what-if keeps its own numbers.">Based on
         <select id="targetWin">
@@ -565,6 +565,9 @@
       </label>
       <label class="chk" title="A lap shorter than this can't be trusted on its own for VDOT — too short and fast a rep overstates it wildly. The whole workout is always checked too, and the higher of the two wins. It feeds the pace-zone histogram as well, since that is read against the day's VDOT.">Min lap for VDOT
         <input type="number" id="minLapM" min="100" max="5000" step="100" value="1500"> m
+      </label>
+      <label class="chk" title="Every workout's VDOT is multiplied by this. The watch tends to read a little fast, which puts the estimate higher than it should be; 0.98 takes 2% off. It moves the VDOT panel and, with it, where the pace-zone boundaries sit (and so the workout types). 1.00 is no correction.">VDOT correction &times;
+        <input type="number" id="vdotCorr" min="0.9" max="1" step="0.01" value="0.98">
       </label>
       <label class="chk" title="The VDOT line is a rolling max, so a session that came close to the ceiling without beating it leaves no mark on it — the line just carries on flat. These dots put those days back: one per run day whose own reading is within the percentage below of the peak in force that day, drawn at the day's own value, so a near miss sits just under the line and a day that set the peak sits on it.">
         <input type="checkbox" id="vdotNearDots" checked> Mark near-max days
@@ -1086,6 +1089,7 @@ const PREF_DEFAULTS = {
   windowMult: 4,     // each next window is this many times the one before, 2-8
   windowVdot: 350,   // 50 weeks
   minLapM: 1500,     // laps shorter than this can't be trusted for VDOT on their own
+  vdotCorr: 0.98,    // every workout's VDOT times this, 0.9-1 in hundredths: the watch reads high
   gapVdot: false,    // compute VDOT off Runalyze's grade-adjusted pace instead of the raw one
   gapPace: true,     // bin the pace-zone histogram by grade-adjusted pace instead of the raw one
   vdotNearDots: true,  // mark the days that came close to the VDOT ceiling without beating it
@@ -1118,7 +1122,7 @@ const PREF_DEFAULTS = {
   highlightMax: true,
   plan: null,        // null = the what-if box follows real history; {km, days, runs} = edited
   targetLong: true,  // the weekly target counts one run as the long one (only at >= 3 days/wk)
-  targetLongW: 2,    // ...worth this many one-run days, 1.5-2.5 in tenths
+  targetLongW: 2,    // ...worth this many one-run days, 1-3 in tenths
   targetWin: 's2',   // slot key: the window the weekly target's starting figures are averaged over
 };
 // Slot keys, not week counts — a slot keeps its colour and its show/hide
@@ -1140,6 +1144,7 @@ function loadPrefs() {
   if (num(raw.windowMult, 2, 8)) p.windowMult = Math.round(raw.windowMult);
   if (num(raw.windowVdot, 7, 1820)) p.windowVdot = week(raw.windowVdot, 1820);
   if (num(raw.minLapM, 100, 5000)) p.minLapM = Math.round(raw.minLapM / 100) * 100;
+  if (num(raw.vdotCorr, 0.9, 1)) p.vdotCorr = Math.round(raw.vdotCorr * 100) / 100;
   if (num(raw.zoneBars, 1, 20)) p.zoneBars = Math.round(raw.zoneBars);
   if (raw.zoneAxis === 'time' || raw.zoneAxis === 'dist') p.zoneAxis = raw.zoneAxis;
   if (num(raw.vdotNearPct, 0, 100)) p.vdotNearPct = Math.round(raw.vdotNearPct);
@@ -1172,7 +1177,7 @@ function loadPrefs() {
     }
   }
   if (SLOT_KEYS.includes(raw.zoneAreaWin)) p.zoneAreaWin = raw.zoneAreaWin;
-  if (num(raw.targetLongW, 1.5, 2.5)) p.targetLongW = Math.round(raw.targetLongW * 10) / 10;
+  if (num(raw.targetLongW, 1, 3)) p.targetLongW = Math.round(raw.targetLongW * 10) / 10;
   if (SLOT_KEYS.includes(raw.targetWin)) p.targetWin = raw.targetWin;
   if (['km', 'min', 'pctKm', 'pctMin'].includes(raw.zoneAreaMode)) p.zoneAreaMode = raw.zoneAreaMode;
   // An entry from before runs/wk existed has no `runs`; it starts at one run a day.
@@ -1194,6 +1199,7 @@ function savePrefs() {
     windowMult,
     windowVdot: WINDOW_VDOT,
     minLapM: MIN_LAP_M,
+    vdotCorr: VDOT_CORR,
     gapVdot,
     gapPace,
     vdotNearDots,
@@ -1281,6 +1287,20 @@ rebuildWindows();
 let WINDOW_VDOT = prefs.windowVdot;
 
 // ---- derive series -------------------------------------------------------
+// Run the history up to today, not just to the last logged run: a break should
+// show as rest days and falling lines, not as a chart stuck on the day the
+// running stopped. Padded here rather than in buildData(), since the cached
+// copy would otherwise freeze at whatever day it was parsed on. Day counts in
+// UTC so a DST change can't add or drop one.
+{
+  const now = new Date();
+  const today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+  const want = Math.round((today - Date.parse(DATA.start + 'T00:00:00Z')) / 86400000) + 1;
+  for (let i = DATA.values.length; i < want; i++) {
+    DATA.values.push(0); DATA.maxRun.push(0); DATA.nRuns.push(0);
+    if (DATA.acts) DATA.acts.push([]);
+  }
+}
 const daily = DATA.values;
 const maxRun = DATA.maxRun;   // longest single run that day
 const nRuns  = DATA.nRuns;    // how many separate runs that day
@@ -1396,6 +1416,11 @@ function impliedVdot(km, sec) {
 // the two wins — a long tempo run IS its own best evidence when it beats every
 // individual lap (e.g. an evenly-paced race with no lap data at all).
 let MIN_LAP_M = prefs.minLapM;
+// The watch tends to read a little fast, so the VDOT a workout implies comes out
+// higher than it should. Every day's reading is scaled by this before anything
+// reads it — the panel, the near-max dots and the pace zones all see the
+// corrected figure. The ratio to the peak doesn't move, since both sides scale.
+let VDOT_CORR = prefs.vdotCorr;
 // Grade-adjusted pace, as two separate toggles, both off by default, because the
 // raw pace is what was actually run and this is a second opinion on it, not a
 // correction. `gapVdot` has the VDOT search below read each activity's
@@ -1439,7 +1464,7 @@ function recomputeDayVdot() {
         take(lap.km, effortSec(lap, gapVdot), lap.sec, 'lap');
       }
     }
-    dayVdot[i] = best;
+    dayVdot[i] = best * VDOT_CORR;
     dayVdotSource[i] = bestSrc;
   }
 }
@@ -1914,7 +1939,7 @@ const wt = { wtExp: prefs.wtExp, wtShare: prefs.wtShare };
 // VDOT (its window, min lap and GAP), the laps off gapPace.
 let zoneScoreKey = '', zoneScores = null;
 function zoneScoresOf(i) {
-  const key = [WINDOW_VDOT, MIN_LAP_M, gapVdot, gapPace, wt.wtExp].join(':');
+  const key = [WINDOW_VDOT, MIN_LAP_M, VDOT_CORR, gapVdot, gapPace, wt.wtExp].join(':');
   if (key !== zoneScoreKey) { zoneScoreKey = key; zoneScores = new Array(N); }
   if (zoneScores[i] !== undefined) return zoneScores[i];
   const v = vdot[i];
@@ -2117,7 +2142,7 @@ function targetInfo(t, ok) {
   const a = planActual();
   const { kmSum, runDays: rd, nRuns: rn, W, end, lastIsToday } = targetSeed;
   const endText = `${fmtDate.format(dateAt(end))}${lastIsToday
-    ? ' &mdash; yesterday, since the data runs to today and today may not have all its runs in yet'
+    ? ' &mdash; yesterday, since the chart runs to today and today may not have all its runs in yet'
     : ', the last day in the data'}`;
   const why = !targetLong ? 'the long run is switched off in the settings'
     : `the long run needs at least ${LONG_MIN_RUNS_PER_WEEK} days/wk`;
@@ -3494,7 +3519,7 @@ const TABLE_MAX_ROWS = 400;
 function renderTable(i0, i1) {
   // Keyed on what's in it, not just which days: the Workout column moves with
   // every setting behind the scores, so no handler has to remember to clear this.
-  const key = [i0, i1, WINDOW_VDOT, MIN_LAP_M, gapVdot, gapPace, wt.wtExp, wt.wtShare].join(':');
+  const key = [i0, i1, WINDOW_VDOT, MIN_LAP_M, VDOT_CORR, gapVdot, gapPace, wt.wtExp, wt.wtShare].join(':');
   if (key === tableKey) return;
   tableKey = key;
   const rows = [];
@@ -3631,6 +3656,7 @@ document.getElementById('reset').onclick = () => {
   rebuildWindows();
   WINDOW_VDOT = PREF_DEFAULTS.windowVdot;
   MIN_LAP_M = PREF_DEFAULTS.minLapM;
+  VDOT_CORR = PREF_DEFAULTS.vdotCorr;
   gapVdot = PREF_DEFAULTS.gapVdot;
   gapPace = PREF_DEFAULTS.gapPace;
   vdotNearDots = PREF_DEFAULTS.vdotNearDots;
@@ -3744,6 +3770,7 @@ function syncControls() {
   winMultInput.value = windowMult;
   winVdotInput.value = WINDOW_VDOT / 7;
   minLapInput.value = MIN_LAP_M;
+  vdotCorrInput.value = VDOT_CORR.toFixed(2);
   nearDotsChk.checked = vdotNearDots;
   nearPctInput.value = vdotNearPct;
   // An export with no usable `gap` column has nothing to switch to, so the box
@@ -3870,6 +3897,20 @@ minLapInput.onchange = minLapInput.oninput = () => {
   renderZonePanel();
   drawAll();
 };
+const vdotCorrInput = document.getElementById('vdotCorr');
+vdotCorrInput.onchange = vdotCorrInput.oninput = () => {
+  const v = Math.round(Number(vdotCorrInput.value) * 100) / 100;
+  if (!(v >= 0.9 && v <= 1)) return;   // ignore half-typed values
+  VDOT_CORR = v;
+  savePrefs();
+  recomputeDayVdot();
+  recomputeVdot();
+  recomputeZones();
+  refreshReadout();
+  renderZonePanel();
+  drawAll();
+};
+vdotCorrInput.addEventListener('change', () => { vdotCorrInput.value = VDOT_CORR.toFixed(2); });
 // Both near-max settings are draw-time only — nothing computed depends on them,
 // so the panel title and a redraw are the whole job.
 const nearDotsChk = document.getElementById('vdotNearDots');
@@ -3964,7 +4005,7 @@ targetLongChk.onchange = () => {
 const targetLongWInput = document.getElementById('targetLongW');
 targetLongWInput.onchange = targetLongWInput.oninput = () => {
   const v = Math.round(Number(targetLongWInput.value) * 10) / 10;
-  if (!(v >= 1.5 && v <= 2.5)) return;
+  if (!(v >= 1 && v <= 3)) return;
   targetLongW = v;
   savePrefs();
   renderTarget();
