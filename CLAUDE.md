@@ -1459,6 +1459,25 @@ Roughly: `recompute` (the four windows' series + `computeTargets`) →
   edges pixel-snapped, so neighbours share an edge exactly at any zoom.
 - **Zoom is cursor-anchored** — the fractional day under the pointer keeps its screen
   x; it must not re-centre or pin the left edge.
+- **Wheel zoom needs ⌘ (Ctrl elsewhere).** A plain wheel over a panel returns
+  from `onWheel()` *without* `preventDefault()`, so it scrolls the page — the
+  chart is most of the page, and scrolling past it used to mean aiming the
+  pointer at a margin. The check is `metaKey || ctrlKey`, not `metaKey` alone:
+  a macOS trackpad pinch arrives as a wheel event with `ctrlKey` set, so pinch
+  keeps zooming with no key held. The hint's `.zoomKey` reads "⌘" and is
+  swapped to "Ctrl" off a Mac (`navigator.platform`).
+- **Holding the key is holding the mouse button.** A keydown of `ZOOM_KEY`
+  (`'Meta'` on a Mac, `'Control'` elsewhere) with the pointer over a panel
+  starts the very same `drag` a mousedown does, from the last pointer position
+  (`ptr`, kept by `onMove()` — a keydown carries no coordinates), and its keyup
+  or a window blur ends it. Pressed with the pointer anywhere else it does
+  nothing, and moving onto the chart afterwards still does nothing — exactly
+  like a press off the chart. A key pan is marked `drag.key` so only the key
+  ends it (and a mouse pan only the mouseup), and it never sets
+  `draggedNotClicked`, since no click follows a key release. ⌘-scroll during
+  a pan re-anchors `drag.x`/`drag.center` on the zoomed view, otherwise the
+  next move would snap back to the centre the pan started from — which matters
+  now that zooming and panning share one held key.
 - **The readout must not change height** between idle, hovered and pinned. The idle
   state carries an invisible label/value spacer, and `.v2` reserves two line boxes,
   so all three match by construction. The VDOT detail line now *fills* exactly

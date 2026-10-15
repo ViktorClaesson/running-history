@@ -686,10 +686,10 @@
       <div class="panel-title"><span class="zaN">Distance per week</span> by pace zone &mdash; <span class="zaWinN">16w</span> rolling</div>
       <canvas id="chartZa"></canvas>
     </div>
-    <div class="hint">Zoom, pan, pin a day<span class="info" tabindex="0">i<span class="info-text"><p>Scroll or pinch to zoom — the day under the cursor stays put while both sides scale around it. Drag to pan. Double-click, or press <kbd>r</kbd>, to go back to the default view, the longest window ending on the most recent day.
+    <div class="hint">Zoom, pan, pin a day<span class="info" tabindex="0">i<span class="info-text"><p>Hold <kbd class="zoomKey">⌘</kbd> and scroll, or pinch, to zoom — a plain scroll just scrolls the page — the day under the cursor stays put while both sides scale around it. Drag to pan — or hold <kbd class="zoomKey">⌘</kbd> and just move the mouse, which works like holding the button down (press it with the pointer over a panel; pressed elsewhere it does nothing). Double-click, or press <kbd>r</kbd>, to go back to the default view, the longest window ending on the most recent day.
       Click a day to pin its numbers in the readout above; click it again, or press <kbd>t</kbd> or Esc, to release.
       The coloured dots along the top of each panel mark where each window reaches back to — filled from the day under the pointer, hollow from the pinned one, and a chevron at the left edge for a window that reaches back past what's drawn.</p></span></span>
-      &nbsp;<kbd>r</kbd> reset view &middot; <kbd>t</kbd> release pin</div>
+      &nbsp;<kbd class="zoomKey">⌘</kbd>+scroll zoom &middot; hold <kbd class="zoomKey">⌘</kbd> pan &middot; <kbd>r</kbd> reset view &middot; <kbd>t</kbd> release pin</div>
   </div>
 
   <div class="chartcard" id="zonecard" hidden>
@@ -3540,10 +3540,19 @@ let drag = null;
 // A pan ends in a mouseup on the canvas, which the browser then reports as a
 // click. Only a press that never really moved should pin a day.
 let draggedNotClicked = false;
+// Holding the zoom key (⌘ on a Mac, Ctrl elsewhere) is the mouse button held
+// down: pressed with the pointer over a panel it starts the same pan a press
+// does, from where the pointer is, and letting go ends it. Pressed anywhere
+// else it does nothing, the same as a press off the chart. `ptr` is the last
+// pointer position over a panel, since a keydown doesn't carry one.
+const IS_MAC = /Mac|iPhone|iPad/.test(navigator.platform);
+const ZOOM_KEY = IS_MAC ? 'Meta' : 'Control';
+let ptr = null;   // { x } in canvas px while the pointer is over a panel, else null
 
 function onMove(e) {
   const rect = e.currentTarget.getBoundingClientRect();
   const mx = e.clientX - rect.left;
+  ptr = { x: mx };
   if (drag) {
     if (Math.abs(mx - drag.x) > 3) drag.moved = true;
     center = drag.center - (mx - drag.x) / barW();
@@ -3556,6 +3565,10 @@ function onMove(e) {
 }
 
 function onWheel(e) {
+  // Only a held ⌘ (Ctrl elsewhere) zooms, so a plain scroll over the chart
+  // scrolls the page. A trackpad pinch arrives as a wheel event with ctrlKey
+  // set, so pinch-to-zoom keeps working without the key.
+  if (!e.metaKey && !e.ctrlKey) return;
   e.preventDefault();
   if (raf) { cancelAnimationFrame(raf); raf = null; span = tSpan; center = tCenter; clampView(); }
   const rect = e.currentTarget.getBoundingClientRect();
@@ -3568,6 +3581,9 @@ function onWheel(e) {
   center = anchorDay + (0.5 - frac) * span;
   clampView();
   tSpan = span; tCenter = center;
+  // Mid-pan, re-anchor the pan on the zoomed view, or the next move would snap
+  // back to the centre the pan started from.
+  if (drag) { drag.x = mx; drag.center = center; }
   const i = idxAt(mx);
   const next = (i >= 0 && i < N) ? i : null;
   if (next !== hover) { hover = next; refreshReadout(); renderZonePanel(); }
@@ -3594,9 +3610,14 @@ function onTouchMove(e) {
   }
 }
 
+// The zoom modifier is ⌘ on a Mac and Ctrl everywhere else; the hint says which.
+if (!IS_MAC) {
+  for (const k of document.querySelectorAll('.zoomKey')) k.textContent = 'Ctrl';
+}
+
 for (const el of PANEL_CVS) {
   el.addEventListener('mousemove', onMove);
-  el.addEventListener('mouseleave', () => { hover = null; refreshReadout(); renderZonePanel(); drawAll(); });
+  el.addEventListener('mouseleave', () => { ptr = null; hover = null; refreshReadout(); renderZonePanel(); drawAll(); });
   el.addEventListener('wheel', onWheel, { passive: false });
   el.addEventListener('mousedown', e => {
     const rect = el.getBoundingClientRect();
@@ -3620,11 +3641,22 @@ for (const el of PANEL_CVS) {
   el.addEventListener('touchmove', onTouchMove, { passive: false });
   el.addEventListener('touchend', () => { pinch = null; });
 }
-window.addEventListener('mouseup', () => {
-  draggedNotClicked = !!(drag && drag.moved);
+const endDrag = () => {
   drag = null;
   for (const el of PANEL_CVS) el.style.cursor = 'crosshair';
+};
+window.addEventListener('mouseup', () => {
+  draggedNotClicked = !!(drag && drag.moved);
+  endDrag();
 });
+window.addEventListener('keydown', e => {
+  if (e.key !== ZOOM_KEY || e.repeat || drag || !ptr) return;
+  drag = { x: ptr.x, center, moved: false, key: true };
+  for (const el of PANEL_CVS) el.style.cursor = 'grabbing';
+});
+// Only a key-started pan ends with the key; one the mouse started ends on mouseup.
+window.addEventListener('keyup', e => { if (e.key === ZOOM_KEY && drag && drag.key) endDrag(); });
+window.addEventListener('blur', () => { if (drag && drag.key) endDrag(); });
 // Keys, for the two things worth doing without aiming at anything: `r` puts the
 // view back to its default span (the double-click, minus the aiming) and `t`
 // releases the pinned day (Esc does the same — `t` is just next door to `r`,
