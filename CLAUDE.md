@@ -1466,6 +1466,18 @@ Roughly: `recompute` (the four windows' series + `computeTargets`) →
   a macOS trackpad pinch arrives as a wheel event with `ctrlKey` set, so pinch
   keeps zooming with no key held. The hint's `.zoomKey` reads "⌘" and is
   swapped to "Ctrl" off a Mac (`navigator.platform`).
+- **Holding the key is holding the mouse button.** A keydown of `ZOOM_KEY`
+  (`'Meta'` on a Mac, `'Control'` elsewhere) with the pointer over a panel
+  starts the very same `drag` a mousedown does, from the last pointer position
+  (`ptr`, kept by `onMove()` — a keydown carries no coordinates), and its keyup
+  or a window blur ends it. Pressed with the pointer anywhere else it does
+  nothing, and moving onto the chart afterwards still does nothing — exactly
+  like a press off the chart. A key pan is marked `drag.key` so only the key
+  ends it (and a mouse pan only the mouseup), and it never sets
+  `draggedNotClicked`, since no click follows a key release. ⌘-scroll during
+  a pan re-anchors `drag.x`/`drag.center` on the zoomed view, otherwise the
+  next move would snap back to the centre the pan started from — which matters
+  now that zooming and panning share one held key.
 - **The readout must not change height** between idle, hovered and pinned. The idle
   state carries an invisible label/value spacer, and `.v2` reserves two line boxes,
   so all three match by construction. The VDOT detail line now *fills* exactly
