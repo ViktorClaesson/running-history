@@ -370,6 +370,8 @@
   #chartZa { display: block; width: 100%; height: 156px; touch-action: none; cursor: crosshair; }
   .panel-title { font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
     color: var(--muted); padding: 4px 0 2px 54px; }
+  .chart-title { font-size: 14px; font-weight: 600; margin: 0 0 6px; padding-left: 4px;
+    color: var(--text-primary); }
   .hint { padding: 6px 4px 0; font-size: 11px; color: var(--muted); }
   /* a key to press, not code: same face as the text it sits in, just boxed */
   .hint kbd { font: inherit; border: 1px solid var(--border); border-radius: 3px;
@@ -665,6 +667,10 @@
   <div class="tiles" id="tiles"></div>
 
   <div class="chartcard">
+    <h2 class="chart-title"><span id="chartTitle">Training history</span><span class="info" tabindex="0">i<span class="info-text"><p>Hold <kbd class="zoomKey">⌘</kbd> and scroll, or pinch, to zoom — a plain scroll just scrolls the page — the day under the cursor stays put while both sides scale around it. Drag to pan — or hold <kbd class="zoomKey">⌘</kbd> and just move the mouse, which works like holding the button down (press it with the pointer over a panel; pressed elsewhere it does nothing). Double-click, or press <kbd>r</kbd>, to go back to the default view, the longest window ending on the most recent day.
+      Click a day to pin its numbers in the readout above; click it again, or press <kbd>t</kbd> or Esc, to release.
+      The coloured dots along the top of each panel mark where each window reaches back to — filled from the day under the pointer, hollow from the pinned one, and a chevron at the left edge for a window that reaches back past what's drawn.</p></span></span></h2>
+    <div class="panel-title">Distance per day</div>
     <canvas id="chart"></canvas>
     <div class="chart-panel" id="panel-vol">
       <div class="panel-title">Distance per week &mdash; <span class="winsN">1 / 4 / 16 / 64</span>-week rolling averages</div>
@@ -686,10 +692,7 @@
       <div class="panel-title"><span class="zaN">Distance per week</span> by pace zone &mdash; <span class="zaWinN">16w</span> rolling</div>
       <canvas id="chartZa"></canvas>
     </div>
-    <div class="hint">Zoom, pan, pin a day<span class="info" tabindex="0">i<span class="info-text"><p>Hold <kbd class="zoomKey">⌘</kbd> and scroll, or pinch, to zoom — a plain scroll just scrolls the page — the day under the cursor stays put while both sides scale around it. Drag to pan — or hold <kbd class="zoomKey">⌘</kbd> and just move the mouse, which works like holding the button down (press it with the pointer over a panel; pressed elsewhere it does nothing). Double-click, or press <kbd>r</kbd>, to go back to the default view, the longest window ending on the most recent day.
-      Click a day to pin its numbers in the readout above; click it again, or press <kbd>t</kbd> or Esc, to release.
-      The coloured dots along the top of each panel mark where each window reaches back to — filled from the day under the pointer, hollow from the pinned one, and a chevron at the left edge for a window that reaches back past what's drawn.</p></span></span>
-      &nbsp;<kbd class="zoomKey">⌘</kbd>+scroll zoom &middot; hold <kbd class="zoomKey">⌘</kbd> pan &middot; <kbd>r</kbd> reset view &middot; <kbd>t</kbd> release pin</div>
+    <div class="hint"><kbd class="zoomKey">⌘</kbd>+scroll zoom &middot; hold <kbd class="zoomKey">⌘</kbd> pan &middot; <kbd>r</kbd> reset view &middot; <kbd>t</kbd> release pin</div>
   </div>
 
   <div class="chartcard" id="zonecard" hidden>
@@ -761,6 +764,14 @@ const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); retu
 const lsDel = k => { try { localStorage.removeItem(k); } catch (e) { /* nothing to undo */ } };
 
 // --- CSV: quoted fields may contain commas, newlines and doubled quotes --------
+// Dates read "14 Oct 2026 (Wed)" everywhere, in that order whatever the
+// browser's locale would pick; fmtShort is the same without the weekday.
+// Up here rather than in the app script so the data line can use them too.
+const fmtMonName = new Intl.DateTimeFormat('en-GB', { month:'short' });
+const fmtWday = new Intl.DateTimeFormat('en-GB', { weekday:'short' });
+const fmtShort = { format: d => `${d.getDate()} ${fmtMonName.format(d)} ${d.getFullYear()}` };
+const fmtDate = { format: d => `${fmtShort.format(d)} (${fmtWday.format(d)})` };
+
 function parseCsv(text) {
   const rows = [];
   let row = [], field = '', quoted = false;
@@ -1043,7 +1054,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   const info = document.getElementById('data-info');
   if (info) {
     info.innerHTML = `<span class="dim">Data:</span> ${window.RUNVIZ.fileName || 'local file'}` +
-      ` <span class="dim">· ${window.RUNVIZ.values.length} days · loaded ${window.RUNVIZ.loadedAt}</span>`;
+      ` <span class="dim">· ${window.RUNVIZ.values.length} days · loaded ${fmtDate.format(new Date(window.RUNVIZ.loadedAt + 'T00:00:00'))}</span>`;
   }
   const change = document.getElementById('data-change');
   if (change) change.onclick = () => openGate(true);
@@ -1993,8 +2004,6 @@ function workoutColour(w) {
   return w.type === 0 ? leadRamps.recovery : C(ZONES[w.type - 1].strong);
 }
 
-const fmtDate = new Intl.DateTimeFormat(undefined, { weekday:'short', year:'numeric', month:'short', day:'numeric' });
-const fmtShort = new Intl.DateTimeFormat(undefined, { year:'numeric', month:'short', day:'numeric' });
 const fmtMon = new Intl.DateTimeFormat(undefined, { month:'short' });
 const km = v => v.toFixed(2);
 // min/km -> "m:ss", for anything pace-shaped (VDOT zone ranges, lap paces)
@@ -2391,9 +2400,9 @@ const visibleRange = () => [
 // The dot sits **on its own line**, at that line's value on the start day
 // (`m.yAt`), so it reads as a point of that line rather than as a tick floating
 // above it — and the pairing of colour to line needs no working out. Panels
-// with no line of their own to sit on fall back to a row just under the top
-// inset (`MARK_Y`): the bars, where a window is not a series at all, and any
-// day the VDOT line is undefined for.
+// with no line to sit on fall back to a row just under the top inset
+// (`MARK_Y`): any day the VDOT line is undefined for. The bars, where a window
+// is not a series at all, pass `dots = false` and get the dashed lines alone.
 //
 // Both marked days get a set, the same way both already get a bar outline and a
 // line dot: hover's dots are filled and its dashed lines the stronger of the
@@ -2419,7 +2428,7 @@ const winMarks = yAt => WINDOWS
   .map((w, k) => ({ days: w.days, css: w.css, slot: k, yAt: yAt && yAt(k) }))
   .filter(m => visLines[WINDOWS[m.slot].key]);
 const MARK_Y = 4;          // px below the panel's top inset: the fallback dot row
-function markWindowStarts(c, insetTop, plotH, i0, i1, marks) {
+function markWindowStarts(c, insetTop, plotH, i0, i1, marks, dots = true) {
   const onScreen = i => i !== null && i >= i0 && i <= i1;
   // Pin first, so a live hover draws over it rather than under it.
   const days = [];
@@ -2439,6 +2448,7 @@ function markWindowStarts(c, insetTop, plotH, i0, i1, marks) {
       c.setLineDash([2, 3]);
       c.beginPath(); c.moveTo(x, insetTop); c.lineTo(x, insetTop + plotH); c.stroke();
       c.setLineDash([]); c.globalAlpha = 1;
+      if (!dots) continue;
       c.beginPath(); c.arc(x, y, 3.5, 0, Math.PI * 2);
       c.fillStyle = hollow ? C('--surface-1') : col; c.fill();
       c.strokeStyle = col; c.lineWidth = hollow ? 1.5 : 1; c.stroke();
@@ -2607,9 +2617,9 @@ function drawBars() {
   const inView = i => i !== null && i >= i0 && i <= i1;
   if (inView(selected) && selected !== hover) outline(selected, true);
   if (inView(hover)) outline(hover, false);
-  // No yAt on this panel: a window is not a series here, so its dot stays in
-  // the row under the top inset rather than pretending to sit on something.
-  markWindowStarts(ctx, BARS.t, plotH, i0, i1, winMarks());
+  // Dashed lines only, no dots: a window is not a series here, so a dot would
+  // have no line to sit on and only float above the bars.
+  markWindowStarts(ctx, BARS.t, plotH, i0, i1, winMarks(), false);
   ctx.restore();
   if (isBottom) drawXAxisLabels(ctx, w, BARS.t, plotH, i0, i1);
 }
@@ -3087,7 +3097,14 @@ function drawZoneArea() {
   if (isBottom) drawXAxisLabels(c, w, insets.t, plotH, i0, i1);
 }
 
+// The days the chart is showing — any bar even partly in view counts.
+function syncChartTitle() {
+  const a = Math.max(0, Math.floor(left())), b = Math.min(N - 1, Math.ceil(left() + span) - 1);
+  document.getElementById('chartTitle').textContent = `Training history from ${fmtDate.format(dateAt(a))} to ${fmtDate.format(dateAt(b))}`;
+}
+
 function drawAll() {
+  syncChartTitle();
   drawBars();
   if (visPanels.vol) drawVol();
   if (visPanels.freq) drawFreq();
@@ -3525,7 +3542,7 @@ function renderTable(i0, i1) {
   const rows = [];
   // Newest at the top, so the cap cuts the oldest days off rather than the newest.
   for (let i = i1; i >= Math.max(i0, i1 - TABLE_MAX_ROWS + 1); i--) {
-    rows.push(`<tr><td>${fmtShort.format(dateAt(i))}</td><td>${daily[i] > 0 ? km(daily[i]) : '—'}</td><td>${volSeries[IV][i].toFixed(1)}</td><td>${perWeekAt(i).toFixed(1)}</td><td>${perWeekRunsAt(i).toFixed(1)}</td><td>${(() => { const c = classify(i);
+    rows.push(`<tr><td>${fmtDate.format(dateAt(i))}</td><td>${daily[i] > 0 ? km(daily[i]) : '—'}</td><td>${volSeries[IV][i].toFixed(1)}</td><td>${perWeekAt(i).toFixed(1)}</td><td>${perWeekRunsAt(i).toFixed(1)}</td><td>${(() => { const c = classify(i);
         return c ? `<span style="color:${fullColour(c)}">${DIR_ARROW[c.dir]} ${DIR_LABEL[c.dir]}</span><br><span class="why">${verdictWhy(c)}</span>`
                   : '<span style="color:var(--text-secondary)">— no run</span>'; })()}</td><td>${
         workoutsOf(i).map(w => w ? `<span style="color:${workoutColour(w)}">${WORKOUT_TYPES[w.type].label}</span> <span style="color:var(--muted)">${w.why}</span>`

@@ -20,6 +20,18 @@ to refresh). After that the page opens straight into the chart.
 
 ## What the chart shows
 
+The chart card is titled **"Training history from X to Y"**, X and Y being the
+first and last day with any of its bar in view — `syncChartTitle()`, called at
+the top of `drawAll()`, so it follows zoom and pan. Under it the bar panel has its own
+`.panel-title`, "Distance per day", the same as every other panel's.
+
+**Dates read "14 Oct 2026 (Wed)" everywhere** — readout, pace-zone title, data
+table, the target's (i), the data line — via `fmtDate`; `fmtShort` is the same
+without the weekday (day-level x-axis labels). Both are built by hand from
+`en-GB` month/weekday names rather than one `Intl` format, since no locale
+gives that order with the weekday in brackets. They live in the bootstrap
+script, not the app one, so the data line can use them before `DATA` exists.
+
 Up to six stacked panels sharing one x-axis, one bar/point per calendar day:
 
 1. **Bars** — height is **that day's own distance**, on a **linear** axis by
@@ -260,14 +272,17 @@ inside each window — a dot in that window's own colour, plus a faint dashed li
 down through the plot — so each line's reach is something you can see against the
 bars it covers. Every panel gets them: the bars and the three window panels mark
 the four windows (`winMarks()`), and the VDOT panel marks its own `WINDOW_VDOT`
-in `--vdot`, since that window is its own thing.
+in `--vdot`, since that window is its own thing. **The bars get the dashed lines
+and chevrons but no dots** (`markWindowStarts(…, dots = false)`): a window isn't
+a series there, so a dot had no line to sit on and just floated in a row above
+the bars.
 
 The dot sits **on its own line**, at that line's value on the start day — each
 caller passes its own y mapping in as `yAt`, so the dot reads as a point of that
 line rather than a tick floating above it, and which colour means which line
-needs no working out. Panels with no line for it to sit on fall back to a row
-just under the top inset (`MARK_Y`): the bars, where a window isn't a series at
-all, and any day the VDOT line is undefined for.
+needs no working out. A day with no line for it to sit on — any day the VDOT
+line is undefined for — falls back to a row just under the top inset
+(`MARK_Y`). Chevrons use that row on every panel, the bars included.
 
 **Both** marked days get a set, the same way both already get a bar outline and
 a line dot: hover's dots are filled and its dashed lines the stronger of the
@@ -294,8 +309,7 @@ at half alpha, matching its dots.
 
 The marks follow `visLines`, unlike the readout: those toggles exist to declutter
 exactly these lines, and a mark for a line that isn't drawn is clutter of the
-same kind — which is also why hiding `1w` takes its dot off the *bars* panel too,
-where there is no line to hide.
+same kind.
 
 **The default view** is the two longest windows' worth of days added together
 (`defaultSpan()` = `WINDOWS[3].days + WINDOWS[2].days`, 448 + 112 = 560 at the
@@ -1272,8 +1286,9 @@ beside the toggle that switches them off. Each half says so in its own note, so
 the repetition reads as the point rather than as an oversight.
 
 **Long explanations sit behind an (i)** (`.info`, holding a hidden
-`.info-text`) next to a group title, the page title and the hint under the
-charts, not as running text. Hovering or focusing one copies its text into the
+`.info-text`) next to a group title, the page title and the chart card's own
+title, not as running text. (The chart's (i) — zoom, pan, pin — used to sit on
+the hint line under the panels; that line is now just the key summary.) Hovering or focusing one copies its text into the
 one shared `#infoPop`, which is `position: fixed` because the sidebars scroll
 and would clip anything absolutely positioned inside them. A `<p data-when="…">`
 inside is only shown under that `barColour` mode, so the Distance bars note
