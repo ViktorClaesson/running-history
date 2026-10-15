@@ -32,7 +32,7 @@ without the weekday (day-level x-axis labels). Both are built by hand from
 gives that order with the weekday in brackets. They live in the bootstrap
 script, not the app one, so the data line can use them before `DATA` exists.
 
-Up to six stacked panels sharing one x-axis, one bar/point per calendar day:
+Up to eight stacked panels sharing one x-axis, one bar/point per calendar day:
 
 1. **Bars** — height is **that day's own distance**, on a **linear** axis by
    default (`barScale`; logarithmic is the other option).
@@ -55,6 +55,9 @@ Up to six stacked panels sharing one x-axis, one bar/point per calendar day:
 4. **Lines** — average runs per week over each window: every run counts, so a
    double-run day shows as 2. Axis is not fixed at 0–7 like the panel above it,
    since it can run higher.
+4a. **Lines** — raw stress score per week over each window (`srawSeries`).
+4b. **Lines** — relative stress score per week over each window
+   (`srelSeries`). See "Stress score" below.
 5. **Line** — highest VDOT achieved by any workout in the trailing *VDOT* window
    (default 50 weeks, set independently — see "VDOT and pace zones" below).
    Undefined (a gap, not a zero) before the first-ever logged run. Plus **dots**
@@ -63,8 +66,9 @@ Up to six stacked panels sharing one x-axis, one bar/point per calendar day:
    *Which* window is a setting (`zoneAreaWin`, default the 16-week slot); only
    ever one at a time. See "Running volume by pace zone" below.
 
-Panels 2–6, the pace-zone histogram and the data table each have their own show/hide checkbox in
-the settings sidebar (`visPanels`, persisted in `runviz.prefs.v1` as `panels`) —
+Panels 2–6 (4a/4b included), the pace-zone histogram and the data table each have their own show/hide checkbox in
+the settings sidebar (`visPanels`, persisted in `runviz.prefs.v1` as `panels`; all shown by
+default except run days/week and relative stress, which start hidden) —
 panel 1 (the bars) always stays up as the anchor chart. The x-axis date labels
 live on whichever panel is currently the lowest *visible* one (`bottomPanel()`,
 walking `PANEL_ORDER` — the panels in DOM order, top to bottom — from the back),
@@ -115,14 +119,18 @@ data rather than at zero:
   not a zero line** — there isn't one on this axis, so unlike the linear panels
   no gridline is drawn in `--baseline` and none is labelled 0.
 
-Hovering a day fills the readout sidebar: exact distance, then one small table
-per measure (distance/week, run days/week, runs/week) listing each window from
-1w to 64w, then — when the stacked-zone panel is up — that
+Hovering a day fills the readout sidebar: exact distance, then small tables
+listing each window from 1w to 64w — distance/week, then runs and run days per week
+as one table ("6.5 runs in 5.0 days", with the raw counts — "26 runs in 20 days
+(out of 28 days)" — behind an (i) at the end of each row, wired by delegation on
+`#readout` since the readout is rebuilt on every hover), then the day's stress, then raw/relative stress per
+week as one table (`stressGrid()`: "898 128/day  422 60/day", each figure with
+its own per-day note, so the relative ones line up in a column) — then — when the stacked-zone panel is up — that
 panel's window split by pace zone (see "Running volume by pace zone") — the same
 order the panels' legend reads in. Every line is listed whether or not it is currently
 *drawn*: the per-line toggles declutter the chart, they don't filter the numbers.
 Each row carries a dim note to the right of its value — the raw counts behind the
-rate ("78 of 112 days", "87 runs in 112 days"), or for the distance table that
+rate, the per-day pair for stress, or for the distance table that
 same rate restated as km/mo and km/yr. (The km/wk part is left out there, since
 that is the value it sits next to.) That note is **10px, a step down from the
 rest of the row** — it is the widest thing in the sidebar once a week goes over
@@ -517,6 +525,31 @@ All of it is derived in-browser from one array of daily distances.
   ramp-in mode existed and was removed: it made the readout say "1 of 1 days" while
   the rate was computed against a 7-day floor, which was both inconsistent and not
   what the chart is for.
+
+## Stress score
+
+Two of the window panels (`sraw` shown by default, `srel` hidden) measure how
+*hard* the running was rather than how much. `recomputeDayStress()` scores every
+lap of the day (`lapsOfDay()`, so the whole-activity fallback applies):
+
+- **raw** = hours × (km/h)², summed — 1 h at 12 km/h is 144.
+- **relative** = 100 × hours × (speed ÷ threshold speed)², summed — the TSS
+  convention, so **1 h at threshold is exactly 100**. Threshold speed is the
+  threshold anchor (`ZONE_ANCHOR_PCT[2]`, 88% VDOT) at **that day's own rolling
+  VDOT** `vdot[i]`, the same fitness level the pace zones read against.
+
+Speed follows `gapPace` (like the zones and the workout type), and the relative
+score follows everything that moves VDOT. Rolled per week over the four
+windows exactly like `volSeries` (`recomputeStressWindows()`, full-window
+divisor, dust snap). Wiring: the day half runs inside `recomputeZones()`, the
+window half at the end of `recomputeZoneWindows()`, so every call site that
+already moved the zones (VDOT window, `minLapM`, `vdotCorr`, both GAP toggles,
+`windowBase`/`windowMult` via `applyWindow()`) moves these too. The readout
+shows the day's own scores ("Stress that day: 103 raw · 46 relative") and one
+combined table (`stressGrid()`), each figure followed by its per-day equivalent. A probe
+brute-forcing both from the laps agrees to 1e-12 over a real 1355-day export;
+at the defaults the most recent day reads 4w ≈ 420 relative/week, and the
+hardest single day 522.
 
 ## Workout type (the other bar colouring)
 
@@ -1177,7 +1210,7 @@ columns' content.
 set to, so the page opens the way it was left: `windowBase`, `windowMult`,
 `windowVdot`, `minLapM`, `vdotCorr`, `gapVdot`, `gapPace`, `vdotNearDots`, `vdotNearPct`,
 `barScale` (`'log'`/`'linear'`), `barCap` (boolean), `barCapKm` (1–500, whole km),
-`barColour` (`'verdict'`/`'workout'`/`'none'`; a legacy `colourVerdicts: false` reads as `'none'`), `wtExp` (0–4, halves), `wtShare` (1–100), `zoneBars`, `zoneAxis`, `highlightMax`, `panels` (`{vol, freq, runs, vdot, zone, zarea, table, target}`, each independently
+`barColour` (`'verdict'`/`'workout'`/`'none'`; a legacy `colourVerdicts: false` reads as `'none'`), `wtExp` (0–4, halves), `wtShare` (1–100), `zoneBars`, `zoneAxis`, `highlightMax`, `panels` (`{vol, freq, runs, sraw, srel, vdot, zone, zarea, table, target}`, each independently
 show/hide — see below), `lines` (`{s0, s1, s2, s3}` — slot keys, which of
 the four lines the three window panels draw), `zoneAreaWin` (a slot key: which
 window the stacked-zone panel is over, `'s2'` by default), `zoneAreaMode` (`'km'`/`'min'`/`'pctKm'`/`'pctMin'`), `targetWin` (a slot key, `'s2'` by default), and `plan` (`null` = the what-if box follows real
@@ -1227,7 +1260,7 @@ the defaults, and a remembered setting has to overwrite them at boot.
   and their percentage, the pace-zone bar
   count and bar height, the highest-line highlight, the bar scale and cap, the bar-colour mode and the two workout-type settings, the
   eight panel show/hide toggles, the weekly target's long-run toggle and the four line show/hide toggles back to their
-  defaults (every panel shown, all four lines, the highlight on), plus the view back to its
+  defaults (every panel shown but run days/week and relative stress, all four lines, the highlight on), plus the view back to its
   default span. It does *not*
   touch the what-if.
 - **reset** in the Weekly target tile: clears the what-if back to following real
@@ -1272,7 +1305,7 @@ much height:
 |---|---|
 | Weekly target | the tile's show/hide (`visPanels.target`), `targetLong`, `targetLongW` (disabled while the long run is off), `targetWin` |
 | Distance bars | `barScale`, `barCap`/`barCapKm`, the `barColour` select, then whichever of its two legends is in use: the four-verdict/rest legend, or the workout-type legend plus its two settings |
-| Volume & frequency panels | the four line show/hide swatches, the three panel show/hide boxes, `windowBase`/`windowMult`, `highlightMax` |
+| Volume & frequency panels | the four line show/hide swatches, the five panel show/hide boxes (incl. the two stress panels), `windowBase`/`windowMult`, `highlightMax` |
 | VDOT panel | its show/hide, `windowVdot`, `minLapM`, `vdotCorr`, `gapVdot`, `vdotNearDots`/`vdotNearPct` |
 | Pace-zone volume | the eight-bucket zone legend, the panel's show/hide, `zoneAreaWin`, `zoneAreaMode` |
 | Pace zones | its show/hide, `zoneBars`, `zoneAxis`, `gapPace` |

@@ -246,6 +246,9 @@
   .readout .pair .sub-v { font-size: 12px; font-weight: 400; color: var(--text-secondary); }
   .readout .pair .v2 { font-size: 11px; font-weight: 400; color: var(--muted);
     font-variant-numeric: tabular-nums; margin-top: 1px; min-height: 33px; min-height: 2lh; }
+  /* The distance line only ever holds the per-run split ("8.06 + 10.52 km"),
+     which never needs a second line, so it only reserves one. */
+  .readout .pair.detail .v2 { min-height: 17px; min-height: 1lh; }
   /* The four windows, as one small table per measure. Every row is always
      present (four windows, run or no run), so unlike the free-text detail
      lines this can't change the sidebar's height from day to day. */
@@ -262,6 +265,16 @@
      weeks stop wrapping — sized against a 280px sidebar, which is what this is
      actually used at. */
   .readout .wingrid .wx { color: var(--muted); font-size: 10px; }
+  /* The words inside a value ("6.5 runs in 5.0 days"): only the figures are bold. */
+  .readout .wingrid .wu { font-weight: 400; color: var(--text-secondary); }
+  /* The grid lines its cells up on the text baseline, which sits a 14px icon
+     low; centring its cell on the row puts it level with the text instead. */
+  .readout .wingrid .wx:has(> .info) { align-self: center; display: flex; }
+  .readout .wingrid .info { margin-left: 0; translate: none; }
+  /* Raw and relative stress side by side, each with its own per-day note, so
+     the relative figures line up in a column of their own. */
+  .readout .stressgrid { grid-template-columns: auto auto auto auto auto 1fr; }
+  .readout .stressgrid .wv.rel { padding-left: 10px; }
   /* The zone rows carry a fifth column — each bucket's pace band — after the
      share. Right-aligning the share puts its % signs in a column the way the
      amounts' units already are, instead of letting a 9% and a 100% start at the
@@ -330,6 +343,12 @@
     font: 600 9px/1 system-ui, -apple-system, sans-serif; font-style: normal;
     text-transform: none; letter-spacing: 0; color: var(--muted); cursor: help;
     vertical-align: middle; margin-left: 6px; user-select: none; }
+  /* `middle` centres on half the x-height, which reads low beside a title —
+     most of them all caps. Nudged up to the centre of the capitals instead,
+     by how much that is at each title's size (measured, not eyeballed). */
+  .info { translate: 0 -0.9px; }
+  h1 > .info { translate: 0 -1.7px; }
+  .chart-title > .info { translate: 0 -1.2px; }
   .info:hover, .info:focus-visible { color: var(--text-primary); outline: none; }
   .info-text { display: none; }
   #infoPop { position: fixed; z-index: 30; max-width: 320px; padding: 10px 12px;
@@ -367,6 +386,7 @@
   #chart3 { display: block; width: 100%; height: 156px; touch-action: none; cursor: crosshair; }
   #chart4 { display: block; width: 100%; height: 156px; touch-action: none; cursor: crosshair; }
   #chart5 { display: block; width: 100%; height: 156px; touch-action: none; cursor: crosshair; }
+  #chartSr, #chartSl { display: block; width: 100%; height: 156px; touch-action: none; cursor: crosshair; }
   #chartZa { display: block; width: 100%; height: 156px; touch-action: none; cursor: crosshair; }
   .panel-title { font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
     color: var(--muted); padding: 4px 0 2px 54px; }
@@ -547,8 +567,10 @@
     </div>
     <div class="ctrls">
       <label class="chk"><input type="checkbox" id="showVol" checked> Distance/week panel</label>
-      <label class="chk"><input type="checkbox" id="showFreq" checked> Run days/week panel</label>
+      <label class="chk"><input type="checkbox" id="showFreq"> Run days/week panel</label>
       <label class="chk"><input type="checkbox" id="showRuns" checked> Runs/week panel</label>
+      <label class="chk" title="Every lap scores hours &times; (km/h)&sup2;, summed over the week."><input type="checkbox" id="showSraw" checked> Raw stress/week panel</label>
+      <label class="chk" title="Every lap scores 100 &times; hours &times; (speed &divide; threshold speed)&sup2;, so an hour at threshold is 100. Threshold speed is read off that day&rsquo;s VDOT."><input type="checkbox" id="showSrel"> Relative stress/week panel</label>
       <label class="chk" title="Weeks in the shortest of the four rolling windows. The other three follow from the multiple below.">Shortest window
         <input type="number" id="windowBase" min="1" max="8" step="1" value="1"> weeks
       </label>
@@ -686,6 +708,14 @@
     <div class="chart-panel" id="panel-runs">
       <div class="panel-title">Runs per week &mdash; <span class="winsN">1 / 4 / 16 / 64</span>-week rolling averages</div>
       <canvas id="chart3"></canvas>
+    </div>
+    <div class="chart-panel" id="panel-sraw">
+      <div class="panel-title">Raw stress score per week &mdash; <span class="winsN">1 / 4 / 16 / 64</span>-week rolling averages</div>
+      <canvas id="chartSr"></canvas>
+    </div>
+    <div class="chart-panel" id="panel-srel">
+      <div class="panel-title">Relative stress score per week &mdash; <span class="winsN">1 / 4 / 16 / 64</span>-week rolling averages</div>
+      <canvas id="chartSl"></canvas>
     </div>
     <div class="chart-panel" id="panel-vdot">
       <div class="panel-title">Highest VDOT in the trailing <span class="winVdotN">910</span> days<span class="vdotNearNote"></span></div>
@@ -1116,7 +1146,7 @@ const PREF_DEFAULTS = {
   wtShare: 35,       // % of the score a zone plus everything faster needs to be the run's type
   zoneBars: 3,       // sub-bands per pace zone in the pace-zone histogram
   zoneAxis: 'dist',  // what the pace-zone histogram's bars measure: 'time' (minutes) or 'dist' (km)
-  panels: { vol: true, freq: true, runs: true, vdot: true, zone: true, zarea: true, table: true, target: true },   // which optional panels are shown
+  panels: { vol: true, freq: false, runs: true, sraw: true, srel: false, vdot: true, zone: true, zarea: true, table: true, target: true },   // which optional panels are shown
   // Which window the stacked-zone panel is over — one at a time, since the
   // stack is eight bands deep and four of those at once is a lot of chart. A
   // slot key, so it keeps its meaning when windowBase/windowMult change. s2
@@ -1140,7 +1170,7 @@ const PREF_DEFAULTS = {
 // setting when windowBase/windowMult change what it actually measures.
 const SLOT_KEYS = ['s0', 's1', 's2', 's3'];
 // The optional panels, i.e. everything but the bars.
-const PANEL_KEYS = ['vol', 'freq', 'runs', 'vdot', 'zone', 'zarea', 'table', 'target'];
+const PANEL_KEYS = ['vol', 'freq', 'runs', 'sraw', 'srel', 'vdot', 'zone', 'zarea', 'table', 'target'];
 const LINE_KEYS = SLOT_KEYS;
 function loadPrefs() {
   const p = { ...PREF_DEFAULTS, panels: { ...PREF_DEFAULTS.panels }, lines: { ...PREF_DEFAULTS.lines } };
@@ -1905,11 +1935,60 @@ function recomputeZoneWindows() {
       tot[i] = t;
     }
   });
+  recomputeStressWindows();
 }
 // The lap walk is cheap enough (a few ms over a 1339-day export) that every
 // call site just does both halves rather than reasoning about which one its
 // setting moved.
-const recomputeZones = () => { recomputeDayZones(); recomputeZoneWindows(); };
+const recomputeZones = () => { recomputeDayZones(); recomputeDayStress(); recomputeZoneWindows(); };
+
+// ---- stress score ------------------------------------------------------------
+// How hard the running was, not just how much. Every lap scores
+//     raw       hours x (km/h)^2
+//     relative  100 x hours x (speed / threshold speed)^2
+// summed over the day, so an hour at threshold is exactly 100 relative (the
+// TSS convention). Threshold speed is the threshold anchor (88% VDOT) at that
+// day's own rolling VDOT, the same fitness level the pace zones read against.
+// Speed follows `gapPace`, like the zones and the workout type: a climb was
+// harder than its raw pace says. Before the first logged run there is no VDOT,
+// so no relative score either — which is also no run, so 0 is right.
+const dayStressRaw = new Float64Array(N);
+const dayStressRel = new Float64Array(N);
+function recomputeDayStress() {
+  for (let i = 0; i < N; i++) {
+    const v = vdot[i];
+    const vT = v > 0 ? velocityFromVo2(ZONE_ANCHOR_PCT[2] * v) * 0.06 : 0;   // m/min -> km/h
+    let raw = 0, rel = 0;
+    for (const lap of lapsOfDay(i)) {
+      const h = effortSec(lap, gapPace) / 3600;
+      if (!(h > 0)) continue;
+      const kmh = lap.km / h;
+      raw += h * kmh * kmh;
+      if (vT > 0) rel += 100 * h * (kmh / vT) ** 2;
+    }
+    dayStressRaw[i] = raw; dayStressRel[i] = rel;
+  }
+}
+// Per week over each window, divided by the full window and snapped off float
+// dust, exactly like volSeries in recompute().
+const srawSeries = blank();
+const srelSeries = blank();
+function recomputeStressWindows() {
+  WINDOWS.forEach((win, w) => {
+    const d = win.days;
+    let raw = 0, rel = 0;
+    for (let i = 0; i < N; i++) {
+      raw += dayStressRaw[i]; rel += dayStressRel[i];
+      if (i >= d) {
+        raw -= dayStressRaw[i - d]; rel -= dayStressRel[i - d];
+        if (raw < 1e-9) raw = 0;
+        if (rel < 1e-9) rel = 0;
+      }
+      srawSeries[w][i] = raw * 7 / d;
+      srelSeries[w][i] = rel * 7 / d;
+    }
+  });
+}
 recomputeZones();
 
 // ---- workout type, from the same lap binning ------------------------------
@@ -2259,7 +2338,11 @@ const ctx5 = cv5.getContext('2d');
 const zaCv  = document.getElementById('chartZa');
 const zaCtx = zaCv.getContext('2d');
 // Every panel drives the same view, so every panel gets the same listeners.
-const PANEL_CVS = [cv, cv2, cv3, cv4, cv5, zaCv];
+const srCv  = document.getElementById('chartSr');
+const srCtx = srCv.getContext('2d');
+const slCv  = document.getElementById('chartSl');
+const slCtx = slCv.getContext('2d');
+const PANEL_CVS = [cv, cv2, cv3, cv4, cv5, srCv, slCv, zaCv];
 
 // The default view is the two longest windows' worth of days added together,
 // ending on the most recent one, rather than the whole history: zoomed all the
@@ -2309,6 +2392,8 @@ const BARS = { t: 14, b: 12 };    // top panel insets
 const VOLI  = { t: 10, b: 12 };  // km/week panel insets
 const FREQ  = { t: 10, b: 12 };  // run days/week panel insets
 const FREQ2 = { t: 10, b: 12 };  // runs/week panel insets
+const SRAWI = { t: 10, b: 12 };  // raw stress panel insets
+const SRELI = { t: 10, b: 12 };  // relative stress panel insets
 // The bottom inset that fits the x-axis date labels. Whichever panel is lowest
 // takes it; everything above keeps the plain 12.
 const XLAB_B = 26;
@@ -2318,7 +2403,7 @@ const ZAI   = { t: 10, b: 12 };  // stacked-zone panel insets
 // labels, so hiding a panel never leaves the chart without dates. Its bottom
 // inset is widened to XLAB_B to fit them. Listed in DOM order, top to bottom —
 // the bars are always up, so they're the floor of it.
-const PANEL_ORDER = ['bars', 'vol', 'freq', 'runs', 'vdot', 'zarea'];
+const PANEL_ORDER = ['bars', 'vol', 'freq', 'runs', 'sraw', 'srel', 'vdot', 'zarea'];
 const panelShown = k => k === 'bars' || visPanels[k];
 function bottomPanel() {
   for (let i = PANEL_ORDER.length - 1; i > 0; i--) {
@@ -2797,6 +2882,9 @@ const drawFreq = () => drawWindowPanel(cv2, ctx2, freqSeries, FREQ, 'freq', 'run
 // Runs per week — every run counts, so a double-run day shows as 2 and the axis
 // is not capped at 7 the way run-days/week is.
 const drawRuns = () => drawWindowPanel(cv3, ctx3, runSeries, FREQ2, 'runs', 'runs / week');
+// Stress score per week, raw and relative to threshold — see recomputeDayStress.
+const drawSraw = () => drawWindowPanel(srCv, srCtx, srawSeries, SRAWI, 'sraw', 'raw / week');
+const drawSrel = () => drawWindowPanel(slCv, slCtx, srelSeries, SRELI, 'srel', 'rel. / week');
 
 // x-axis labels live on the bottom panel only; every panel shares the x mapping,
 // so whichever one is drawn last just calls this with its own insets.
@@ -3109,6 +3197,8 @@ function drawAll() {
   if (visPanels.vol) drawVol();
   if (visPanels.freq) drawFreq();
   if (visPanels.runs) drawRuns();
+  if (visPanels.sraw) drawSraw();
+  if (visPanels.srel) drawSrel();
   if (visPanels.vdot) drawVdot();
   if (visPanels.zarea) drawZoneArea();
   // Nothing to keep current while it's hidden; tableKey makes the first
@@ -3159,11 +3249,12 @@ function vdotBasisText(i) {
 // numbers. `extra(w, v)` is an optional dim note per row — the raw counts
 // behind a rate, or the same rate over a longer span — with `w` the window
 // index.
-function winGrid(set, i, dp, unit, extra) {
+// `fmt`, if given, writes the value itself — for a row that carries two measures.
+function winGrid(set, i, dp, unit, extra, fmt) {
   const row = (cls, css, label, v, w) =>
     `<span class="sw ${cls}" style="background:var(${css})"></span>` +
     `<span class="wl ${cls}">${label}</span>` +
-    `<span class="wv ${cls}">${v.toFixed(dp)}${unit ? ' ' + unit : ''}</span>` +
+    `<span class="wv ${cls}">${fmt ? fmt(w, v) : v.toFixed(dp)}${unit ? ' ' + unit : ''}</span>` +
     `<span class="wx ${cls}">${extra ? extra(w, v) : ''}</span>`;
   return `<span class="wingrid">` +
     WINDOWS.map((win, w) => row('', win.css, win.label, set[w][i], w)).join('') +
@@ -3229,6 +3320,18 @@ function zoneGrid(i, k) {
     `</span>`;
 }
 
+// Raw and relative stress per week for each window, each followed by its
+// per-day equivalent — two pairs to a row rather than one "898 / 422".
+function stressGrid(i) {
+  const row = (win, w) => `<span class="sw" style="background:var(${win.css})"></span>` +
+    `<span class="wl">${win.label}</span>` +
+    `<span class="wv">${nf0.format(srawSeries[w][i])}</span>` +
+    `<span class="wx">${nf0.format(srawSeries[w][i] / 7)}/day</span>` +
+    `<span class="wv rel">${nf0.format(srelSeries[w][i])}</span>` +
+    `<span class="wx">${nf0.format(srelSeries[w][i] / 7)}/day</span>`;
+  return `<span class="wingrid stressgrid">${WINDOWS.map(row).join('')}</span>`;
+}
+
 const ro = document.getElementById('readout');
 function setReadout(i, tag) {
   if (i === null) {
@@ -3250,8 +3353,13 @@ function setReadout(i, tag) {
     <span class="pair detail"><span class="k">Distance that day</span><span class="v">${daily[i] > 0 ? km(daily[i]) + ' km' : 'no run'}${nRuns[i] > 1 ? `<span class="sub-v"> in ${nRuns[i]} runs</span>` : ''}</span><span class="v2">${
       nRuns[i] > 1 ? seg((dayActs[i] || []).map(a => `${km(a.km)}`)).replaceAll(' · ', ' + ') + ' km' : ''}</span></span>
     <span class="pair"><span class="k">Distance per week</span>${winGrid(volSeries, i, 1, 'km', (_w, v) => longerSpans(v))}</span>
-    <span class="pair"><span class="k">Run days per week</span>${winGrid(freqSeries, i, 1, '', w => `${runDaysIn[w][i]} of ${WINDOWS[w].days} days`)}</span>
-    <span class="pair"><span class="k">Runs per week</span>${winGrid(runSeries, i, 1, '', w => `${runsIn[w][i]} runs in ${WINDOWS[w].days} days`)}</span>
+    <span class="pair"><span class="k">Run days/Runs per week</span>${winGrid(freqSeries, i, 1, '',
+      w => `<span class="info" tabindex="0">i<span class="info-text">${runsIn[w][i]} run${runsIn[w][i] === 1 ? '' : 's'} in ${
+        runDaysIn[w][i]} day${runDaysIn[w][i] === 1 ? '' : 's'} (out of ${WINDOWS[w].days} days)</span></span>`,
+      (w, v) => `${runSeries[w][i].toFixed(1)}<span class="wu"> runs in </span>${v.toFixed(1)}<span class="wu"> days</span>`)}</span>
+    <span class="pair"><span class="k">Stress that day</span><span class="v">${daily[i] > 0
+      ? `${nf0.format(dayStressRaw[i])} raw<span class="sub-v"> · ${nf0.format(dayStressRel[i])} relative</span>` : 'no run'}</span></span>
+    <span class="pair"><span class="k">Raw/Relative stress per week</span>${stressGrid(i)}</span>
     <span class="pair"><span class="k">By pace zone, ${WINDOWS[zk].label} ${
       zoneAreaMin() ? 'min' : 'km'}/week</span>${zoneGrid(i, zk)}</span>
     <span class="pair"><span class="k">VDOT (peak, trailing ${Math.round(WINDOW_VDOT/7)}w)</span><span class="v">${vdot[i] != null ? vdot[i].toFixed(1) : '—'}</span><span class="v2">${vdotBasisText(i)}</span></span>
@@ -3755,9 +3863,9 @@ function syncLabels() {
 // Pushes visPanels into both the checkboxes and the panel wrapper divs' `hidden`
 // attribute — the one place panel visibility is written to the DOM, same idea as
 // syncControls() below.
-const PANEL_CHK = { vol: 'showVol', freq: 'showFreq', runs: 'showRuns', vdot: 'showVdot',
+const PANEL_CHK = { vol: 'showVol', freq: 'showFreq', runs: 'showRuns', sraw: 'showSraw', srel: 'showSrel', vdot: 'showVdot',
                     zone: 'showZone', zarea: 'showZarea', table: 'showTable', target: 'showTarget' };
-const PANEL_EL = { vol: 'panel-vol', freq: 'panel-freq', runs: 'panel-runs', vdot: 'panel-vdot',
+const PANEL_EL = { vol: 'panel-vol', freq: 'panel-freq', runs: 'panel-runs', sraw: 'panel-sraw', srel: 'panel-srel', vdot: 'panel-vdot',
                    zone: 'zonecard', zarea: 'panel-zarea', table: 'tablecard', target: 'target-tile' };
 function syncPanelVisibility() {
   for (const k of PANEL_KEYS) {
@@ -4018,7 +4126,7 @@ zoneBarsInput.onchange = zoneBarsInput.oninput = () => {
   savePrefs();
   renderZonePanel();
 };
-for (const k of ['vol', 'freq', 'runs', 'vdot', 'zarea', 'table']) {
+for (const k of ['vol', 'freq', 'runs', 'sraw', 'srel', 'vdot', 'zarea', 'table']) {
   document.getElementById(PANEL_CHK[k]).onchange = e => {
     visPanels[k] = e.target.checked;
     savePrefs();
@@ -4101,6 +4209,17 @@ for (const icon of document.querySelectorAll('.info')) {
   if (!icon.closest('#target-tile')) wireInfo(icon);
 }
 window.addEventListener('scroll', hideInfo, true);
+// The readout is rebuilt on every hover, so its (i)s are wired once, by
+// delegation, rather than each time they are created.
+{
+  const ro = document.getElementById('readout');
+  const over = e => { const icon = e.target.closest('.info'); if (icon) showInfo(icon); };
+  const out = e => { const icon = e.target.closest('.info'); if (icon && !icon.contains(e.relatedTarget)) hideInfo(); };
+  ro.addEventListener('mouseover', over);
+  ro.addEventListener('mouseout', out);
+  ro.addEventListener('focusin', over);
+  ro.addEventListener('focusout', hideInfo);
+}
 
 // Draw-time only: nothing computed depends on how the bars are scaled.
 const barScaleSel = document.getElementById('barScale');
