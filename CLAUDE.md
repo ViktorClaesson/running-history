@@ -63,7 +63,7 @@ Up to eight stacked panels sharing one x-axis, one bar/point per calendar day:
    Undefined (a gap, not a zero) before the first-ever logged run. Plus **dots**
    for the days that went after that ceiling — see "Near-max days" below.
 6. **Stacked area** — what one window's running was made of, zone by zone.
-   *Which* window is a setting (`zoneAreaWin`, default the 16-week slot); only
+   *Which* window is a setting (`zoneAreaWin`, default the 4-week slot, as a share of distance); only
    ever one at a time. See "Running volume by pace zone" below.
 
 Panels 2–6 (4a/4b included), the pace-zone histogram and the data table each have their own show/hide checkbox in
@@ -266,7 +266,7 @@ showing — `'pinned'`, `'most recent run'`, or `''` for a live hover — shared
 agree without each deciding for itself. The pinned day is drawn **dashed**
 (bars) and as a **hollow ring** (frequency panel) against hover's solid
 outline and filled dot, so both can be on screen at once and still read as two
-different things. Like zoom, the pin itself is view state and deliberately not
+different things. Unlike zoom, the pin is view state that is deliberately not
 persisted in `runviz.prefs.v1`.
 
 A pan ends in a mouseup on the canvas, which the browser then reports as a click —
@@ -330,6 +330,24 @@ the full history still works — the clamp is unchanged. `resetView()` is that
 same view, shared by the double-click, the `r` key and the settings Reset so
 "reset the zoom" means one thing everywhere. Changing `windowBase`/`windowMult` moves what
 `defaultSpan()` returns but deliberately does not re-fit the current view.
+
+**Keys `1`–`4` zoom to each window in turn** (`zoomToWindow(k)`), ending on
+the most recent day: `windowSpan(k)` is the same shape as the default — that
+window plus the next one down, i.e. window × (1 + 1/`windowMult`) — so `4` *is*
+the default view and `1` the closest in (8.75 / 35 / 140 / 560 days at the
+defaults). `defaultSpan()` is just `windowSpan(3)`.
+
+**The view is remembered** (`view` in `runviz.prefs.v1`): `{span, right}`, the
+days in view and the right edge in days since 1970 — a date, not an index, so
+it survives a re-import that starts on another day. `right` is `null` when the
+view runs to the most recent day (within half a day), so it keeps doing that as
+the history grows a day at a time; the whole entry is `null` (nothing stored)
+when it is the default view. Every view change ends in a `drawAll()`, which
+calls `noteView()`; that saves 400ms after the last change rather than on every
+frame. A remembered view that no longer fits is clamped at load. It was once
+deliberately *not* remembered, on the grounds that it would open the page
+mid-history; Reset puts it back to the default like everything else, and a
+view parked at the end stays at the end.
 
 **Sidebar, not inline.** The readout used to sit directly above the chart, so
 scrolling down past a tall chart lost sight of it — no good once there were five
@@ -1134,9 +1152,10 @@ time, which is what the question is. `drawZoneArea()`, over whichever window
   other: one show/hide box (`visPanels.zarea`) plus a **window select**
   (`zoneAreaWin`, a *slot key* so it survives a change to
   `windowBase`/`windowMult`; its `<option>`s carry the `.winLabelK` classes, so
-  `syncLabels()` relabels them for free). Default **`s2`** — 16 weeks at the
-  default windows, which reads as "what has this training phase been made of";
-  the 1-week end is mostly this week's weather. All four windows' sums are
+  `syncLabels()` relabels them for free). Default **`s1`** — 4 weeks at the
+  default windows, "what has this past month been made of" — and
+  `zoneAreaMode` **`'pctKm'`** (share of distance); until Oct 2026 it was 16
+  weeks in km/week. The 1-week end is mostly this week's weather. All four windows' sums are
   computed regardless (0.4 ms for the lot), so switching window is a relabel and
   a redraw with nothing to recompute.
 - **`zoneAreaMode`** — one select, four values, because both halves of the
@@ -1213,7 +1232,7 @@ set to, so the page opens the way it was left: `windowBase`, `windowMult`,
 `barColour` (`'verdict'`/`'workout'`/`'none'`; a legacy `colourVerdicts: false` reads as `'none'`), `wtExp` (0–4, halves), `wtShare` (1–100), `zoneBars`, `zoneAxis`, `highlightMax`, `panels` (`{vol, freq, runs, sraw, srel, vdot, zone, zarea, table, target}`, each independently
 show/hide — see below), `lines` (`{s0, s1, s2, s3}` — slot keys, which of
 the four lines the three window panels draw), `zoneAreaWin` (a slot key: which
-window the stacked-zone panel is over, `'s2'` by default), `zoneAreaMode` (`'km'`/`'min'`/`'pctKm'`/`'pctMin'`), `targetWin` (a slot key, `'s2'` by default), and `plan` (`null` = the what-if box follows real
+window the stacked-zone panel is over, `'s1'` by default), `zoneAreaMode` (`'km'`/`'min'`/`'pctKm'`/`'pctMin'`, `'pctKm'` by default), `view` (`null` = the default zoom, else `{span, right}` — see "The default view"), `targetWin` (a slot key, `'s2'` by default), and `plan` (`null` = the what-if box follows real
 history, `{km, days, runs}` = edited; an older entry without `runs` gets one run a day), `targetLong` (boolean), `targetLongW` (1.0–3.0, tenths), `vdotCorr` (0.90–1.00, hundredths). Three rules:
 
 - **Read at the very top of the `if (DATA)` block**, above `WINDOWS` and
@@ -1271,7 +1290,8 @@ and call `savePrefs()` — which rewrites the whole entry from current state, ke
 it if anything is still off-default and dropping it if nothing is. So a chart reset
 with an edited what-if leaves an entry holding only the plan, and vice versa.
 
-**Two keys**, for the two things worth doing without aiming at anything: `r`
+**Keys**, for the things worth doing without aiming at anything: `1`–`4` zoom
+to a window (see "The default view"), `r`
 resets the view, `t` releases the pin (Esc still does too — `t` is next door to
 `r`, which is what makes the pair usable one-handed with the other hand on the
 mouse). Both ignore modified presses, so ⌘R still reloads, and both ignore
@@ -1279,9 +1299,7 @@ anything typed into a settings input, where a plain `r` is a keystroke and not a
 shortcut.
 
 Double-clicking a panel still resets only the view (`resetView()` — the default
-span, see "Window-start marks" above), which is view state and deliberately
-*not* remembered — persisting it would fight the Reset button and open the page
-mid-history.
+span, see "Window-start marks" above).
 
 **The settings sidebar** is the third sidebar-shaped thing on the page, on the
 opposite side from the readout — `<aside id="settingsSidebar">`, always visible
