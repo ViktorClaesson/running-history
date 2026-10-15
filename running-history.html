@@ -271,6 +271,10 @@
      low; centring its cell on the row puts it level with the text instead. */
   .readout .wingrid .wx:has(> .info) { align-self: center; display: flex; }
   .readout .wingrid .info { margin-left: 0; }
+  /* Raw and relative stress side by side, each with its own per-day note, so
+     the relative figures line up in a column of their own. */
+  .readout .stressgrid { grid-template-columns: auto auto auto auto auto 1fr; }
+  .readout .stressgrid .wv.rel { padding-left: 10px; }
   /* The zone rows carry a fifth column — each bucket's pace band — after the
      share. Right-aligning the share puts its % signs in a column the way the
      amounts' units already are, instead of letting a 9% and a 100% start at the
@@ -3310,6 +3314,18 @@ function zoneGrid(i, k) {
     `</span>`;
 }
 
+// Raw and relative stress per week for each window, each followed by its
+// per-day equivalent — two pairs to a row rather than one "898 / 422".
+function stressGrid(i) {
+  const row = (win, w) => `<span class="sw" style="background:var(${win.css})"></span>` +
+    `<span class="wl">${win.label}</span>` +
+    `<span class="wv">${nf0.format(srawSeries[w][i])}</span>` +
+    `<span class="wx">${nf0.format(srawSeries[w][i] / 7)}/day</span>` +
+    `<span class="wv rel">${nf0.format(srelSeries[w][i])}</span>` +
+    `<span class="wx">${nf0.format(srelSeries[w][i] / 7)}/day</span>`;
+  return `<span class="wingrid stressgrid">${WINDOWS.map(row).join('')}</span>`;
+}
+
 const ro = document.getElementById('readout');
 function setReadout(i, tag) {
   if (i === null) {
@@ -3337,9 +3353,7 @@ function setReadout(i, tag) {
       (w, v) => `${runSeries[w][i].toFixed(1)}<span class="wu"> runs in </span>${v.toFixed(1)}<span class="wu"> days</span>`)}</span>
     <span class="pair"><span class="k">Stress that day</span><span class="v">${daily[i] > 0
       ? `${nf0.format(dayStressRaw[i])} raw<span class="sub-v"> · ${nf0.format(dayStressRel[i])} relative</span>` : 'no run'}</span></span>
-    <span class="pair"><span class="k">Raw/Relative stress per week</span>${winGrid(srawSeries, i, 0, '',
-      w => `${nf0.format(srawSeries[w][i] / 7)} / ${nf0.format(srelSeries[w][i] / 7)} /day`,
-      (w, v) => `${nf0.format(v)} / ${nf0.format(srelSeries[w][i])}`)}</span>
+    <span class="pair"><span class="k">Raw/Relative stress per week</span>${stressGrid(i)}</span>
     <span class="pair"><span class="k">By pace zone, ${WINDOWS[zk].label} ${
       zoneAreaMin() ? 'min' : 'km'}/week</span>${zoneGrid(i, zk)}</span>
     <span class="pair"><span class="k">VDOT (peak, trailing ${Math.round(WINDOW_VDOT/7)}w)</span><span class="v">${vdot[i] != null ? vdot[i].toFixed(1) : '—'}</span><span class="v2">${vdotBasisText(i)}</span></span>

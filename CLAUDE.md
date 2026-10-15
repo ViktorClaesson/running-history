@@ -124,8 +124,8 @@ listing each window from 1w to 64w — distance/week, then runs and run days per
 as one table ("6.5 runs in 5.0 days", with the raw counts — "26 runs in 20 days,
 out of 28" — behind an (i) at the end of each row, wired by delegation on
 `#readout` since the readout is rebuilt on every hover), then the day's stress, then raw/relative stress per
-week as one table ("898 / 422"; `winGrid`'s `fmt` argument writes the paired
-value) — then — when the stacked-zone panel is up — that
+week as one table (`stressGrid()`: "898 128/day  422 60/day", each figure with
+its own per-day note, so the relative ones line up in a column) — then — when the stacked-zone panel is up — that
 panel's window split by pace zone (see "Running volume by pace zone") — the same
 order the panels' legend reads in. Every line is listed whether or not it is currently
 *drawn*: the per-line toggles declutter the chart, they don't filter the numbers.
@@ -546,7 +546,7 @@ window half at the end of `recomputeZoneWindows()`, so every call site that
 already moved the zones (VDOT window, `minLapM`, `vdotCorr`, both GAP toggles,
 `windowBase`/`windowMult` via `applyWindow()`) moves these too. The readout
 shows the day's own scores ("Stress that day: 103 raw · 46 relative") and one
-combined `winGrid` ("898 / 422") with the per-day pair as the dim note. A probe
+combined table (`stressGrid()`), each figure followed by its per-day equivalent. A probe
 brute-forcing both from the laps agrees to 1e-12 over a real 1355-day export;
 at the defaults the most recent day reads 4w ≈ 420 relative/week, and the
 hardest single day 522.
