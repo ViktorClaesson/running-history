@@ -121,8 +121,8 @@ data rather than at zero:
 
 Hovering a day fills the readout sidebar: exact distance, then small tables
 listing each window from 1w to 64w — distance/week, then runs and run days per week
-as one table ("6.5 runs in 5.0 days", with the raw counts — "26 runs in 20 days,
-out of 28" — behind an (i) at the end of each row, wired by delegation on
+as one table ("6.5 runs in 5.0 days", with the raw counts — "26 runs in 20 days
+(out of 28 days)" — behind an (i) at the end of each row, wired by delegation on
 `#readout` since the readout is rebuilt on every hover), then the day's stress, then raw/relative stress per
 week as one table (`stressGrid()`: "898 128/day  422 60/day", each figure with
 its own per-day note, so the relative ones line up in a column) — then — when the stacked-zone panel is up — that

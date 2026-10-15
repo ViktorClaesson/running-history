@@ -3355,7 +3355,7 @@ function setReadout(i, tag) {
     <span class="pair"><span class="k">Distance per week</span>${winGrid(volSeries, i, 1, 'km', (_w, v) => longerSpans(v))}</span>
     <span class="pair"><span class="k">Run days/Runs per week</span>${winGrid(freqSeries, i, 1, '',
       w => `<span class="info" tabindex="0">i<span class="info-text">${runsIn[w][i]} run${runsIn[w][i] === 1 ? '' : 's'} in ${
-        runDaysIn[w][i]} day${runDaysIn[w][i] === 1 ? '' : 's'}, out of ${WINDOWS[w].days}</span></span>`,
+        runDaysIn[w][i]} day${runDaysIn[w][i] === 1 ? '' : 's'} (out of ${WINDOWS[w].days} days)</span></span>`,
       (w, v) => `${runSeries[w][i].toFixed(1)}<span class="wu"> runs in </span>${v.toFixed(1)}<span class="wu"> days</span>`)}</span>
     <span class="pair"><span class="k">Stress that day</span><span class="v">${daily[i] > 0
       ? `${nf0.format(dayStressRaw[i])} raw<span class="sub-v"> · ${nf0.format(dayStressRel[i])} relative</span>` : 'no run'}</span></span>
