@@ -267,6 +267,9 @@
   .readout .wingrid .wx { color: var(--muted); font-size: 10px; }
   /* The words inside a value ("6.5 runs in 5.0 days"): only the figures are bold. */
   .readout .wingrid .wu { font-weight: 400; color: var(--text-secondary); }
+  /* The grid lines its cells up on the text baseline, which sits a 14px icon
+     low; centring its cell on the row puts it level with the text instead. */
+  .readout .wingrid .wx:has(> .info) { align-self: center; display: flex; }
   .readout .wingrid .info { margin-left: 0; }
   /* The zone rows carry a fifth column — each bucket's pace band — after the
      share. Right-aligning the share puts its % signs in a column the way the
