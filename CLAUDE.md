@@ -120,15 +120,17 @@ data rather than at zero:
   no gridline is drawn in `--baseline` and none is labelled 0.
 
 Hovering a day fills the readout sidebar: exact distance, then small tables
-listing each window from 1w to 64w — distance/week, then run days/runs per week
-as one table ("5.0 / 6.5"), then the day's stress, then raw/relative stress per
+listing each window from 1w to 64w — distance/week, then runs and run days per week
+as one table ("6.5 runs in 5.0 days", with the raw counts — "26 runs in 20 days,
+out of 28" — behind an (i) at the end of each row, wired by delegation on
+`#readout` since the readout is rebuilt on every hover), then the day's stress, then raw/relative stress per
 week as one table ("898 / 422"; `winGrid`'s `fmt` argument writes the paired
 value) — then — when the stacked-zone panel is up — that
 panel's window split by pace zone (see "Running volume by pace zone") — the same
 order the panels' legend reads in. Every line is listed whether or not it is currently
 *drawn*: the per-line toggles declutter the chart, they don't filter the numbers.
 Each row carries a dim note to the right of its value — the raw counts behind the
-rate ("26 runs in 20 of 28 days"), the per-day pair for stress, or for the distance table that
+rate, the per-day pair for stress, or for the distance table that
 same rate restated as km/mo and km/yr. (The km/wk part is left out there, since
 that is the value it sits next to.) That note is **10px, a step down from the
 rest of the row** — it is the widest thing in the sidebar once a week goes over

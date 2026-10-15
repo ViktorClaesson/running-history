@@ -265,6 +265,9 @@
      weeks stop wrapping — sized against a 280px sidebar, which is what this is
      actually used at. */
   .readout .wingrid .wx { color: var(--muted); font-size: 10px; }
+  /* The words inside a value ("6.5 runs in 5.0 days"): only the figures are bold. */
+  .readout .wingrid .wu { font-weight: 400; color: var(--text-secondary); }
+  .readout .wingrid .info { margin-left: 0; }
   /* The zone rows carry a fifth column — each bucket's pace band — after the
      share. Right-aligning the share puts its % signs in a column the way the
      amounts' units already are, instead of letting a 9% and a 100% start at the
@@ -3326,8 +3329,9 @@ function setReadout(i, tag) {
       nRuns[i] > 1 ? seg((dayActs[i] || []).map(a => `${km(a.km)}`)).replaceAll(' · ', ' + ') + ' km' : ''}</span></span>
     <span class="pair"><span class="k">Distance per week</span>${winGrid(volSeries, i, 1, 'km', (_w, v) => longerSpans(v))}</span>
     <span class="pair"><span class="k">Run days/Runs per week</span>${winGrid(freqSeries, i, 1, '',
-      w => `${runsIn[w][i]} run${runsIn[w][i] === 1 ? '' : 's'} in ${runDaysIn[w][i]} of ${WINDOWS[w].days} days`,
-      (w, v) => `${v.toFixed(1)} / ${runSeries[w][i].toFixed(1)}`)}</span>
+      w => `<span class="info" tabindex="0">i<span class="info-text">${runsIn[w][i]} run${runsIn[w][i] === 1 ? '' : 's'} in ${
+        runDaysIn[w][i]} day${runDaysIn[w][i] === 1 ? '' : 's'}, out of ${WINDOWS[w].days}</span></span>`,
+      (w, v) => `${runSeries[w][i].toFixed(1)}<span class="wu"> runs in </span>${v.toFixed(1)}<span class="wu"> days</span>`)}</span>
     <span class="pair"><span class="k">Stress that day</span><span class="v">${daily[i] > 0
       ? `${nf0.format(dayStressRaw[i])} raw<span class="sub-v"> · ${nf0.format(dayStressRel[i])} relative</span>` : 'no run'}</span></span>
     <span class="pair"><span class="k">Raw/Relative stress per week</span>${winGrid(srawSeries, i, 0, '',
@@ -4182,6 +4186,17 @@ for (const icon of document.querySelectorAll('.info')) {
   if (!icon.closest('#target-tile')) wireInfo(icon);
 }
 window.addEventListener('scroll', hideInfo, true);
+// The readout is rebuilt on every hover, so its (i)s are wired once, by
+// delegation, rather than each time they are created.
+{
+  const ro = document.getElementById('readout');
+  const over = e => { const icon = e.target.closest('.info'); if (icon) showInfo(icon); };
+  const out = e => { const icon = e.target.closest('.info'); if (icon && !icon.contains(e.relatedTarget)) hideInfo(); };
+  ro.addEventListener('mouseover', over);
+  ro.addEventListener('mouseout', out);
+  ro.addEventListener('focusin', over);
+  ro.addEventListener('focusout', hideInfo);
+}
 
 // Draw-time only: nothing computed depends on how the bars are scaled.
 const barScaleSel = document.getElementById('barScale');
