@@ -3325,8 +3325,9 @@ function setReadout(i, tag) {
     <span class="pair detail"><span class="k">Distance that day</span><span class="v">${daily[i] > 0 ? km(daily[i]) + ' km' : 'no run'}${nRuns[i] > 1 ? `<span class="sub-v"> in ${nRuns[i]} runs</span>` : ''}</span><span class="v2">${
       nRuns[i] > 1 ? seg((dayActs[i] || []).map(a => `${km(a.km)}`)).replaceAll(' · ', ' + ') + ' km' : ''}</span></span>
     <span class="pair"><span class="k">Distance per week</span>${winGrid(volSeries, i, 1, 'km', (_w, v) => longerSpans(v))}</span>
-    <span class="pair"><span class="k">Run days per week</span>${winGrid(freqSeries, i, 1, '', w => `${runDaysIn[w][i]} of ${WINDOWS[w].days} days`)}</span>
-    <span class="pair"><span class="k">Runs per week</span>${winGrid(runSeries, i, 1, '', w => `${runsIn[w][i]} runs in ${WINDOWS[w].days} days`)}</span>
+    <span class="pair"><span class="k">Run days/Runs per week</span>${winGrid(freqSeries, i, 1, '',
+      w => `${runsIn[w][i]} run${runsIn[w][i] === 1 ? '' : 's'} in ${runDaysIn[w][i]} of ${WINDOWS[w].days} days`,
+      (w, v) => `${v.toFixed(1)} / ${runSeries[w][i].toFixed(1)}`)}</span>
     <span class="pair"><span class="k">Stress that day</span><span class="v">${daily[i] > 0
       ? `${nf0.format(dayStressRel[i])} relative<span class="sub-v"> · ${nf0.format(dayStressRaw[i])} raw</span>` : 'no run'}</span></span>
     <span class="pair"><span class="k">Raw/Relative stress per week</span>${winGrid(srawSeries, i, 0, '',
