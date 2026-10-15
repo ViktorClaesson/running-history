@@ -686,10 +686,10 @@
       <div class="panel-title"><span class="zaN">Distance per week</span> by pace zone &mdash; <span class="zaWinN">16w</span> rolling</div>
       <canvas id="chartZa"></canvas>
     </div>
-    <div class="hint">Zoom, pan, pin a day<span class="info" tabindex="0">i<span class="info-text"><p>Scroll or pinch to zoom — the day under the cursor stays put while both sides scale around it. Drag to pan. Double-click, or press <kbd>r</kbd>, to go back to the default view, the longest window ending on the most recent day.
+    <div class="hint">Zoom, pan, pin a day<span class="info" tabindex="0">i<span class="info-text"><p>Hold <kbd class="zoomKey">⌘</kbd> and scroll, or pinch, to zoom — a plain scroll just scrolls the page — the day under the cursor stays put while both sides scale around it. Drag to pan. Double-click, or press <kbd>r</kbd>, to go back to the default view, the longest window ending on the most recent day.
       Click a day to pin its numbers in the readout above; click it again, or press <kbd>t</kbd> or Esc, to release.
       The coloured dots along the top of each panel mark where each window reaches back to — filled from the day under the pointer, hollow from the pinned one, and a chevron at the left edge for a window that reaches back past what's drawn.</p></span></span>
-      &nbsp;<kbd>r</kbd> reset view &middot; <kbd>t</kbd> release pin</div>
+      &nbsp;<kbd class="zoomKey">⌘</kbd>+scroll zoom &middot; <kbd>r</kbd> reset view &middot; <kbd>t</kbd> release pin</div>
   </div>
 
   <div class="chartcard" id="zonecard" hidden>
@@ -3556,6 +3556,10 @@ function onMove(e) {
 }
 
 function onWheel(e) {
+  // Only a held ⌘ (Ctrl elsewhere) zooms, so a plain scroll over the chart
+  // scrolls the page. A trackpad pinch arrives as a wheel event with ctrlKey
+  // set, so pinch-to-zoom keeps working without the key.
+  if (!e.metaKey && !e.ctrlKey) return;
   e.preventDefault();
   if (raf) { cancelAnimationFrame(raf); raf = null; span = tSpan; center = tCenter; clampView(); }
   const rect = e.currentTarget.getBoundingClientRect();
@@ -3592,6 +3596,11 @@ function onTouchMove(e) {
     center = pinch.anchorDay + (0.5 - pinch.frac) * span;
     clampView(); tSpan = span; tCenter = center; drawAll();
   }
+}
+
+// The zoom modifier is ⌘ on a Mac and Ctrl everywhere else; the hint says which.
+if (!/Mac|iPhone|iPad/.test(navigator.platform)) {
+  for (const k of document.querySelectorAll('.zoomKey')) k.textContent = 'Ctrl';
 }
 
 for (const el of PANEL_CVS) {

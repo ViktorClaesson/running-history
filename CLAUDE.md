@@ -1459,6 +1459,13 @@ Roughly: `recompute` (the four windows' series + `computeTargets`) →
   edges pixel-snapped, so neighbours share an edge exactly at any zoom.
 - **Zoom is cursor-anchored** — the fractional day under the pointer keeps its screen
   x; it must not re-centre or pin the left edge.
+- **Wheel zoom needs ⌘ (Ctrl elsewhere).** A plain wheel over a panel returns
+  from `onWheel()` *without* `preventDefault()`, so it scrolls the page — the
+  chart is most of the page, and scrolling past it used to mean aiming the
+  pointer at a margin. The check is `metaKey || ctrlKey`, not `metaKey` alone:
+  a macOS trackpad pinch arrives as a wheel event with `ctrlKey` set, so pinch
+  keeps zooming with no key held. The hint's `.zoomKey` reads "⌘" and is
+  swapped to "Ctrl" off a Mac (`navigator.platform`).
 - **The readout must not change height** between idle, hovered and pinned. The idle
   state carries an invisible label/value spacer, and `.v2` reserves two line boxes,
   so all three match by construction. The VDOT detail line now *fills* exactly
