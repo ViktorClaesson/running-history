@@ -1276,7 +1276,7 @@ much height:
 | VDOT panel | its show/hide, `windowVdot`, `minLapM`, `vdotCorr`, `gapVdot`, `vdotNearDots`/`vdotNearPct` |
 | Pace-zone volume | the eight-bucket zone legend, the panel's show/hide, `zoneAreaWin`, `zoneAreaMode` |
 | Pace zones | its show/hide, `zoneBars`, `zoneAxis`, `gapPace` |
-| Data table | its show/hide (`visPanels.table`; it used to be a `<details>` collapse). Newest day at the top; past `TABLE_MAX_ROWS` (400) days in view it drops the *oldest*, so the most recent day in view is always the first row. Its columns are km / week (the `WINDOW_VOL` slot's `volSeries`), run days / week and runs / week (the `WINDOW_FREQ` slot), verdict and workout |
+| Data table | its show/hide (`visPanels.table`; it used to be a `<details>` collapse). Newest day at the top; past `TABLE_MAX_ROWS` (400) days in view it drops the *oldest*, so the most recent day in view is always the first row. Its columns are km / week (the `WINDOW_VOL` slot's `volSeries`), run days / week and runs / week (the `WINDOW_FREQ` slot), verdict and workout. The table *is* its card (`#tablecard.tablewrap`): no title, no inner box, the scroll container carrying the card's border and radius itself |
 
 Two placements are worth naming. **The legend is split across two groups**, not
 kept as one block — even though both halves are now literally the same four

@@ -437,7 +437,10 @@
 
   #zonecard, #tablecard { margin-top: 20px; }
   #tablecard[hidden] { display: none; }
-  .tablewrap { max-height: 340px; overflow: auto; margin-top: 6px; border: 1px solid var(--border); border-radius: 8px; }
+  /* The table is the card: no title, no inner box, edge to edge. */
+  .tablewrap { max-height: 340px; overflow: auto; background: var(--surface-1);
+    border: 1px solid var(--border); border-radius: 10px; }
+  .tablewrap tr:last-child td { border-bottom: 0; }
   table { border-collapse: collapse; width: 100%; font-size: 13px; background: var(--surface-1); }
   td .why { color: var(--muted); font-size: 10px; }
   th, td { text-align: right; padding: 6px 12px; border-bottom: 1px solid var(--grid); font-variant-numeric: tabular-nums; }
@@ -701,14 +704,11 @@
     <div id="zone-body"></div>
   </div>
 
-  <div class="chartcard" id="tablecard">
-    <div class="panel-title" style="padding-left:4px">Data table &mdash; days currently in view</div>
-    <div class="tablewrap">
-      <table>
-        <thead><tr><th>Date</th><th>Distance (km)</th><th>km / week</th><th>Run days / week</th><th>Runs / week</th><th>Verdict</th><th>Workout</th></tr></thead>
-        <tbody id="tbody"></tbody>
-      </table>
-    </div>
+  <div class="tablewrap" id="tablecard">
+    <table>
+      <thead><tr><th>Date</th><th>Distance (km)</th><th>km / week</th><th>Run days / week</th><th>Runs / week</th><th>Verdict</th><th>Workout</th></tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
   </div>
 </div>
 
