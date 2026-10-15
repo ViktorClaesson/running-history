@@ -3233,11 +3233,12 @@ function vdotBasisText(i) {
 // numbers. `extra(w, v)` is an optional dim note per row — the raw counts
 // behind a rate, or the same rate over a longer span — with `w` the window
 // index.
-function winGrid(set, i, dp, unit, extra) {
+// `fmt`, if given, writes the value itself — for a row that carries two measures.
+function winGrid(set, i, dp, unit, extra, fmt) {
   const row = (cls, css, label, v, w) =>
     `<span class="sw ${cls}" style="background:var(${css})"></span>` +
     `<span class="wl ${cls}">${label}</span>` +
-    `<span class="wv ${cls}">${v.toFixed(dp)}${unit ? ' ' + unit : ''}</span>` +
+    `<span class="wv ${cls}">${fmt ? fmt(w, v) : v.toFixed(dp)}${unit ? ' ' + unit : ''}</span>` +
     `<span class="wx ${cls}">${extra ? extra(w, v) : ''}</span>`;
   return `<span class="wingrid">` +
     WINDOWS.map((win, w) => row('', win.css, win.label, set[w][i], w)).join('') +
@@ -3328,8 +3329,9 @@ function setReadout(i, tag) {
     <span class="pair"><span class="k">Runs per week</span>${winGrid(runSeries, i, 1, '', w => `${runsIn[w][i]} runs in ${WINDOWS[w].days} days`)}</span>
     <span class="pair"><span class="k">Stress that day</span><span class="v">${daily[i] > 0
       ? `${nf0.format(dayStressRel[i])} relative<span class="sub-v"> · ${nf0.format(dayStressRaw[i])} raw</span>` : 'no run'}</span></span>
-    <span class="pair"><span class="k">Raw stress per week</span>${winGrid(srawSeries, i, 0, '', (_w, v) => `${nf0.format(v / 7)}/day`)}</span>
-    <span class="pair"><span class="k">Relative stress per week</span>${winGrid(srelSeries, i, 0, '', (_w, v) => `${nf0.format(v / 7)}/day`)}</span>
+    <span class="pair"><span class="k">Raw/Relative stress per week</span>${winGrid(srawSeries, i, 0, '',
+      w => `${nf0.format(srawSeries[w][i] / 7)} / ${nf0.format(srelSeries[w][i] / 7)} /day`,
+      (w, v) => `${nf0.format(v)} / ${nf0.format(srelSeries[w][i])}`)}</span>
     <span class="pair"><span class="k">By pace zone, ${WINDOWS[zk].label} ${
       zoneAreaMin() ? 'min' : 'km'}/week</span>${zoneGrid(i, zk)}</span>
     <span class="pair"><span class="k">VDOT (peak, trailing ${Math.round(WINDOW_VDOT/7)}w)</span><span class="v">${vdot[i] != null ? vdot[i].toFixed(1) : '—'}</span><span class="v2">${vdotBasisText(i)}</span></span>
