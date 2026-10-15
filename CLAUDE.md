@@ -543,7 +543,7 @@ divisor, dust snap). Wiring: the day half runs inside `recomputeZones()`, the
 window half at the end of `recomputeZoneWindows()`, so every call site that
 already moved the zones (VDOT window, `minLapM`, `vdotCorr`, both GAP toggles,
 `windowBase`/`windowMult` via `applyWindow()`) moves these too. The readout
-shows the day's own scores ("Stress that day: 46 relative · 103 raw") and one
+shows the day's own scores ("Stress that day: 103 raw · 46 relative") and one
 combined `winGrid` ("898 / 422") with the per-day pair as the dim note. A probe
 brute-forcing both from the laps agrees to 1e-12 over a real 1355-day export;
 at the defaults the most recent day reads 4w ≈ 420 relative/week, and the

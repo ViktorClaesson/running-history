@@ -3329,7 +3329,7 @@ function setReadout(i, tag) {
       w => `${runsIn[w][i]} run${runsIn[w][i] === 1 ? '' : 's'} in ${runDaysIn[w][i]} of ${WINDOWS[w].days} days`,
       (w, v) => `${v.toFixed(1)} / ${runSeries[w][i].toFixed(1)}`)}</span>
     <span class="pair"><span class="k">Stress that day</span><span class="v">${daily[i] > 0
-      ? `${nf0.format(dayStressRel[i])} relative<span class="sub-v"> · ${nf0.format(dayStressRaw[i])} raw</span>` : 'no run'}</span></span>
+      ? `${nf0.format(dayStressRaw[i])} raw<span class="sub-v"> · ${nf0.format(dayStressRel[i])} relative</span>` : 'no run'}</span></span>
     <span class="pair"><span class="k">Raw/Relative stress per week</span>${winGrid(srawSeries, i, 0, '',
       w => `${nf0.format(srawSeries[w][i] / 7)} / ${nf0.format(srelSeries[w][i] / 7)} /day`,
       (w, v) => `${nf0.format(v)} / ${nf0.format(srelSeries[w][i])}`)}</span>
