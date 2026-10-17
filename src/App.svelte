@@ -12,9 +12,12 @@
   import StatTiles from './lib/ui/components/StatTiles.svelte';
   import ZoneCard from './lib/ui/components/ZoneCard.svelte';
   import { lastSyncedText } from './lib/ui/lastSynced';
+  import UpdateBanner from './lib/ui/components/UpdateBanner.svelte';
+  import { updates } from './lib/ui/updates.svelte';
 
   onMount(() => {
     void app.start();
+    updates.start();
   });
 
   // Tell the view how long the history is (and which windows exist) whenever that changes.
@@ -81,6 +84,7 @@
 </div>
 
 <InfoPop />
+<UpdateBanner />
 
 <style>
   /* Three columns: settings, the chart, the readout. The sidebars are sticky, so the readout

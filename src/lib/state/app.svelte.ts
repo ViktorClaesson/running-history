@@ -3,7 +3,7 @@ import { todayLocal } from '../domain/dates';
 import type { ActivityId } from '../domain/types';
 import { openDb, type ActivityRow, type RhDb } from '../data/db';
 import { RequestBudget, type PauseReason } from '../data/http';
-import { PROCESSING_VERSION } from '../data/processing';
+import { PROCESSING_VERSION } from '../data/processingVersion';
 import { ProcessClient } from '../data/processClient';
 import { reprocess } from '../data/reprocess';
 import { allActivities } from '../data/repositories/activities';

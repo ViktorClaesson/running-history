@@ -1,6 +1,6 @@
 <script lang="ts">
   import { fmtDate, parseIsoDate, todayLocal } from '../../domain/dates';
-  import { CHUNK_DISTANCE_M, PROCESSING_VERSION } from '../../data/processing';
+  import { CHUNK_DISTANCE_M, PROCESSING_VERSION } from '../../data/processingVersion';
   import { app } from '../../state/app.svelte';
 
   // A local copy of the form, so typing doesn't save on every keystroke; "Save" commits it.

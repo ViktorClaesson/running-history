@@ -2,7 +2,7 @@
   "extends": "./tsconfig.app.json",
   "compilerOptions": {
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.test.tsbuildinfo",
-    "types": ["svelte", "vite/client", "node"]
+    "types": ["svelte", "vite/client", "vite-plugin-pwa/client", "node"]
   },
   "include": ["src/**/*.ts", "src/**/*.svelte", "tests/**/*.ts"]
 }

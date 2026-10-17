@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Maskable: full-bleed background, artwork inside the central 80% safe zone. -->
+  <rect width="512" height="512" fill="#1a1a19"/>
+  <g transform="translate(256 256) scale(0.72) translate(-256 -256)">
+    <g transform="translate(96 120)">
+      <rect x="0"   y="160" width="40" height="112" rx="6" fill="#007440"/>
+      <rect x="60"  y="104" width="40" height="168" rx="6" fill="#3e96ea"/>
+      <rect x="120" y="176" width="40" height="96"  rx="6" fill="#d97900"/>
+      <rect x="180" y="64"  width="40" height="208" rx="6" fill="#7f41b7"/>
+      <rect x="240" y="0"   width="40" height="272" rx="6" fill="#a97cf0"/>
+    </g>
+    <path d="M96 336 C176 300 256 280 416 196" fill="none" stroke="#ffffff" stroke-width="18" stroke-linecap="round" opacity="0.9"/>
+  </g>
+</svg>
