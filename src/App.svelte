@@ -12,6 +12,8 @@
   import StatTiles from './lib/ui/components/StatTiles.svelte';
   import ZoneCard from './lib/ui/components/ZoneCard.svelte';
   import { lastSyncedText } from './lib/ui/lastSynced';
+  import { layout } from './lib/ui/layout.svelte';
+  import PhoneApp from './lib/ui/components/PhoneApp.svelte';
   import UpdateBanner from './lib/ui/components/UpdateBanner.svelte';
   import { updates } from './lib/ui/updates.svelte';
 
@@ -45,43 +47,48 @@
 
 <svelte:window onkeydown={onKey} />
 
-<div class="page">
-  <aside class="sidebar settings-col"><SettingsSidebar /></aside>
+{#if layout.phone}
+  <PhoneApp />
+{:else}
+  <div class="page">
+    <aside class="sidebar settings-col"><SettingsSidebar /></aside>
 
-  <div class="wrap">
-    <h1>
-      Running history<Info>
-        <p>
-          One bar per day, height that day&rsquo;s own distance. The colour says what kind of session it was,
-          or, in verdict mode, <strong>which rolling distance-per-week window is highest that day</strong>, so
-          the answer is &ldquo;is my training trending up&rdquo; rather than &ldquo;was this run long
-          enough&rdquo;.
-        </p>
-      </Info>
-    </h1>
-    <div class="status" class:offline={!app.online}>
-      {app.runs.length} runs · {app.online ? 'Online' : 'Offline'} · {lastSyncedText(app.lastSync)}
-      {#if app.reprocessing}· reprocessing {app.reprocessing.done} / {app.reprocessing.total}…{/if}
+    <div class="wrap">
+      <h1>
+        Running history<Info>
+          <p>
+            One bar per day, height that day&rsquo;s own distance. The colour says what kind of session it
+            was, or, in verdict mode, <strong
+              >which rolling distance-per-week window is highest that day</strong
+            >, so the answer is &ldquo;is my training trending up&rdquo; rather than &ldquo;was this run long
+            enough&rdquo;.
+          </p>
+        </Info>
+      </h1>
+      <div class="status" class:offline={!app.online}>
+        {app.runs.length} runs · {app.online ? 'Online' : 'Offline'} · {lastSyncedText(app.lastSync)}
+        {#if app.reprocessing}· reprocessing {app.reprocessing.done} / {app.reprocessing.total}…{/if}
+      </div>
+
+      {#if app.loaded && !model.daily}
+        <div class="card empty">
+          <h2>No runs yet</h2>
+          <p>
+            Enter your Intervals.icu athlete id and API key under <em>Data</em> in the settings, then press
+            <strong>Sync</strong>. The key stays in this browser and is only ever sent to intervals.icu.
+          </p>
+        </div>
+      {/if}
+
+      <StatTiles />
+      {#if model.daily}<ChartCard />{/if}
+      <ZoneCard />
+      <DataTable />
     </div>
 
-    {#if app.loaded && !model.daily}
-      <div class="card empty">
-        <h2>No runs yet</h2>
-        <p>
-          Enter your Intervals.icu athlete id and API key under <em>Data</em> in the settings, then press
-          <strong>Sync</strong>. The key stays in this browser and is only ever sent to intervals.icu.
-        </p>
-      </div>
-    {/if}
-
-    <StatTiles />
-    {#if model.daily}<ChartCard />{/if}
-    <ZoneCard />
-    <DataTable />
+    <aside class="sidebar"><Readout /></aside>
   </div>
-
-  <aside class="sidebar"><Readout /></aside>
-</div>
+{/if}
 
 <InfoPop />
 <UpdateBanner />

@@ -1,4 +1,8 @@
+import { PHONE_QUERY } from '../ui/layout.svelte';
 import { defaultPrefs, loadPrefs, savePrefs, type Prefs } from './prefs';
+
+/** Which defaults apply is decided once, at startup: a phone starts with fewer panels. */
+const PHONE = typeof matchMedia !== 'undefined' && matchMedia(PHONE_QUERY).matches;
 
 /** Writes are batched: a burst of changes (dragging the zoom) is saved once it settles. */
 const SAVE_DELAY_MS = 400;
@@ -8,7 +12,7 @@ const SAVE_DELAY_MS = 400;
  * directly (or `bind:` to it); every change is saved shortly afterwards.
  */
 class SettingsStore {
-  p = $state<Prefs>(loadPrefs());
+  p = $state<Prefs>(loadPrefs(localStorage, PHONE));
   private timer: ReturnType<typeof setTimeout> | undefined;
 
   constructor() {
@@ -19,7 +23,7 @@ class SettingsStore {
       $effect(() => {
         const snapshot = $state.snapshot(this.p);
         clearTimeout(this.timer);
-        this.timer = setTimeout(() => savePrefs(snapshot), SAVE_DELAY_MS);
+        this.timer = setTimeout(() => savePrefs(snapshot, localStorage, PHONE), SAVE_DELAY_MS);
       });
     });
   }
@@ -30,7 +34,7 @@ class SettingsStore {
    */
   resetAll(): void {
     const plan = this.p.plan;
-    this.p = { ...defaultPrefs(), plan };
+    this.p = { ...defaultPrefs(PHONE), plan };
   }
 }
 

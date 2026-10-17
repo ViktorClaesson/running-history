@@ -82,4 +82,15 @@ describe('prefs', () => {
     savePrefs(p, s);
     expect(s.getItem(PREFS_KEY)).toBeNull(); // back to default: removed again
   });
+
+  it('a phone starts with fewer panels, and those are its defaults (nothing stored)', () => {
+    const s = memoryStorage();
+    const p = loadPrefs(s, true);
+    expect(p.panels.table).toBe(false);
+    expect(p.panels.runs).toBe(false);
+    expect(p.panels.vdot).toBe(true);
+    savePrefs(p, s, true);
+    expect(s.getItem(PREFS_KEY)).toBeNull();
+    expect(isDefault(p)).toBe(false); // by desktop standards it is not the default
+  });
 });

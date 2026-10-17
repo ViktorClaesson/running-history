@@ -110,9 +110,27 @@ export const PREF_DEFAULTS: Readonly<Prefs> = Object.freeze({
   view: null,
 });
 
-/** A fresh, mutable copy of the defaults. */
-export function defaultPrefs(): Prefs {
-  return { ...PREF_DEFAULTS, panels: { ...PREF_DEFAULTS.panels }, lines: { ...PREF_DEFAULTS.lines } };
+/**
+ * A phone starts with fewer panels: the bars, distance per week, VDOT, the zone volume and
+ * the histogram. Every one can be brought back in the settings.
+ */
+export const PHONE_PANELS: Readonly<Record<PanelKey, boolean>> = Object.freeze({
+  vol: true,
+  freq: false,
+  runs: false,
+  sraw: false,
+  srel: false,
+  vdot: true,
+  zone: true,
+  zarea: true,
+  table: false,
+  target: false,
+});
+
+/** A fresh, mutable copy of the defaults (the phone's, when `phone`). */
+export function defaultPrefs(phone = false): Prefs {
+  const panels = phone ? PHONE_PANELS : PREF_DEFAULTS.panels;
+  return { ...PREF_DEFAULTS, panels: { ...panels }, lines: { ...PREF_DEFAULTS.lines } };
 }
 
 const inRange = (v: unknown, lo: number, hi: number): v is number =>
@@ -121,8 +139,8 @@ const oneOf = <T extends string>(v: unknown, options: readonly T[]): v is T =>
   typeof v === 'string' && (options as readonly string[]).includes(v);
 const roundTo = (v: number, step: number) => Math.round(v / step) * step;
 
-export function parsePrefs(raw: unknown): Prefs {
-  const p = defaultPrefs();
+export function parsePrefs(raw: unknown, phone = false): Prefs {
+  const p = defaultPrefs(phone);
   if (typeof raw !== 'object' || raw === null) return p;
   const r = raw as Record<string, unknown>;
   parseNumbers(r, p);
@@ -205,27 +223,28 @@ function parsePlan(v: unknown): Plan | null {
 }
 
 /** True when nothing differs from the defaults (then nothing should be stored at all). */
-export function isDefault(p: Prefs): boolean {
+export function isDefault(p: Prefs, phone = false): boolean {
+  const panels = phone ? PHONE_PANELS : PREF_DEFAULTS.panels;
   return (Object.keys(PREF_DEFAULTS) as (keyof Prefs)[]).every((k) => {
-    if (k === 'panels') return PANEL_KEYS.every((pk) => p.panels[pk] === PREF_DEFAULTS.panels[pk]);
+    if (k === 'panels') return PANEL_KEYS.every((pk) => p.panels[pk] === panels[pk]);
     if (k === 'lines') return SLOT_KEYS.every((lk) => p.lines[lk] === PREF_DEFAULTS.lines[lk]);
     if (k === 'plan' || k === 'view') return p[k] === null;
     return p[k] === PREF_DEFAULTS[k];
   });
 }
 
-export function loadPrefs(storage: Storage = localStorage): Prefs {
+export function loadPrefs(storage: Storage = localStorage, phone = false): Prefs {
   try {
-    return parsePrefs(JSON.parse(storage.getItem(PREFS_KEY) ?? 'null'));
+    return parsePrefs(JSON.parse(storage.getItem(PREFS_KEY) ?? 'null'), phone);
   } catch {
-    return defaultPrefs();
+    return defaultPrefs(phone);
   }
 }
 
 /** Writes the whole entry, or removes it when everything is back to default. */
-export function savePrefs(p: Prefs, storage: Storage = localStorage): void {
+export function savePrefs(p: Prefs, storage: Storage = localStorage, phone = false): void {
   try {
-    if (isDefault(p)) storage.removeItem(PREFS_KEY);
+    if (isDefault(p, phone)) storage.removeItem(PREFS_KEY);
     else storage.setItem(PREFS_KEY, JSON.stringify(p));
   } catch {
     // Private browsing can refuse storage: the settings just aren't remembered.

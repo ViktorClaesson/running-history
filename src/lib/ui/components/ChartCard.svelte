@@ -17,6 +17,7 @@
   import { theme } from '../theme.svelte';
   import Info from './Info.svelte';
   import Panel from './Panel.svelte';
+  import { layout } from '../layout.svelte';
 
   const zoomKey = IS_MAC ? '⌘' : 'Ctrl';
   const p = $derived(settings.p);
@@ -129,27 +130,36 @@
   </Panel>
 
   {#if p.panels.vol}
-    <Panel height={156} draw={windowPanel('vol', model.series?.vol, 'km / week')}>
+    <Panel height={layout.phone ? 130 : 156} draw={windowPanel('vol', model.series?.vol, 'km / week')}>
       {#snippet title()}Distance per week — {winsN}-week rolling averages{/snippet}
     </Panel>
   {/if}
   {#if p.panels.freq}
-    <Panel height={156} draw={windowPanel('freq', model.series?.freq, 'run days / week', true)}>
+    <Panel
+      height={layout.phone ? 130 : 156}
+      draw={windowPanel('freq', model.series?.freq, 'run days / week', true)}
+    >
       {#snippet title()}Run days per week — {winsN}-week rolling averages{/snippet}
     </Panel>
   {/if}
   {#if p.panels.runs}
-    <Panel height={156} draw={windowPanel('runs', model.series?.runs, 'runs / week')}>
+    <Panel height={layout.phone ? 130 : 156} draw={windowPanel('runs', model.series?.runs, 'runs / week')}>
       {#snippet title()}Runs per week — {winsN}-week rolling averages{/snippet}
     </Panel>
   {/if}
   {#if p.panels.sraw}
-    <Panel height={156} draw={windowPanel('sraw', model.stressSeries?.raw, 'raw / week')}>
+    <Panel
+      height={layout.phone ? 130 : 156}
+      draw={windowPanel('sraw', model.stressSeries?.raw, 'raw / week')}
+    >
       {#snippet title()}Raw stress score per week — {winsN}-week rolling averages{/snippet}
     </Panel>
   {/if}
   {#if p.panels.srel}
-    <Panel height={156} draw={windowPanel('srel', model.stressSeries?.rel, 'rel. / week')}>
+    <Panel
+      height={layout.phone ? 130 : 156}
+      draw={windowPanel('srel', model.stressSeries?.rel, 'rel. / week')}
+    >
       {#snippet title()}Relative stress score per week — {winsN}-week rolling averages{/snippet}
     </Panel>
   {/if}
@@ -194,7 +204,7 @@
     </Panel>
   {/if}
 
-  <div class="hint">
+  <div class="hint" hidden={layout.phone}>
     <kbd>{zoomKey}</kbd>+scroll zoom · hold <kbd>{zoomKey}</kbd> pan · <kbd>1</kbd>–<kbd>4</kbd> zoom to
     window ·
     <kbd>r</kbd> reset view · <kbd>t</kbd> release pin

@@ -104,3 +104,21 @@ label.chk input[type='date'] {
 [hidden] {
   display: none !important;
 }
+
+/* Phone: tighter page margins, room for the notch and the home indicator. */
+@media (max-width: 700px) {
+  body {
+    padding: 0 12px;
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+  }
+  label.chk,
+  button {
+    min-height: 44px;
+  }
+}
+@media (max-width: 700px) {
+  label.chk select {
+    min-height: 40px;
+  }
+}
