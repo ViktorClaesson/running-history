@@ -15,6 +15,9 @@ export default ts.config(
       '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/no-non-null-assertion': 'off',
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+      // Svelte 5 strips whitespace at the start and end of an element's content, so
+      // {' · '} is the explicit way to keep a separator's spaces. Not useless here.
+      'svelte/no-useless-mustaches': 'off',
     },
   },
   {
