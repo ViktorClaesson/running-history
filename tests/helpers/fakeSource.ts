@@ -20,6 +20,7 @@ export function summary(
     avgHr: 140,
     elevGainM: 20,
     changeMarker: 'm1',
+    fileSportIndex: 0,
     ...extra,
   };
 }

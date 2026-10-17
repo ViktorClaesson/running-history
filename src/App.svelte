@@ -1,20 +1,41 @@
 <script lang="ts">
-  // Milestone 1: an empty themed page. The real layout arrives in milestone 5.
+  import { onMount } from 'svelte';
+  import { app } from './lib/state/app.svelte';
+  import RunsTable from './lib/ui/components/RunsTable.svelte';
+  import SyncPanel from './lib/ui/components/SyncPanel.svelte';
+
+  // Opens the database and loads what's already synced, once, when the page mounts.
+  onMount(() => {
+    void app.start();
+  });
 </script>
 
-<main class="card">
-  <h1>Running history</h1>
-  <p>Nothing synced yet.</p>
-</main>
+<div class="page">
+  <aside class="card side"><SyncPanel /></aside>
+  <main>
+    <h1>Running history <span class="count">{app.runs.length} runs</span></h1>
+    <RunsTable />
+  </main>
+</div>
 
 <style>
-  main {
-    max-width: 640px;
-    margin: 0 auto;
-    padding: 20px 24px;
+  .page {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+    flex-wrap: wrap;
   }
-  p {
-    color: var(--text-secondary);
-    margin: 0;
+  .side {
+    flex: 0 1 300px;
+    padding: 14px 16px;
+  }
+  main {
+    flex: 1 1 600px;
+    min-width: 0;
+  }
+  .count {
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--muted);
   }
 </style>

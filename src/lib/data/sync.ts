@@ -93,6 +93,7 @@ const SUMMARY_FIELDS = [
   'elapsedS',
   'avgHr',
   'elevGainM',
+  'fileSportIndex',
 ] as const satisfies readonly (keyof ActivitySummary)[];
 
 function sameSummary(a: ActivitySummary, b: ActivitySummary): boolean {
@@ -125,7 +126,7 @@ export interface SyncOptions {
   db: RhDb;
   source: ActivitySource;
   /** Raw → chunks. The app runs this in a Web Worker; tests pass a plain function. */
-  process: (raw: RawActivity) => Promise<ChunkSet>;
+  process: (raw: RawActivity, summary: ActivitySummary) => Promise<ChunkSet>;
   includedTypes: ReadonlySet<string>;
   earliest: IsoDate;
   today: IsoDate;
@@ -193,7 +194,7 @@ export async function runSync(opts: SyncOptions): Promise<SyncResult> {
   await fetchInOrder(work.toFetch, opts.concurrency ?? SYNC_CONCURRENCY, {
     async fetch(summary) {
       const raw = await politely(() => opts.source.fetchRaw(summary.id, opts.signal));
-      return { summary, raw, chunks: await opts.process(raw) };
+      return { summary, raw, chunks: await opts.process(raw, summary) };
     },
     // No abort check here: a run already downloaded is still worth keeping on cancel.
     async commit(run) {

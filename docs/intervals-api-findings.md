@@ -130,3 +130,17 @@ Garmin/Strava models deliberately don't. A per-chunk GAP therefore needs a decis
 
 Conclusion: Intervals.icu is clearly better for this app. Strava's only real
 advantage is those 62 entries.
+
+## Found while building the processing (Milestone 3)
+
+- **One multisport file.** The Jönköping triathlon (7 Jul 2024) is a single FIT holding
+  five sessions (swim, transition, bike, transition, run). Intervals.icu splits it into
+  activities and marks the run with `file_sport_index: 4`, but `/file` returns the whole
+  recording. Processing therefore reads only that session's time window, laps and events.
+  It is the only run in the history with `file_sport_index` ≠ 0.
+- **Samples can end before the timer.** On one of 140 sampled runs the records stop 41 s
+  before the watch's timer total (3,338 s of samples, 3,379 s of timer, no pause). Chunk
+  durations sum to the *samples*; the other 139 agree with the watch within 6 s.
+- **Real numbers:** full backfill of 671 runs = 676 requests in 150 s, 0 failures; a second
+  sync straight after = 1 request. Decoding + chunking averages 14 ms per run; reprocessing
+  all 671 from raw with the network off takes 9 s in the browser.

@@ -27,6 +27,11 @@ export interface ActivitySummary {
    * the stored one, sync re-downloads the raw data. Opaque: only ever compared for equality.
    */
   changeMarker: string;
+  /**
+   * Which session of the original file is this run. 0 for an ordinary run; a multisport
+   * file (swim → bike → run) holds several, and the source splits them into activities.
+   */
+  fileSportIndex: number;
 }
 
 /**

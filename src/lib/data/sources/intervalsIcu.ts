@@ -114,5 +114,6 @@ export function parseActivity(o: Json): ActivitySummary | null {
     elevGainM: num(o, 'total_elevation_gain'),
     // `analyzed` moves whenever Intervals.icu re-reads or edits the activity.
     changeMarker: str(o, 'analyzed') ?? str(o, 'icu_sync_date') ?? '',
+    fileSportIndex: num(o, 'file_sport_index') ?? 0,
   };
 }

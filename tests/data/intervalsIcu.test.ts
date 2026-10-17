@@ -39,6 +39,7 @@ describe('Intervals.icu list parsing', () => {
         avgHr: 132,
         elevGainM: 53.89,
         changeMarker: '2026-10-15T11:58:31.352+00:00',
+        fileSportIndex: 0,
       },
     ]);
   });

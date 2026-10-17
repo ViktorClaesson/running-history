@@ -16,5 +16,5 @@
     "noImplicitReturns": true,
     "moduleDetection": "force"
   },
-  "include": ["src/**/*.ts", "src/**/*.svelte", "tests/**/*.ts"]
+  "include": ["src/**/*.ts", "src/**/*.svelte"]
 }
