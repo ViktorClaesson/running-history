@@ -1,0 +1,106 @@
+/* Page-wide rules shared by many components. Anything that belongs to one component
+   lives in that component's own <style> block instead (Svelte scopes it for us:
+   https://svelte.dev/docs/svelte/scoped-styles). Ported from legacy/running-history.html. */
+
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  padding: 32px 24px 0;
+  background: var(--page);
+  color: var(--text-primary);
+  font:
+    14px/1.5 system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+}
+h1 {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0 0 24px;
+  letter-spacing: -0.01em;
+}
+
+/* A card: the chart, the zone histogram, the sidebars and the tiles all share it. */
+.card {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+button,
+label.chk {
+  font: inherit;
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+button:hover,
+label.chk:hover {
+  background: var(--ghost);
+}
+button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+button:disabled:hover {
+  background: transparent;
+}
+button.primary {
+  border-color: transparent;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+  padding: 7px 14px;
+}
+button.primary:hover {
+  filter: brightness(1.08);
+  background: var(--accent);
+}
+label.chk {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+/* a setting the data can't support: still says what it would do */
+label.chk.off {
+  opacity: 0.45;
+  cursor: default;
+}
+label.chk.off:hover {
+  background: transparent;
+}
+label.chk select {
+  font: inherit;
+  font-size: 12px;
+  color: var(--text-primary);
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+label.chk input[type='number'],
+label.chk input[type='text'],
+label.chk input[type='password'],
+label.chk input[type='date'] {
+  font: inherit;
+  font-size: 12px;
+  color: var(--text-primary);
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  width: 46px;
+  text-align: right;
+  padding: 0 2px;
+}
+
+/* an author display rule beats the UA stylesheet behind [hidden], so say it again */
+[hidden] {
+  display: none !important;
+}

@@ -1,0 +1,153 @@
+/* The colour tokens, copied verbatim from legacy/running-history.html (lines 8-155).
+   Every hex here was validated for colour-blind separation; see legacy/CLAUDE.md,
+   "Colour system" and the Threshold exception under "VDOT and pace zones".
+   Do not change a colour without re-running that validation. */
+
+:root {
+  color-scheme: light;
+  --page: #f9f9f7;
+  --surface-1: #fcfcfb;
+  --text-primary: #0b0b0b;
+  --text-secondary: #52514e;
+  --muted: #898781;
+  --grid: #e1e0d9;
+  --baseline: #c3c2b7;
+  --border: rgba(11, 11, 11, 0.1);
+  /* ONE four-colour scheme, used for two things that are really the same thing:
+     the four rolling window lines (slot 0 to slot 3) and the four verdicts
+     (highly productive, productive, steady, unproductive). A verdict IS "which
+     window slot is the highest that day", so slot k's line and verdict k get
+     the same colour — a purple bar says the purple line is the highest one,
+     with no legend lookup in between. Purple, green, blue, orange.
+     Flat, not ramped: a verdict is a comparison that either holds or it
+     doesn't, so there is no "how far past the target" left to ramp along.
+     ALL-PAIRS CVD validated, which both uses need for their own reason (four
+     series crossing each other in one plot; and any two verdicts can end up as
+     neighbouring bars): light worst ΔE 9.3 (protan) / 15.6 normal-vision,
+     dark 10.9 / 21.5.
+     Light's blue was originally a much paler #5fa4e6 (contrast 2.6:1). That
+     was fine as a bar and too faint as a LINE, which the same colours now also
+     have to be — so it was pulled down to L 0.57 for 4.26:1, which costs
+     nothing on CVD (9.3 either way; the binding pair is green/orange, not
+     purple/blue). Light's orange is the one WARN left at 2.6:1, and it stays:
+     every darker option in that hue is a brown. Dark's purple and green sit at
+     2.8 and 3.0:1, which measures low but reads strongly as a saturated hue on
+     near-black. The legend, the hover readout and the table all label every
+     line and name every verdict in words, which is the relief those warnings
+     ask for. */
+  --v-hp: #6b3fa0;
+  --v-pr: #2c8a52;
+  --v-st: #2880b0;
+  --v-un: #e08a1e;
+  /* Page chrome, not data: the primary button, the focus underline and the
+     gate's error line. Kept separate from the verdict hues so those stay
+     purely semantic. */
+  --accent: #4f83c2;
+  --bad: #d4722f;
+  --nocolour: #b5b3aa; /* a run whose scheme has colouring switched off */
+  --rest: #e7e5dd; /* no run at all */
+  --vdot: #7444b4;
+  /* Pace-zone histogram: endurance/marathon/threshold/interval/repetition, ordered
+     fast→slow around the visible spectrum. Adjacent-pair CVD ΔE validated (not
+     all-pairs — this is an ordered bar histogram where neighbours are what
+     matters, same basis the skill's validator uses for stacks/bars/lines) for
+     every zone EXCEPT threshold: light worst-adjacent ΔE 20.0, dark 12.5, both
+     well above the 8.0 target for the other four.
+     Threshold trades that colourblind-safety away on purpose, in both modes —
+     see CLAUDE.md for the two wrong attempts this took before landing, each
+     breaking something the validator can't see: (1) true yellow's gamut in
+     sRGB is starved everywhere a CVD-safe pair could sit (max chroma
+     ~0.10-0.14), and dark --z-threshold-weak additionally had a real contrast
+     bug (1.3:1 against the card vs every sibling's 2.0-2.4) — fixing only the
+     chroma/hue made dark mode's fix look far brighter than its siblings,
+     which has to be checked by eye, the validator only compares Threshold
+     against its own neighbours, not the whole palette's brightness; (2) light
+     mode's fix then matched sibling lightness but kept chroma flat across the
+     ramp, so it went visibly muddier weak-to-strong instead of more vivid
+     like every other zone — a dark, desaturated yellow reads as olive-brown,
+     there's no "deep vivid yellow" the way there's a deep vivid blue or red,
+     so light's pair now keeps both ends bright (siding with Marathon/
+     Interval's L≈0.70-0.72 cluster over Endurance/Repetition's darker one) so
+     chroma still climbs weak→strong. Each mode's own weak→strong pair still
+     shares one hue (avoiding the earlier drift bug: an early light strong,
+     #923c00, drifted ~38° towards red, turning a "gold throughout" zone
+     red-brown at its fastest sub-bands) even though the two modes no longer
+     share the same hue as each other.
+     --z-easy/-weak are the Endurance zone: the zone was renamed, the colour
+     identity (and everything documenting it by name) deliberately wasn't. */
+  --z-easy-weak: #869fe3;
+  --z-easy: #3554da;
+  --z-marathon-weak: #80e1bc;
+  --z-marathon: #00c17f;
+  --z-threshold-weak: #ebdeb1;
+  --z-threshold: #cfaa0a;
+  --z-interval-weak: #f5be8c;
+  --z-interval: #e97f00;
+  --z-repetition-weak: #cf8d95;
+  --z-repetition: #ae304e;
+  --ghost: rgba(11, 11, 11, 0.05);
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme='light'])) {
+    color-scheme: dark;
+    --page: #0d0d0d;
+    --surface-1: #1a1a19;
+    --text-primary: #ffffff;
+    --text-secondary: #c3c2b7;
+    --muted: #898781;
+    --grid: #2c2c2a;
+    --baseline: #383835;
+    --border: rgba(255, 255, 255, 0.1);
+    --ghost: rgba(255, 255, 255, 0.06);
+    --v-hp: #7f41b7;
+    --v-pr: #007440;
+    --v-st: #3e96ea;
+    --v-un: #d97900;
+    --accent: #5c90cf;
+    --bad: #e8871f;
+    --nocolour: #5c5a54;
+    --rest: #333230;
+    --vdot: #a97cf0;
+    --z-easy-weak: #20507b;
+    --z-easy: #008ae9;
+    --z-marathon-weak: #005b3c;
+    --z-marathon: #00a764;
+    --z-threshold-weak: #8d6d05;
+    --z-threshold: #b18904;
+    --z-interval-weak: #724e30;
+    --z-interval: #ca7c30;
+    --z-repetition-weak: #5e1b21;
+    --z-repetition: #c3223c;
+  }
+}
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --page: #0d0d0d;
+  --surface-1: #1a1a19;
+  --text-primary: #ffffff;
+  --text-secondary: #c3c2b7;
+  --muted: #898781;
+  --grid: #2c2c2a;
+  --baseline: #383835;
+  --border: rgba(255, 255, 255, 0.1);
+  --ghost: rgba(255, 255, 255, 0.06);
+  --v-hp: #7f41b7;
+  --v-pr: #007440;
+  --v-st: #3e96ea;
+  --v-un: #d97900;
+  --accent: #5c90cf;
+  --bad: #e8871f;
+  --nocolour: #5c5a54;
+  --rest: #333230;
+  --vdot: #a97cf0;
+  --z-easy-weak: #20507b;
+  --z-easy: #008ae9;
+  --z-marathon-weak: #005b3c;
+  --z-marathon: #00a764;
+  --z-threshold-weak: #8d6d05;
+  --z-threshold: #b18904;
+  --z-interval-weak: #724e30;
+  --z-interval: #ca7c30;
+  --z-repetition-weak: #5e1b21;
+  --z-repetition: #c3223c;
+}
