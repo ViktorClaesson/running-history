@@ -181,7 +181,7 @@ Fitting the same construction as Runalyze, (C(g)/C(0))^k, to Garmin's per-lap GA
 laps of ≥ 400 m and ≥ 90 s: k = 1 median error 1.41% (p90 6.1%), 0.83: 1.03%, 0.5: **0.76%**
 (p90 3.3%), 0.4: 0.72% (but worse on hilly laps), 0.3: 0.83%. The app uses k = 0.5 by default
 as a setting ("GAP strength"); 1 is pure Minetti, 0.83 Runalyze. Speed is metres ÷ time over a
-chunk (default 30 s), not the watch's smoothed speed.
+chunk (default 10 s since 20 Oct; the figures below were measured at 30 s), not the watch's smoothed speed.
 
 On the 22 Jul hill session the app now puts the 90 s reps at 3:40–3:56 (Intervals 3:48–3:58,
 Runalyze 3:37–3:57), the 60 s reps at 3:31–3:42 (3:26–3:36 / 3:34–3:44) and the 30 s sprints

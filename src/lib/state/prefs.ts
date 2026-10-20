@@ -91,8 +91,8 @@ export const PREF_DEFAULTS: Readonly<Prefs> = Object.freeze({
   wtShare: 35,
   zoneBars: 3,
   zoneAxis: 'dist',
-  // Long enough that GPS noise and single strides don't decide a zone; a 90 s rep is 3 chunks.
-  chunkSec: 30,
+  // About 30 m at running pace: averages out GPS jitter, short enough to keep a 30 s rep's shape.
+  chunkSec: 10,
   // Fits Garmin's per-lap GAP best (docs/intervals-api-findings.md); Runalyze uses 0.83.
   gapExp: 0.5,
   panels: {
