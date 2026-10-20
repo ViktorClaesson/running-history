@@ -38,7 +38,8 @@ export function handleRequest(req: ProcessRequest): { response: ProcessResponse;
   }
 }
 
-function sampleBuffers(c: SampleSet): ArrayBuffer[] {
+/** The buffers under a sample set's columns, to transfer instead of copy. */
+export function sampleBuffers(c: SampleSet): ArrayBuffer[] {
   const arrays = [c.seg, c.dt, c.dist, c.grade, c.hr];
   return arrays.map((a) => a.buffer).filter((b): b is ArrayBuffer => b instanceof ArrayBuffer);
 }

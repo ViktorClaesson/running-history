@@ -44,7 +44,9 @@ export function buildSamples(id: ActivityId, run: ParsedRun, processingVersion: 
 }
 
 /** A run with no samples (a manual entry): one interval from the session totals. */
-function singleSample(run: ParsedRun) {
+export function singleSample(
+  run: ParsedRun,
+): Omit<SampleSet, 'activityId' | 'processingVersion' | 'lapRule' | 'segmentCount'> {
   const { distM, timerS } = run.totals;
   return {
     seg: Uint16Array.of(0),
@@ -66,7 +68,7 @@ export function timerSeconds(from: number, to: number, pauses: readonly Pause[])
 }
 
 /** Interval ending at sample i belongs to the last lap that started strictly before sample i (−1 if no laps). */
-function lapOfIntervals(t: Float64Array, laps: readonly WatchLap[]): Int32Array {
+export function lapOfIntervals(t: Float64Array, laps: readonly WatchLap[]): Int32Array {
   const out = new Int32Array(t.length).fill(laps.length ? 0 : -1);
   let k = 0;
   for (let i = 1; i < t.length; i++) {

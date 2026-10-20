@@ -73,10 +73,13 @@ export function looksLikeFit(bytes: ArrayBuffer): boolean {
 // entry is skipped rather than poisoning the whole list, and everything after this point
 // can trust the types.
 
-type Json = Record<string, unknown>;
-const isObject = (v: unknown): v is Json => typeof v === 'object' && v !== null && !Array.isArray(v);
-const str = (o: Json, k: string): string | null => (typeof o[k] === 'string' ? o[k] : null);
-const num = (o: Json, k: string): number | null =>
+export type Json = Record<string, unknown>;
+/** A plain object (not null, not an array). */
+export const isObject = (v: unknown): v is Json => typeof v === 'object' && v !== null && !Array.isArray(v);
+/** Field `k` if it is a string, else null. */
+export const str = (o: Json, k: string): string | null => (typeof o[k] === 'string' ? o[k] : null);
+/** Field `k` if it is a finite number, else null. */
+export const num = (o: Json, k: string): number | null =>
   typeof o[k] === 'number' && Number.isFinite(o[k]) ? o[k] : null;
 
 export function parseActivityList(body: unknown): ActivityList {
