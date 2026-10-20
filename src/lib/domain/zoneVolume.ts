@@ -1,7 +1,5 @@
+import { todo } from '../exercise';
 import type { Daily } from './daily';
-import { chunkVelocity } from './chunks';
-import { binEdges, binWithEdges, N_BUCKETS } from './paceZones';
-import { perWeek } from './rolling';
 
 /**
  * "What have the last N weeks been made of": every chunk sorted into one of eight
@@ -16,28 +14,29 @@ export interface DayBuckets {
   min: Float64Array;
 }
 
+/*
+ * TODO(E13) · volume by pace zone · difficulty ★★☆ · phase 2
+ *   dayBuckets(daily, vdot, gapPace)
+ *     Every chunk of every run sorted into one of N_BUCKETS whole-zone buckets (Standing,
+ *     Walking, Recovery, then the five zones) with binEdges(vdot[i], 1); add its km and minutes
+ *     to day i, bucket b at index i × N_BUCKETS + b. A day with no VDOT yet is left empty.
+ *   zoneArea(buckets, n, windowDays)
+ *     For each bucket, its per-day values rolled with perWeek(…, windowDays): bands[b][i].
+ *     total[i] = the sum of the bands that day.
+ * Edge cases that matter, and why:
+ * - The buckets add up to the distance actually binned, so the top of the stack is the
+ *   distance-per-week line, decomposed (the test checks exactly that).
+ * - One flat Float64Array of n × N_BUCKETS, not n small arrays: one allocation instead of
+ *   thousands.
+ * Background: legacy/CLAUDE.md, "Running volume by pace zone".
+ * Concepts:
+ * - row-major layout of a 2-D table in one array: https://en.wikipedia.org/wiki/Row-_and_column-major_order
+ * Check: npm run exercise E13 (tests/domain/zones.test.ts, "E13 zone volume"). In the app the
+ * "by pace zone" panel and the readout's zone rows appear.
+ * Spoiler: `recomputeDayZones()` and `recomputeZoneWindows()` in legacy/running-history.html.
+ */
 export function dayBuckets(daily: Daily, vdot: readonly (number | null)[], gapPace: boolean): DayBuckets {
-  const out: DayBuckets = {
-    km: new Float64Array(daily.n * N_BUCKETS),
-    min: new Float64Array(daily.n * N_BUCKETS),
-  };
-  for (let i = 0; i < daily.n; i++) {
-    const v = vdot[i];
-    if (!v) continue; // no VDOT yet: nothing to judge a pace against
-    const edges = binEdges(v, 1); // zoneBars 1: bin = bucket
-    for (const run of daily.runs[i]!) {
-      const c = run.chunks;
-      if (!c) continue;
-      for (let k = 0; k < c.durS.length; k++) {
-        const vel = chunkVelocity(c, k, gapPace);
-        if (vel === null) continue;
-        const at = i * N_BUCKETS + binWithEdges(vel, edges);
-        out.km[at] += c.distM[k]! / 1000;
-        out.min[at] += c.durS[k]! / 60;
-      }
-    }
-  }
-  return out;
+  return todo('E13', daily, vdot, gapPace);
 }
 
 export interface ZoneArea {
@@ -48,12 +47,5 @@ export interface ZoneArea {
 
 /** One window's rolling per-week sums of each bucket (km or minutes). */
 export function zoneArea(buckets: Float64Array, n: number, windowDays: number): ZoneArea {
-  const bands = Array.from({ length: N_BUCKETS }, (_, b) => {
-    const perDay = new Float64Array(n);
-    for (let i = 0; i < n; i++) perDay[i] = buckets[i * N_BUCKETS + b]!;
-    return perWeek(perDay, windowDays);
-  });
-  const total = new Float64Array(n);
-  for (const band of bands) for (let i = 0; i < n; i++) total[i] += band[i]!;
-  return { bands, total };
+  return todo('E13', buckets, n, windowDays);
 }

@@ -1,6 +1,6 @@
-import { whenDone } from '../exercise';
+import { todo, whenDone } from '../exercise';
 import { buildChunks, type Chunks } from './chunks';
-import { addDays, daysBetween, type IsoDate } from './dates';
+import { addDays, type IsoDate } from './dates';
 import { flatMetresFactor } from './gap';
 import type { SampleSet } from './sampleTypes';
 import type { ActivityId, ActivitySummary } from './types';
@@ -51,6 +51,38 @@ export interface Daily {
 /** km rounded to the metre: what makes the dust snap in rolling.ts safe. */
 export const roundKm = (km: number): number => Math.round(km * 1000) / 1000;
 
+/*
+ * TODO(E03) · daily series · difficulty ★★☆ · phase 1
+ *   buildDaily(activities, samples, chunkSec, gapExp, today)
+ *     One entry per calendar day from the first run's day to `today` inclusive (or to the
+ *     last run, if that is later), so a break shows as rest days rather than a chart frozen
+ *     on the last run. null when there are no activities.
+ *     - start = the earliest run's localDate; n = days from start to today, + 1.
+ *     - runs[i] = that day's runs, earliest first (sort by startLocal), each built with the
+ *       provided runData(activity, samples.get(id) ?? null, chunkSec, gapExp).
+ *     - km[i] = the day's total, rounded to the metre with roundKm; nRuns[i] = runs that day.
+ *     - lastRunIdx = the last day with km > 0, or −1.
+ *   segmentTotals(s, flatFactor)
+ *     Per segment (manual lap), summed over its samples: km, timer seconds, and flatSec, the
+ *     time it would have taken at its grade-adjusted speed: sec × metres ÷ flat-equivalent
+ *     metres, where each sample's flat-equivalent metres are dist × flatFactor(grade). With
+ *     no flat metres at all (a stretch of standing), flatSec = sec.
+ * Edge cases that matter, and why:
+ * - Keep the runs apart. Two runs on one day are two efforts; gluing them into one inflates
+ *   VDOT later (legacy/CLAUDE.md, "VDOT and pace zones", "An effort is an activity, never a day").
+ * - Days are counted with daysBetween (E01), never by stepping a Date object.
+ * - Round each day's km: the dust snap in rolling.ts relies on it.
+ * - Sum metres, not speeds or times: grade adjustment is combined by energy (see gap.ts).
+ * Background: legacy/CLAUDE.md, "Data pipeline" ("The day arrays run to today") and "Days with
+ * more than one run".
+ * Concepts:
+ * - Array.prototype.sort with a comparator: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/sort
+ * - Array.from({ length: n }, …): https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/from
+ * - Map.prototype.get: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Map/get
+ * Check: npm run exercise E03 (tests/domain/windows.test.ts, "E03 daily series"). In the app the
+ * "Exercise E03" card goes and the bars appear (the lines need E04).
+ * Spoiler: `buildData()` in legacy/running-history.html did this from the CSV rows.
+ */
 export function buildDaily(
   activities: readonly ActivitySummary[],
   samples: ReadonlyMap<ActivityId, SampleSet>,
@@ -58,22 +90,7 @@ export function buildDaily(
   gapExp: number,
   today: IsoDate,
 ): Daily | null {
-  if (!activities.length) return null;
-  const sorted = [...activities].sort((a, b) => (a.startLocal < b.startLocal ? -1 : 1));
-  const start = sorted[0]!.localDate;
-  const n = Math.max(daysBetween(start, today), daysBetween(start, sorted[sorted.length - 1]!.localDate)) + 1;
-  const runs: RunData[][] = Array.from({ length: n }, () => []);
-  for (const a of sorted)
-    runs[daysBetween(start, a.localDate)]!.push(runData(a, samples.get(a.id) ?? null, chunkSec, gapExp));
-  const km = new Float64Array(n);
-  const nRuns = new Int32Array(n);
-  let lastRunIdx = -1;
-  for (let i = 0; i < n; i++) {
-    km[i] = roundKm(runs[i]!.reduce((s, r) => s + r.km, 0));
-    nRuns[i] = runs[i]!.length;
-    if (km[i]! > 0) lastRunIdx = i;
-  }
-  return { start, n, km, nRuns, runs, lastRunIdx };
+  return todo('E03', activities, samples, chunkSec, gapExp, today);
 }
 
 /**
@@ -120,18 +137,7 @@ function flatFactor(gapExp: number): (grade: number) => number {
 
 /** Per segment: km and seconds summed from its samples, and the time at its grade-adjusted speed. */
 export function segmentTotals(s: SampleSet, flatFactor: (grade: number) => number): SegmentTotals[] {
-  const acc = Array.from({ length: s.segmentCount }, () => ({ m: 0, sec: 0, flat: 0 }));
-  for (let i = 0; i < s.dt.length; i++) {
-    const a = acc[s.seg[i]!]!;
-    a.m += s.dist[i]!;
-    a.sec += s.dt[i]!;
-    a.flat += s.dist[i]! * flatFactor(s.grade[i]!);
-  }
-  return acc.map((a) => ({
-    km: a.m / 1000,
-    sec: a.sec,
-    flatSec: a.flat > 0 ? (a.sec * a.m) / a.flat : a.sec,
-  }));
+  return todo('E03', s, flatFactor);
 }
 
 function wholeRunFlatSec(s: SampleSet, flatFactor: (grade: number) => number): number {

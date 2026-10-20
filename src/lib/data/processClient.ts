@@ -1,6 +1,7 @@
+import { todo } from '../exercise';
 import type { SampleSet } from '../domain/sampleTypes';
 import type { ActivitySummary, RawActivity } from '../domain/types';
-import type { ProcessRequest, ProcessResponse } from '../workers/protocol';
+import type { ProcessResponse } from '../workers/protocol';
 
 /** One run takes ~15 ms; anything near this means the worker is gone, not busy. */
 export const REQUEST_TIMEOUT_MS = 30_000;
@@ -30,15 +31,26 @@ export class ProcessClient {
     this.ensureWorker();
   }
 
+  /*
+   * TODO(E27) · worker messages (part 2 of 2: the page's side) · difficulty ★★☆ · phase 4
+   *   process(raw, summary)
+   *     A Promise around postMessage: take the worker (ensureWorker), give the request the next
+   *     id (this.nextId++), and return a new Promise whose resolve/reject are stored in
+   *     this.waiting under that id, with a timer that calls this.crash(new Error('processing
+   *     timed out')) after REQUEST_TIMEOUT_MS; then post { kind: 'process', requestId, raw,
+   *     fileSportIndex: summary.fileSportIndex }. settle() (already written) resolves or rejects
+   *     it when the answer with that id arrives.
+   * Edge cases that matter, and why:
+   * - Several requests can be in flight and answers can come back in any order: the id is what
+   *   matches them up (the test answers out of order).
+   * - The timeout means a worker that died never leaves a caller waiting forever.
+   * Concepts:
+   * - the Promise constructor: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise/Promise
+   * - Worker.postMessage: https://developer.mozilla.org/en-US/docs/Web/API/Worker/postMessage
+   * Check: npm run exercise E27. In the app Sync and "Reprocess all" work end to end.
+   */
   process(raw: RawActivity, summary: Pick<ActivitySummary, 'fileSportIndex'>): Promise<SampleSet> {
-    const worker = this.ensureWorker();
-    const requestId = this.nextId++;
-    const req: ProcessRequest = { kind: 'process', requestId, raw, fileSportIndex: summary.fileSportIndex };
-    return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => this.crash(new Error('processing timed out')), REQUEST_TIMEOUT_MS);
-      this.waiting.set(requestId, { resolve, reject, timer });
-      worker.postMessage(req);
-    });
+    return todo('E27', raw, summary);
   }
 
   private ensureWorker(): Worker {

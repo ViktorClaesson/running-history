@@ -1,3 +1,4 @@
+import { todo } from '../../exercise';
 /**
  * The shared x mapping. Every panel has the same left/right padding and the same view, so
  * a day sits at the same screen x on each of them. A view is `span` days wide around a
@@ -33,12 +34,32 @@ export function visibleRange(m: XMap, n: number): [number, number] {
   return [Math.max(0, Math.floor(leftDay(m)) - 1), Math.min(n - 1, Math.ceil(leftDay(m) + m.view.span) + 1)];
 }
 
+/*
+ * TODO(E28) · zoom · difficulty ★★☆ · phase 5
+ *   clampView(v, n)        keep a view inside a history of n days: span at least MIN_SPAN (or n,
+ *                          if the history is shorter) and at most n; then the centre so that
+ *                          neither edge is past 0 or n. A span covering everything centres on n ÷ 2.
+ *   zoomAbout(v, frac, factor, n)
+ *                          zoom by `factor` (> 1 zooms out) about the point `frac` of the way
+ *                          across the plot (0 = left edge, 1 = right edge): the fractional day
+ *                          under it keeps its screen position. That day is
+ *                          center − span/2 + frac × span; the new span is span × factor, kept
+ *                          within MIN_SPAN…n; place the new centre so the anchor sits at the
+ *                          same frac, then clampView.
+ * Edge cases that matter, and why:
+ * - Never re-centre on the cursor: that makes the chart jump, and is the classic zoom bug.
+ * - Zooming out against an edge clamps rather than drifting past the end.
+ * Background: legacy/CLAUDE.md, "Gotchas that have bitten before" ("Zoom is cursor-anchored").
+ * Concepts:
+ * - the maths of anchored zoom, drawn out: https://en.wikipedia.org/wiki/Affine_transformation
+ * - WheelEvent.deltaY: https://developer.mozilla.org/en-US/docs/Web/API/WheelEvent/deltaY
+ * Check: npm run exercise E28 (tests/ui/geometry.test.ts). In the app ⌘/Ctrl + scroll zooms
+ * about the cursor, and the view can no longer be dragged past either end.
+ * Spoiler: `onWheel()` and `currentView()` in legacy/running-history.html.
+ */
 /** Keeps a view inside the history: at least MIN_SPAN days, never past either end. */
 export function clampView(v: ViewState, n: number): ViewState {
-  const span = Math.max(Math.min(MIN_SPAN, n), Math.min(n, v.span));
-  const half = span / 2;
-  const center = span >= n ? n / 2 : Math.max(half, Math.min(n - half, v.center));
-  return { span, center };
+  return todo('E28', v, n);
 }
 
 /**
@@ -46,7 +67,5 @@ export function clampView(v: ViewState, n: number): ViewState {
  * keeps its screen position while both sides scale around it. Never re-centres.
  */
 export function zoomAbout(v: ViewState, frac: number, factor: number, n: number): ViewState {
-  const anchor = v.center - v.span / 2 + frac * v.span;
-  const span = Math.max(MIN_SPAN, Math.min(n, v.span * factor));
-  return clampView({ span, center: anchor + (0.5 - frac) * span }, n);
+  return todo('E28', v, frac, factor, n);
 }

@@ -1,6 +1,6 @@
+import { todo } from '../exercise';
 import type { SampleSet } from '../domain/sampleTypes';
 import type { RawActivity } from '../domain/types';
-import { processRaw } from '../data/processing';
 
 /**
  * The messages between the page and the processing worker. A worker shares no memory with
@@ -20,22 +20,27 @@ export type ProcessResponse =
   | { kind: 'processed'; requestId: number; samples: SampleSet }
   | { kind: 'error'; requestId: number; message: string };
 
+/*
+ * TODO(E27) · worker messages (part 1 of 2: the worker's side) · difficulty ★★☆ · phase 4
+ *   handleRequest(req)
+ *     Answer one request: processRaw(req.raw, { fileSportIndex: req.fileSportIndex }) →
+ *     { kind: 'processed', requestId, samples }, with transfer = sampleBuffers(samples).
+ *     If processing throws, answer { kind: 'error', requestId, message } with nothing to
+ *     transfer: never throw, or the page would wait for an answer that never comes.
+ * Concepts:
+ * - Web Workers: https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Using_web_workers
+ * - transferable objects: https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Transferable_objects
+ * Check: npm run exercise E27 (tests/data/worker.test.ts). Part 2 is process() in
+ * data/processClient.ts.
+ * Spoiler: none, the legacy app had no worker.
+ */
 /**
  * One request → one response, plus the buffers to *transfer* rather than copy: the sample
  * arrays move to the page without a copy (the worker can't use them afterwards).
  * https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Transferable_objects
  */
 export function handleRequest(req: ProcessRequest): { response: ProcessResponse; transfer: ArrayBuffer[] } {
-  try {
-    const samples = processRaw(req.raw, { fileSportIndex: req.fileSportIndex });
-    return {
-      response: { kind: 'processed', requestId: req.requestId, samples },
-      transfer: sampleBuffers(samples),
-    };
-  } catch (e) {
-    const message = e instanceof Error ? e.message : String(e);
-    return { response: { kind: 'error', requestId: req.requestId, message }, transfer: [] };
-  }
+  return todo('E27', req);
 }
 
 /** The buffers under a sample set's columns, to transfer instead of copy. */

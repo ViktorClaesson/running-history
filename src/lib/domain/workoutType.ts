@@ -1,13 +1,6 @@
-import { chunkVelocity, type Chunks } from './chunks';
-import {
-  binEdges,
-  binWithEdges,
-  RECOVERY_BIN,
-  STANDING_BIN,
-  WALKING_BIN,
-  ZONE_BIN_OFFSET,
-  ZONES,
-} from './paceZones';
+import { todo } from '../exercise';
+import type { Chunks } from './chunks';
+import { ZONES } from './paceZones';
 
 /**
  * What kind of session a run was. Every chunk scores speed (km/h)^exp × distance (km)
@@ -34,29 +27,36 @@ export interface WorkoutType {
   noRunning: boolean;
 }
 
+/*
+ * TODO(E11) · workout type · difficulty ★★☆ · phase 2
+ *   zoneScores(c, vdot, exp, gapPace)
+ *     A score per type [recovery, endurance, marathon, threshold, interval, repetition]: every
+ *     chunk with a speed adds (speed in km/h)^exp × (its km) to the type of the bin it falls in
+ *     (binEdges(vdot, 1), so bin = whole zone). Recovery's bin scores to type 0, the zones to
+ *     1–5. Standing and Walking score nothing. m/min × 0.06 = km/h.
+ *   workoutFromScores(sc, share)
+ *     From the hardest type down to endurance, pool each type with every faster one; the first
+ *     pool reaching share% of the total names the run: { type, pct (that pool's share), plus
+ *     (the pool included faster types too), noRunning: false }. If none does, it's Recovery
+ *     with pct = recovery's share. A total of 0 is { type: 0, pct: 0, plus: false, noRunning: true }.
+ * Edge cases that matter, and why:
+ * - Pooling is what stops a hard session split across two zones (intervals spilling into
+ *   repetition) losing to the easy running around it.
+ * - Scoring by speed^exp × distance, not × duration: duration favoured slow running.
+ * Background: legacy/CLAUDE.md, "Workout type (the other bar colouring)", with worked examples
+ * the tests use.
+ * Concepts:
+ * - Array.prototype.reduce: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/reduce
+ * - exponentiation (**): https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Exponentiation
+ * Check: npm run exercise E11 (tests/domain/zones.test.ts, "E11 workout type"). In the app the
+ * bars take workout-type colours (the default colouring), and the table and readout name them.
+ * Spoiler: `zoneScoresOf()` and `workoutFromScores()` in legacy/running-history.html.
+ */
 /** Score per type [recovery, endurance … repetition] for one run, at that day's VDOT. */
 export function zoneScores(c: Chunks, vdot: number, exp: number, gapPace: boolean): number[] {
-  const sc = new Array<number>(WORKOUT_TYPES.length).fill(0);
-  const edges = binEdges(vdot, 1);
-  for (let i = 0; i < c.durS.length; i++) {
-    const vel = chunkVelocity(c, i, gapPace);
-    if (vel === null) continue;
-    const bin = binWithEdges(vel, edges);
-    if (bin === STANDING_BIN || bin === WALKING_BIN) continue;
-    const t = bin === RECOVERY_BIN ? 0 : 1 + (bin - ZONE_BIN_OFFSET);
-    sc[t]! += (vel * 0.06) ** exp * (c.distM[i]! / 1000); // m/min × 0.06 = km/h
-  }
-  return sc;
+  return todo('E11', c, vdot, exp, gapPace);
 }
 
 export function workoutFromScores(sc: readonly number[], share: number): WorkoutType {
-  const total = sc.reduce((a, b) => a + b, 0);
-  if (!(total > 0)) return { type: 0, pct: 0, plus: false, noRunning: true };
-  let pool = 0;
-  for (let t = sc.length - 1; t >= 1; t--) {
-    pool += sc[t]!;
-    const pct = (pool / total) * 100;
-    if (pct >= share) return { type: t as WorkoutTypeIndex, pct, plus: t < sc.length - 1, noRunning: false };
-  }
-  return { type: 0, pct: (sc[0]! / total) * 100, plus: false, noRunning: false };
+  return todo('E11', sc, share);
 }

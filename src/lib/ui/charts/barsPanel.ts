@@ -1,11 +1,11 @@
-import { whenDone } from '../../exercise';
+import { todo, whenDone } from '../../exercise';
 import type { BarScale } from '../../state/prefs';
 import { drawXLabels } from './axes';
 import { bottomInset, type Frame } from './frame';
 import { barW, PAD, plotW, visibleRange, xOf } from './geometry';
 import { drawWindowStarts, type Mark } from './marks';
 import { FONT } from './theme';
-import { logDown, logTicks, logTickText, logUp, niceTicks } from './ticks';
+import { logTickText } from './ticks';
 
 /**
  * Panel 1: each day's own distance. Linear by default, log optional. Zero has no place on a
@@ -85,6 +85,32 @@ export function drawBars(f: Frame, d: BarsInput): void {
 const shownKm = (d: Pick<BarsInput, 'km' | 'capKm'>, i: number): number =>
   d.capKm !== null ? Math.min(d.km[i]!, d.capKm) : d.km[i]!;
 
+/*
+ * TODO(E30) · bar axis · difficulty ★★☆ · phase 5
+ *   barYAxis(d, i0, i1, plotH, base)
+ *     The y-axis for days i0…i1. Read only days with a run (km > 0), at their shown height
+ *     (shownKm: cut off at the cap). Nothing in view: pretend the range is 1…10.
+ *     Linear:  niceTicks(max); top = its last tick; yOf(v) = base − plotH × v ÷ top; ticks
+ *              without the 0 (the floor is drawn separately); step = niceTicks' step.
+ *     Log:     top = logUp(max); lo = the smaller of logDown(min) and top ÷ 10 (at least a
+ *              decade); lo maps to MIN_RUN_H above the floor and top to the top of the plot,
+ *              logarithmically in between; ticks = logTicks(lo, top); step 1.
+ *     The cap: when capKm is set and either a day is cut or the top would round past the cap,
+ *              top = capKm (capped: true) and the ticks are those below the cap (and at least
+ *              12 px under the top) plus the cap itself.
+ * Edge cases that matter, and why:
+ * - Zero has no place on a log axis: rest days don't count, and Math.log(0) is −Infinity.
+ * - The shortest run is never shorter than MIN_RUN_H, so it stays a visible, hoverable bar.
+ * - The axis never rounds out to a height no bar can reach (42 km with a 45 cap stops at 45,
+ *   not 50).
+ * Background: legacy/CLAUDE.md, "The bar panel's axis: log, linear, and the cap".
+ * Concepts:
+ * - Math.log: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Math/log
+ * - canvas coordinates (y grows downwards): https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API/Tutorial/Drawing_shapes
+ * Check: npm run exercise E30 (tests/ui/barAxis.test.ts). In the app the bar panel gets its
+ * gridlines, the log scale and the cap back (the note at its top-left goes).
+ * Spoiler: the axis part of `drawBars()` in legacy/running-history.html.
+ */
 /**
  * The y-axis for days i0…i1, on a plot `plotH` pixels tall whose floor is at y = `base`.
  * Linear: 0 on the floor, niceTicks up to the tallest bar. Log: from a 1/2/5 value under
@@ -99,53 +125,7 @@ export function barYAxis(
   plotH: number,
   base: number,
 ): BarAxis {
-  const shown = (i: number) => shownKm(d, i);
-  const isCut = (i: number) => d.capKm !== null && d.km[i]! > d.capKm;
-  let vMax = 0;
-  let vMin = Infinity;
-  let anyCut = false;
-  for (let i = i0; i <= i1; i++) {
-    if (!(d.km[i]! > 0)) continue;
-    vMax = Math.max(vMax, shown(i));
-    vMin = Math.min(vMin, shown(i));
-    anyCut ||= isCut(i);
-  }
-  if (!(vMax > 0)) [vMin, vMax] = [1, 10]; // nothing in view: a plausible empty axis
-  // The axis stops at the cap whenever it would otherwise reach past it (a cut run, or
-  // rounding 42 km up to 50), so it never rounds out to a height no bar can reach.
-  const capAt = (top: number) => (d.capKm !== null && (anyCut || top > d.capKm) ? d.capKm : null);
-  let axis: BarAxis;
-  if (d.scale === 'log') {
-    const cap = capAt(logUp(vMax));
-    const top = cap ?? logUp(vMax);
-    const lo = Math.min(logDown(vMin), logUp(vMax) / 10); // at least a decade of range
-    const [L0, L1] = [Math.log(lo), Math.log(top)];
-    const usable = plotH - MIN_RUN_H;
-    axis = {
-      yOf: (v) => base - MIN_RUN_H - (usable * (Math.log(v) - L0)) / (L1 - L0),
-      ticks: logTicks(lo, top),
-      top,
-      capped: cap !== null,
-      step: 1,
-    };
-  } else {
-    const nice = niceTicks(vMax);
-    const cap = capAt(nice.ticks[nice.ticks.length - 1]!);
-    const top = cap ?? nice.ticks[nice.ticks.length - 1]!;
-    axis = {
-      yOf: (v) => base - (plotH * v) / top,
-      ticks: nice.ticks.filter((t) => t > 0),
-      top,
-      capped: cap !== null,
-      step: nice.step,
-    };
-  }
-  if (axis.capped)
-    axis.ticks = [
-      ...axis.ticks.filter((t) => t < axis.top * 0.9999 && base - axis.yOf(t) < plotH - 12),
-      axis.top,
-    ];
-  return axis;
+  return todo('E30', d, i0, i1, plotH, base);
 }
 
 /** Until exercise E30 (or E29, the ticks it uses) is done: 0 to the tallest bar, no gridlines. */

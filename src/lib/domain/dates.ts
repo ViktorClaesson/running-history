@@ -1,3 +1,4 @@
+import { todo } from '../exercise';
 /**
  * Calendar dates, without time zones.
  *
@@ -18,14 +19,38 @@ export type IsoDate = string & { readonly __brand: 'IsoDate' };
 export const ISO_DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
 export const MS_PER_DAY = 86_400_000;
 
+/*
+ * TODO(E01) · dates · difficulty ★☆☆ · phase 1
+ * Every run is filed under the local calendar day it started on, and the whole app counts
+ * days as integers. Write the five functions of this exercise:
+ *   parseIsoDate(text)  "2026-10-14" → that string branded as IsoDate, or null if it isn't
+ *                       exactly YYYY-MM-DD or names a day that doesn't exist (2026-02-29,
+ *                       2026-13-01). Use ISO_DATE_RE, then check the day survives Date.UTC.
+ *   localDateOf(start)  "2023-07-20T23:36:46" → "2023-07-20". The text already IS local time.
+ *   dayNumber(date)     whole days since 1970-01-01 (1970-01-01 → 0). Use Date.UTC and MS_PER_DAY.
+ *   fromDayNumber(n)    the inverse of dayNumber.
+ *   fmtDate(date)       "14 Oct 2026 (Wed)": fmtShort plus the weekday (weekdayMon0, WEEKDAYS).
+ * Edge cases that matter, and why:
+ * - Never go through `new Date(text)` and a UTC offset to find the day: that is exactly the
+ *   bug that put every run after 22:00 on the next day in the legacy app.
+ * - Date.UTC is pure calendar arithmetic: no time zone, no DST, so a DST weekend can't gain or
+ *   lose a day. Local-time Date methods (getDate, setDate) can.
+ * - Round the day number: a millisecond count divided by 86 400 000 should be whole, but be safe.
+ * Background: legacy/CLAUDE.md, "Data pipeline" (the first bullet) and "What the chart shows"
+ * (dates read "14 Oct 2026 (Wed)" everywhere).
+ * Concepts:
+ * - Date.UTC: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/UTC
+ * - RegExp.prototype.exec: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/RegExp/exec
+ * - toISOString: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/toISOString
+ * - branded types in TypeScript: https://www.typescriptlang.org/docs/handbook/2/everyday-types.html#type-assertions
+ * Check: npm run exercise E01 (tests/domain/dates.test.ts). In the app the header shows dates
+ * again, and with E02–E03 the bars appear.
+ * Spoiler: the legacy app kept dates as Date objects (`dayKey`, `fmtDate` in
+ * legacy/running-history.html); this version deliberately doesn't.
+ */
 /** Validates "YYYY-MM-DD" (including that the day exists) and brands it, or returns null. */
 export function parseIsoDate(text: string): IsoDate | null {
-  const m = ISO_DATE_RE.exec(text);
-  if (!m) return null;
-  const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
-  const back = new Date(Date.UTC(y, mo - 1, d));
-  const ok = back.getUTCFullYear() === y && back.getUTCMonth() === mo - 1 && back.getUTCDate() === d;
-  return ok ? (text as IsoDate) : null;
+  return todo('E01', text);
 }
 
 /** Like `parseIsoDate`, but throws: for values that are ours and must already be valid. */
@@ -40,18 +65,17 @@ export function isoDate(text: string): IsoDate {
  * Just the first ten characters: the text already *is* local time, so there is nothing to convert.
  */
 export function localDateOf(startLocal: string): IsoDate {
-  return isoDate(startLocal.slice(0, 10));
+  return todo('E01', startLocal);
 }
 
 /** Whole days since 1970-01-01. */
 export function dayNumber(date: IsoDate): number {
-  const [y, m, d] = date.split('-').map(Number) as [number, number, number];
-  return Math.round(Date.UTC(y, m - 1, d) / MS_PER_DAY);
+  return todo('E01', date);
 }
 
 /** The inverse of `dayNumber`. */
 export function fromDayNumber(n: number): IsoDate {
-  return new Date(n * MS_PER_DAY).toISOString().slice(0, 10) as IsoDate;
+  return todo('E01', n);
 }
 
 export function addDays(date: IsoDate, days: number): IsoDate {
@@ -91,5 +115,5 @@ export function fmtShort(date: IsoDate): string {
 
 /** "14 Oct 2026 (Wed)", the format used everywhere a day is named (legacy `fmtDate`). */
 export function fmtDate(date: IsoDate): string {
-  return `${fmtShort(date)} (${WEEKDAYS[weekdayMon0(date)]})`;
+  return todo('E01', date);
 }

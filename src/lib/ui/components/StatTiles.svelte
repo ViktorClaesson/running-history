@@ -1,22 +1,37 @@
 <script lang="ts">
-  import { app } from '../../state/app.svelte';
+  import { todo } from '../../exercise';
   import { model } from '../../state/model.svelte';
   import ExerciseBoundary from './ExerciseBoundary.svelte';
   import WeeklyTarget from './WeeklyTarget.svelte';
 
-  // All-time figures, then the weekly-target what-if (legacy `renderTiles`).
-  const tiles = $derived.by(() => {
-    const d = model.daily;
-    if (!d) return [];
-    const total = d.km.reduce((a, b) => a + b, 0);
-    const runDays = d.km.filter((v) => v > 0).length;
-    return [
-      { k: 'Total distance', v: total.toFixed(0), u: 'km' },
-      { k: 'Runs logged', v: String(app.runs.length), u: '' },
-      { k: 'Days with a run', v: `${runDays} / ${d.n}`, u: '' },
-      { k: 'All-time avg', v: (total / d.n).toFixed(2), u: 'km/day' },
-    ];
-  });
+  interface Tile {
+    /** The label ("Total distance"), the figure ("3579"), and its unit ("km", or ''). */
+    k: string;
+    v: string;
+    u: string;
+  }
+
+  /*
+   * TODO(E32) · stat tiles · difficulty ★☆☆ · phase 5 · checked in the app, no tests
+   * The all-time figures above the chart, as a `$derived` list of four tiles, in this order:
+   *   Total distance    the sum of model.daily.km, no decimals            unit 'km'
+   *   Runs logged       app.runs.length                                   no unit
+   *   Days with a run   "<days with km > 0> / <days in the series (n)>"   no unit
+   *   All-time avg      total ÷ n, two decimals                           unit 'km/day'
+   * An empty list while there is no daily series (model.daily is null).
+   * Use $derived.by (a block that returns the value) rather than a function you call from the
+   * markup: Svelte then recomputes it only when something it reads changes (a sync adds runs),
+   * not on every render, and you never update it by hand. You'll need to import `app` from
+   * '../../state/app.svelte' again.
+   * Concepts:
+   * - $derived and $derived.by: https://svelte.dev/docs/svelte/$derived
+   * - {#each} with a key: https://svelte.dev/docs/svelte/each
+   * - Number.prototype.toFixed: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Number/toFixed
+   * Check in the app: the four tiles appear left of the Weekly target box (where the "Exercise
+   * E32" placeholder is now), and "Runs logged" goes up after a Sync.
+   * Spoiler: `renderTiles()` in legacy/running-history.html.
+   */
+  const tiles: Tile[] = $derived.by(() => todo('E32'));
 </script>
 
 {#if model.daily}

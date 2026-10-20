@@ -1,14 +1,31 @@
-import { whenDone } from '../../exercise';
+import { todo, whenDone } from '../../exercise';
 
+/*
+ * TODO(E29) · axis ticks · difficulty ★★☆ · phase 5
+ *   niceTicks(max)   about four even steps from 0 to at least max, on a step of 1, 2, 2.5 or 5
+ *                    × 10ⁿ: raw = max ÷ 4, mag = 10^floor(log10(raw)), step = the first of
+ *                    1/2/2.5/5/10 × mag that is ≥ raw; ticks 0, step, 2·step … up to the first
+ *                    ≥ max. Returns { ticks, step }.
+ *   logUp(v)         v rounded up to 1, 2 or 5 × 10ⁿ (LOG_MANT; logDec gives the 10ⁿ).
+ *   logDown(v)       v rounded down to 1, 2 or 5 × 10ⁿ.
+ *   logTicks(lo, hi) every 1/2/5 × 10ⁿ value in [lo, hi], ends included.
+ * Edge cases that matter, and why:
+ * - Floating point: 0.1 × 3 isn't 0.3, so compare with a small tolerance (1e-9) when testing
+ *   "≥ raw", "≥ max" or "in range", or 50 might round up to 100.
+ * - A log axis wants gridlines on numbers you'd say out loud, so uneven spacing is the point.
+ * Background: legacy/CLAUDE.md, "The bar panel's axis: log, linear, and the cap".
+ * Concepts:
+ * - Math.log10: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Math/log10
+ * - logarithmic scales: https://en.wikipedia.org/wiki/Logarithmic_scale
+ * Check: npm run exercise E29 (tests/ui/ticks.test.ts). In the app the line panels' axes land
+ * on round numbers (until now: four plain equal steps).
+ * Spoiler: `niceTicks()`, `logUp()`, `logDown()` and `logTicks()` in legacy/running-history.html.
+ */
 /** Axis ticks. */
 
 /** About four even steps from 0 to at least `max`, on 1/2/2.5/5 × 10ⁿ. */
 export function niceTicks(max: number): { ticks: number[]; step: number } {
-  const raw = max / 4;
-  const mag = 10 ** Math.floor(Math.log10(raw));
-  const step = ([1, 2, 2.5, 5, 10].find((m) => m * mag >= raw) ?? 10) * mag;
-  const n = Math.ceil(max / step - 1e-9);
-  return { ticks: Array.from({ length: n + 1 }, (_, k) => k * step), step };
+  return todo('E29', max);
 }
 
 /**
@@ -31,24 +48,15 @@ export const LOG_MANT = [1, 2, 5];
 export const logDec = (v: number): number => 10 ** Math.floor(Math.log10(v) + 1e-12);
 
 export function logUp(v: number): number {
-  const d = logDec(v);
-  return (LOG_MANT.find((x) => x >= v / d - 1e-9) ?? 10) * d;
+  return todo('E29', v);
 }
 
 export function logDown(v: number): number {
-  const d = logDec(v);
-  return ([...LOG_MANT].reverse().find((x) => x <= v / d + 1e-9) ?? 1) * d;
+  return todo('E29', v);
 }
 
 export function logTicks(lo: number, hi: number): number[] {
-  const out: number[] = [];
-  for (let d = logDec(lo); d <= hi * 1.0001; d *= 10) {
-    for (const m of LOG_MANT) {
-      const v = m * d;
-      if (v >= lo * 0.9999 && v <= hi * 1.0001) out.push(v);
-    }
-  }
-  return out;
+  return todo('E29', lo, hi);
 }
 
 /** Enough decimals to tell ticks apart below 1. */

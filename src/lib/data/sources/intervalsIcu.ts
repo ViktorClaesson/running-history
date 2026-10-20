@@ -1,5 +1,5 @@
-import { localDateOf, type IsoDate } from '../../domain/dates';
-import type { ActivityId, ActivitySummary, RawActivity } from '../../domain/types';
+import { todo } from '../../exercise';
+import type { ActivitySummary, RawActivity } from '../../domain/types';
 import { fetchWithRetry, HttpError, type RequestBudget } from '../http';
 import type { ActivityList, ActivitySource } from './types';
 
@@ -82,16 +82,35 @@ export const str = (o: Json, k: string): string | null => (typeof o[k] === 'stri
 export const num = (o: Json, k: string): number | null =>
   typeof o[k] === 'number' && Number.isFinite(o[k]) ? o[k] : null;
 
+/*
+ * TODO(E23) · activity list validation · difficulty ★☆☆ · phase 4
+ * The response body is `unknown` until checked; after these two functions everything can trust
+ * the types.
+ *   parseActivityList(body)  throw Error('Intervals.icu: activity list is not an array') unless
+ *                            body is an array; parse each entry that is a plain object (isObject)
+ *                            with parseActivity; count the rest, and the nulls, as `skipped`.
+ *   parseActivity(o)         an ActivitySummary, or null when id, start_date_local or type isn't
+ *                            a string, or start_date_local doesn't start with "YYYY-MM-DDT".
+ *                            Fields (str / num read a field if it has the right type, else null):
+ *                            id, startLocal = start_date_local, localDate = localDateOf(it),
+ *                            name ('' if missing), type, distanceM = distance, movingS =
+ *                            moving_time, elapsedS = elapsed_time (else moving_time) — all 0 if
+ *                            missing; avgHr = average_heartrate, elevGainM =
+ *                            total_elevation_gain (null if missing); changeMarker = analyzed,
+ *                            else icu_sync_date, else ''; fileSportIndex = file_sport_index ?? 0.
+ * Edge cases that matter, and why:
+ * - One odd entry is skipped, it doesn't poison the list: Strava-sourced entries arrive as just
+ *   {id, start_date_local, source, _note} (no type), and must not fail the sync.
+ * - The day comes from the local start text (E01), never from a UTC timestamp.
+ * Background: docs/intervals-api-findings.md (what the list really returns).
+ * Concepts:
+ * - TypeScript's unknown and narrowing: https://www.typescriptlang.org/docs/handbook/2/narrowing.html
+ * - Array.isArray: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/isArray
+ * Check: npm run exercise E23 (tests/data/intervalsIcu.test.ts).
+ * Spoiler: none, the legacy app parsed a CSV (`parseCsv`).
+ */
 export function parseActivityList(body: unknown): ActivityList {
-  if (!Array.isArray(body)) throw new Error('Intervals.icu: activity list is not an array');
-  const activities: ActivitySummary[] = [];
-  let skipped = 0;
-  for (const entry of body) {
-    const a = isObject(entry) ? parseActivity(entry) : null;
-    if (a) activities.push(a);
-    else skipped++;
-  }
-  return { activities, skipped };
+  return todo('E23', body);
 }
 
 /**
@@ -99,24 +118,5 @@ export function parseActivityList(body: unknown): ActivityList {
  * case: Intervals.icu lists them but only as `{id, start_date_local, source, _note}`.
  */
 export function parseActivity(o: Json): ActivitySummary | null {
-  const id: ActivityId | null = str(o, 'id');
-  const startLocal = str(o, 'start_date_local');
-  const type = str(o, 'type');
-  if (!id || !startLocal || !type || !/^\d{4}-\d{2}-\d{2}T/.test(startLocal)) return null;
-  const localDate: IsoDate = localDateOf(startLocal);
-  return {
-    id,
-    startLocal,
-    localDate,
-    name: str(o, 'name') ?? '',
-    type,
-    distanceM: num(o, 'distance') ?? 0,
-    movingS: num(o, 'moving_time') ?? 0,
-    elapsedS: num(o, 'elapsed_time') ?? num(o, 'moving_time') ?? 0,
-    avgHr: num(o, 'average_heartrate'),
-    elevGainM: num(o, 'total_elevation_gain'),
-    // `analyzed` moves whenever Intervals.icu re-reads or edits the activity.
-    changeMarker: str(o, 'analyzed') ?? str(o, 'icu_sync_date') ?? '',
-    fileSportIndex: num(o, 'file_sport_index') ?? 0,
-  };
+  return todo('E23', o);
 }

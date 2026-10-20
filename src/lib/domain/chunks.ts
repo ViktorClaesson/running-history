@@ -1,4 +1,5 @@
-import { DEFAULT_GAP_EXP, flatMetresFactor } from './gap';
+import { todo } from '../exercise';
+import { DEFAULT_GAP_EXP } from './gap';
 import type { SampleSet } from './sampleTypes';
 
 /**
@@ -25,73 +26,50 @@ export interface Chunks {
 
 export const MIN_CHUNK_SEC_LIMITS = [0, 60] as const;
 
-interface Acc {
-  seg: number;
-  durS: number;
-  distM: number;
-  flatM: number;
-  hrSum: number;
-  hrTime: number;
-}
-
+/*
+ * TODO(E19) · chunks · difficulty ★★★ · phase 3
+ *   buildChunks(s, minSec, gapExp)
+ *     Group a run's samples into chunks of at least minSec timer seconds, in order, never across
+ *     a segment. Each chunk sums its samples' durS (dt), distM (dist) and flatM
+ *     (dist × flatMetresFactor(grade, gapExp)), and has a time-weighted mean heart rate
+ *     (Σ hr × dt ÷ Σ dt over samples whose hr is finite; NaN if none). Return them as columns.
+ * Rules:
+ * - Close a chunk as soon as it has ≥ minSec seconds and more than 0 (so minSec = 0 makes
+ *   every sample with time its own chunk).
+ * - A sample with no time (the instant after a pause) joins the chunk being built.
+ * - At the end of each segment, the leftover chunk merges into the previous chunk *of the same
+ *   segment* when it is under half of minSec (or has no time at all); otherwise it stays as a
+ *   shorter chunk of its own. A whole segment shorter than minSec is one chunk.
+ * Edge cases that matter, and why:
+ * - Never cross a segment: a lap boundary is something you did on purpose (a rep starting).
+ * - Time-based, not distance-based: every chunk is the same amount of effort whatever the pace.
+ * - Everything sums: total distance and time over the chunks equal those over the samples.
+ * Background: the comment above (Chunks); CLAUDE.md in the repo root ("time-based chunks").
+ * Concepts:
+ * - Float32Array.from(iterable, mapFn): https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/TypedArray/from
+ * - Number.isFinite: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Number/isFinite
+ * Check: npm run exercise E19 (tests/domain/chunks.test.ts). In the app the pace zones,
+ * workout types, stress and zone volume switch from one chunk per run to real chunks: interval
+ * sessions now show their fast parts. The "Min chunk length" setting takes effect.
+ * Spoiler: none, the legacy app binned whole laps.
+ */
 /** `gapExp` is the GAP strength (see gap.ts): it decides each chunk's flat-equivalent metres. */
 export function buildChunks(s: SampleSet, minSec: number, gapExp = DEFAULT_GAP_EXP): Chunks {
-  const done: Acc[] = [];
-  let acc: Acc | null = null;
-  for (let i = 0; i < s.dt.length; i++) {
-    if (acc && s.seg[i] !== acc.seg) {
-      closeSegment(done, acc, minSec);
-      acc = null;
-    }
-    acc ??= { seg: s.seg[i]!, durS: 0, distM: 0, flatM: 0, hrSum: 0, hrTime: 0 };
-    addSample(acc, s, i, gapExp);
-    // A chunk needs some time in it: an instant (the sample right after a pause) joins the next.
-    if (acc.durS > 0 && acc.durS >= minSec) {
-      done.push(acc);
-      acc = null;
-    }
-  }
-  if (acc) closeSegment(done, acc, minSec);
-  return toColumns(done);
+  return todo('E19', s, minSec, gapExp);
 }
 
-function addSample(acc: Acc, s: SampleSet, i: number, gapExp: number): void {
-  const dt = s.dt[i]!;
-  acc.durS += dt;
-  acc.distM += s.dist[i]!;
-  acc.flatM += s.dist[i]! * flatMetresFactor(s.grade[i]!, gapExp);
-  if (Number.isFinite(s.hr[i]!)) {
-    acc.hrSum += s.hr[i]! * dt;
-    acc.hrTime += dt;
-  }
-}
-
-function closeSegment(done: Acc[], last: Acc, minSec: number): void {
-  const prev = done[done.length - 1];
-  if (prev && prev.seg === last.seg && (last.durS < minSec / 2 || last.durS === 0)) {
-    prev.durS += last.durS;
-    prev.distM += last.distM;
-    prev.flatM += last.flatM;
-    prev.hrSum += last.hrSum;
-    prev.hrTime += last.hrTime;
-  } else {
-    done.push(last);
-  }
-}
-
-function toColumns(chunks: Acc[]): Chunks {
-  const pick = (f: (c: Acc) => number) => Float32Array.from(chunks, f);
-  return {
-    seg: Uint16Array.from(chunks, (c) => c.seg),
-    durS: pick((c) => c.durS),
-    distM: pick((c) => c.distM),
-    flatM: pick((c) => c.flatM),
-    hr: pick((c) => (c.hrTime > 0 ? c.hrSum / c.hrTime : NaN)),
-  };
-}
-
+/*
+ * TODO(E10) · pace histogram (part 1 of 2: chunk speed) · difficulty ★☆☆ · phase 2
+ *   chunkVelocity(c, i, gap)  chunk i's speed in m/min: metres ÷ seconds × 60, from flatM
+ *                             (flat-equivalent metres) when `gap`, from distM otherwise.
+ *                             null when the chunk has no time (durS not > 0).
+ * Why metres ÷ time: the watch's own smoothed speed lags behind every acceleration and
+ * under-reads short reps (docs/intervals-api-findings.md).
+ * Part 2 is paceHistogram in paceZones.ts. Check: npm run exercise E10
+ * (tests/domain/zones.test.ts, "E10 pace histogram").
+ * Spoiler: none, the legacy app had laps rather than chunks.
+ */
 /** A chunk's speed in m/min: grade-adjusted with `gap`, raw (metres ÷ time) otherwise; null with no time. */
 export function chunkVelocity(c: Chunks, i: number, gap: boolean): number | null {
-  const dur = c.durS[i]!;
-  return dur > 0 ? ((gap ? c.flatM[i]! : c.distM[i]!) / dur) * 60 : null;
+  return todo('E10', c, i, gap);
 }

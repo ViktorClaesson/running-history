@@ -1,3 +1,4 @@
+import { todo } from '../../exercise';
 import type { IsoDate } from '../../domain/dates';
 import type { ActivityId, ActivitySummary, RawActivity } from '../../domain/types';
 import type { ActivityRow, RhDb, SamplesRow } from '../db';
@@ -12,10 +13,33 @@ export function getActivity(db: RhDb, id: ActivityId): Promise<ActivityRow | und
   return db.activities.get(id);
 }
 
+/*
+ * TODO(E20) · repositories (part 1 of 2) · difficulty ★★☆ · phase 4
+ *   latestLocalDate(db)  the latest localDate of any stored run: the sync watermark. null when
+ *                        the table is empty. Use the localDate index: order by it, take the last.
+ *   saveRun(db, run, now)
+ *                        write the run's summary (as an ActivityRow: the summary plus syncedAt =
+ *                        now.toISOString()), its raw file and its samples, in ONE read-write
+ *                        transaction over the three tables.
+ * Edge cases that matter, and why:
+ * - One transaction: either all three rows land or none does, so a half-synced run can't exist
+ *   even if the tab closes mid-write. The test makes the last write fail and checks the first
+ *   two were rolled back.
+ * - Inside a Dexie transaction, only await Dexie calls (no fetch, no setTimeout): the
+ *   transaction commits as soon as it has nothing left to do.
+ * Background: README "How the data flows"; the comment at the top of data/sync.ts (the watermark).
+ * Concepts:
+ * - Dexie transactions: https://dexie.org/docs/Dexie/Dexie.transaction()
+ * - Table.orderBy and Collection.last: https://dexie.org/docs/Table/Table.orderBy()
+ * - IndexedDB transactions: https://developer.mozilla.org/en-US/docs/Web/API/IDBTransaction
+ * - async / await: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/async_function
+ * Check: npm run exercise E20 (tests/data/repositories.test.ts and tests/data/reprocess.test.ts).
+ * Part 2 is staleSampleIds in repositories/samples.ts.
+ * Spoiler: none, the legacy app had no database.
+ */
 /** The latest local date of any stored run: the sync watermark. null when empty. */
 export async function latestLocalDate(db: RhDb): Promise<IsoDate | null> {
-  const last = await db.activities.orderBy('localDate').last();
-  return last ? last.localDate : null;
+  return todo('E20', db);
 }
 
 /** Ids of the stored runs that started on a local date in [from, to]. */
@@ -35,12 +59,7 @@ export interface RunToSave {
  * https://dexie.org/docs/Dexie/Dexie.transaction()
  */
 export async function saveRun(db: RhDb, run: RunToSave, now: Date = new Date()): Promise<void> {
-  const row: ActivityRow = { ...run.summary, syncedAt: now.toISOString() };
-  await db.transaction('rw', db.activities, db.raw, db.samples, async () => {
-    await db.activities.put(row);
-    await db.raw.put(run.raw);
-    await db.samples.put(run.samples);
-  });
+  todo('E20', db, run, now);
 }
 
 /** Updates only the summary (name, distance…) when the raw data didn't need re-fetching. */

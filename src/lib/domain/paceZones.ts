@@ -1,5 +1,6 @@
-import { chunkVelocity, type Chunks } from './chunks';
-import { velocityFromVo2, vo2FromVelocity } from './vdot';
+import { todo } from '../exercise';
+import type { Chunks } from './chunks';
+import { velocityFromVo2 } from './vdot';
 
 /**
  * Pace zones, read against a VDOT. Five Daniels zones as %VDOT bands, plus three slow
@@ -53,13 +54,43 @@ export const WALKING_MAX_VEL = 1000 / 10;
 /** Endurance starts at 59% VDOT, Daniels' own E-zone floor; below it (but above walking) is Recovery. */
 export const ENDURANCE_FLOOR_PCT = 0.59;
 
+/*
+ * TODO(E09) · pace-zone edges · difficulty ★★★ · phase 2
+ * Pace zones are %VDOT bands; this turns them into speed edges and bins speeds.
+ *   enduranceFloorPct(vdot)  where Endurance starts: ENDURANCE_FLOOR_PCT (59%), but never below
+ *                            walking pace expressed in %VDOT (vo2FromVelocity(WALKING_MAX_VEL) ÷
+ *                            vdot), and never above ZONE_BOUND_PCT[1] − 0.05.
+ *   zoneEdgeVel(vdot, zone, k, zoneBars)
+ *                            the speed (m/min) at edge k of zoneBars + 1 across `zone`: the zone's
+ *                            two %VDOT edges (zoneEdgesPct) → speeds with velocityFromVo2(vdot × pct)
+ *                            → k/zoneBars of the way from the low speed to the high one.
+ *   binEdges(vdot, zoneBars) the lower speed edge of every bin from bin 1 up (length binCount − 1):
+ *                            [0] STANDING_MAX_VEL (where Walking starts), [1] WALKING_MAX_VEL
+ *                            (Recovery), [2] Endurance's floor speed (at least WALKING_MAX_VEL),
+ *                            then for each zone z and sub-band k the edge zoneEdgeVel(vdot, z, k, zoneBars)
+ *                            at index (ZONE_BIN_OFFSET + z × zoneBars + k) − 1.
+ *   binWithEdges(vel, edges) the bin a speed falls in: the number of edges it is ≥ to. Faster
+ *                            than the top edge lands in the top bin.
+ * Edge cases that matter, and why:
+ * - Sub-bands are equal steps of *speed*, not of pace: seconds per km mean more at the slow end.
+ * - One source of edges: the histogram's bars and their hover labels both read zoneEdgeVel,
+ *   so a bar and its label can't disagree.
+ * - Standing and Walking are fixed paces (20:00/km, 10:00/km): "am I moving" doesn't scale with
+ *   fitness. The tests check the bins tile the speed axis with no gaps.
+ * Background: legacy/CLAUDE.md, "VDOT and pace zones" (from "Pace zones" to the floor history).
+ * Concepts:
+ * - binary vs linear search (a linear scan is fine for ~20 edges): https://en.wikipedia.org/wiki/Binary_search_algorithm
+ * - Math.min / Math.max as a clamp: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Math/max
+ * Check: npm run exercise E09 (tests/domain/zones.test.ts "E09 pace-zone binning", and
+ * tests/domain/vdot.test.ts "E09 endurance floor").
+ * Spoiler: `enduranceFloorPct()`, `zoneEdgeVel()` and `zoneBandFor()` in legacy/running-history.html.
+ */
 /**
  * Endurance's floor for this VDOT: 59%, but never below what walking pace is in %VDOT
  * (Recovery can't cover paces faster than walking) nor near the marathon boundary.
  */
 export function enduranceFloorPct(vdot: number): number {
-  const walkingPct = vo2FromVelocity(WALKING_MAX_VEL) / vdot;
-  return Math.min(ZONE_BOUND_PCT[1] - 0.05, Math.max(ENDURANCE_FLOOR_PCT, walkingPct));
+  return todo('E09', vdot);
 }
 
 /** Histogram bins: three slow buckets, then zone × zoneBars sub-bands. */
@@ -84,10 +115,7 @@ export function zoneEdgesPct(zone: number, vdot: number): [number, number] {
  * edges: binning and the hover text both read them, so a bar and its label can't disagree.
  */
 export function zoneEdgeVel(vdot: number, zone: number, k: number, zoneBars: number): number {
-  const [lo, hi] = zoneEdgesPct(zone, vdot);
-  const vLo = velocityFromVo2(vdot * lo);
-  const vHi = velocityFromVo2(vdot * hi);
-  return vLo + (k / zoneBars) * (vHi - vLo);
+  return todo('E09', vdot, zone, k, zoneBars);
 }
 
 /**
@@ -96,25 +124,12 @@ export function zoneEdgeVel(vdot: number, zone: number, k: number, zoneBars: num
  * once per day, then `binWithEdges`.
  */
 export function binEdges(vdot: number, zoneBars: number): Float64Array {
-  const edges = new Float64Array(binCount(zoneBars) - 1);
-  edges[STANDING_BIN] = STANDING_MAX_VEL; // bin 1 (walking) starts here
-  edges[WALKING_BIN] = WALKING_MAX_VEL; // bin 2 (recovery)
-  edges[RECOVERY_BIN] = Math.max(WALKING_MAX_VEL, zoneEdgeVel(vdot, 0, 0, zoneBars)); // bin 3 (endurance 0)
-  for (let z = 0; z < ZONES.length; z++) {
-    for (let k = 0; k < zoneBars; k++) {
-      const bin = ZONE_BIN_OFFSET + z * zoneBars + k;
-      if (bin === ZONE_BIN_OFFSET) continue;
-      edges[bin - 1] = zoneEdgeVel(vdot, z, k, zoneBars);
-    }
-  }
-  return edges;
+  return todo('E09', vdot, zoneBars);
 }
 
 /** The bin a speed (m/min) falls into, given that day's `binEdges`. Faster than the top edge clamps into the top bin. */
 export function binWithEdges(vel: number, edges: Float64Array): number {
-  let bin = 0;
-  while (bin < edges.length && vel >= edges[bin]!) bin++;
-  return bin;
+  return todo('E09', vel, edges);
 }
 
 /** Which histogram bin a speed (m/min) falls into at this VDOT. */
@@ -134,21 +149,28 @@ export interface Histogram {
   km: Float64Array;
 }
 
+/*
+ * TODO(E10) · pace histogram (part 2 of 2) · difficulty ★☆☆ · phase 2
+ * Part 1 is chunkVelocity in chunks.ts.
+ *   paceHistogram(c, vdot, zoneBars, gapPace)
+ *     One run's chunks binned by speed against that day's VDOT: for every chunk with a speed
+ *     (chunkVelocity, grade-adjusted with gapPace), add its minutes (durS ÷ 60) and its km
+ *     (distM ÷ 1000) to its bin. Arrays of length binCount(zoneBars).
+ * Edge cases that matter, and why:
+ * - Compute binEdges once per call, then binWithEdges per chunk: a long history has millions
+ *   of chunks, solving the VDOT formula for each would be slow.
+ * - The km are never grade-adjusted (kilometres run are kilometres run); only the binning
+ *   speed is.
+ * Background: legacy/CLAUDE.md, "VDOT and pace zones" ("The pace-zone histogram").
+ * Concepts:
+ * - Float64Array: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Float64Array
+ * Check: npm run exercise E10. In the app the pace-zone card shows its histograms (one chunk
+ * per run until E19).
+ * Spoiler: `paceHistogramFor()` and `binLap()` in legacy/running-history.html.
+ */
 /** One run's chunks binned against `vdot`, by grade-adjusted speed with `gapPace`. */
 export function paceHistogram(c: Chunks, vdot: number, zoneBars: number, gapPace: boolean): Histogram {
-  const h: Histogram = {
-    mins: new Float64Array(binCount(zoneBars)),
-    km: new Float64Array(binCount(zoneBars)),
-  };
-  const edges = binEdges(vdot, zoneBars);
-  for (let i = 0; i < c.durS.length; i++) {
-    const vel = chunkVelocity(c, i, gapPace);
-    if (vel === null) continue;
-    const bin = binWithEdges(vel, edges);
-    h.mins[bin] += c.durS[i]! / 60;
-    h.km[bin] += c.distM[i]! / 1000;
-  }
-  return h;
+  return todo('E10', c, vdot, zoneBars, gapPace);
 }
 
 /** Speeds bounding a histogram bin, m/min; `hi` is null for the open-ended top bin. */

@@ -1,3 +1,4 @@
+import { todo } from '../exercise';
 /**
  * Trailing-window sums, the one loop behind every rolling line on the page.
  *
@@ -11,23 +12,35 @@
  */
 export const DUST = 1e-9;
 
+/*
+ * TODO(E02) · rolling sums · difficulty ★☆☆ · phase 1
+ * The one loop behind every rolling line on the page.
+ *   rollingSum(values, window)  out[i] = values[i − window + 1] + … + values[i], fewer terms at
+ *                               the start (nothing before index 0). O(N): keep a running sum,
+ *                               add the value entering the window, subtract the one leaving.
+ *   perWeek(values, windowDays) that sum as a rate per week: sum × 7 ÷ windowDays.
+ * Edge cases that matter, and why:
+ * - Snap float dust: adding and subtracting the same numbers in a different order leaves
+ *   ±1e-15 instead of 0 over a stretch with no runs, and negative dust prints "-0.0 km".
+ *   After subtracting, anything below DUST becomes exactly 0 (the inputs are rounded to the
+ *   metre, so anything that small is dust by definition).
+ * - Divide by the full window, always, never by the days elapsed so far: a 64-week line
+ *   ramps up from zero rather than reading one run on day one as a huge weekly average.
+ * Background: legacy/CLAUDE.md, "The model" (the bullet "Everything is divided by its full
+ * window, always") and "Gotchas that have bitten before" ("Negative zero").
+ * Concepts:
+ * - Float64Array: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Float64Array
+ * - ArrayLike / typed array map: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/TypedArray/map
+ * - why 0.1 + 0.2 isn't 0.3: https://floating-point-gui.de/basic/
+ * Check: npm run exercise E02 (tests/domain/windows.test.ts, "E02 rolling sums").
+ * Spoiler: the sliding sums inside `recompute()` in legacy/running-history.html.
+ */
 /** out[i] = sum of values[i − window + 1 … i] (fewer at the start), dust-snapped. */
 export function rollingSum(values: ArrayLike<number>, window: number): Float64Array {
-  const out = new Float64Array(values.length);
-  let sum = 0;
-  for (let i = 0; i < values.length; i++) {
-    sum += values[i]!;
-    if (i >= window) {
-      sum -= values[i - window]!;
-      if (sum < DUST) sum = 0;
-    }
-    out[i] = sum;
-  }
-  return out;
+  return todo('E02', values, window);
 }
 
 /** The rolling sum as a rate per week: sum × 7 ÷ window days. */
 export function perWeek(values: ArrayLike<number>, windowDays: number): Float64Array {
-  const sums = rollingSum(values, windowDays);
-  return sums.map((s) => (s * 7) / windowDays);
+  return todo('E02', values, windowDays);
 }

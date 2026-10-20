@@ -1,4 +1,4 @@
-import { whenDone } from '../../exercise';
+import { todo, whenDone } from '../../exercise';
 import { model } from '../../state/model.svelte';
 import { view } from '../../state/view.svelte';
 import { dayAt, PAD, plotW, type XMap } from './geometry';
@@ -53,32 +53,52 @@ function dayUnder(canvas: HTMLCanvasElement, x: number): number | null {
 const fracAt = (canvas: HTMLCanvasElement, x: number) =>
   Math.min(1, Math.max(0, (x - PAD.l) / plotW(xmapOf(canvas))));
 
+/*
+ * TODO(E33) · pan, tap and pinch · difficulty ★★★ · phase 5 · checked in the app, no tests
+ * Five handlers, called by chartPointer below (which already does hover, wheel zoom and
+ * double-click, and keeps `touches`: pointerId → clientX for every finger down):
+ *   startDrag(canvas, e)  a primary press (e.button 0) starts a drag: capture the pointer
+ *                         (setPointerCapture, so the drag continues outside the canvas), remember
+ *                         where it started and the view's centre in `drag`, cursor 'grabbing'.
+ *   panTo(canvas, x)      mid-drag: move the view so the day grabbed stays under the pointer
+ *                         (pixels moved ÷ bar width = days); once it has moved more than DRAG_PX,
+ *                         mark the drag as moved.
+ *   endDrag(canvas, e)    end a pointer drag (not one started by the zoom key); if it never
+ *                         moved and this is a pointerup (not a pointercancel), it was a click:
+ *                         toggle the pin on the day under it (view.togglePin).
+ *   startPinch(canvas)    a second finger: cancel any drag; remember the two fingers' distance,
+ *                         the span, the centre, and the frac (fracAt) of the point between them.
+ *   movePinch()           the span scales by start distance ÷ current distance; place the centre
+ *                         so the day that was under the fingers stays under them (as in E28).
+ * Edge cases that matter, and why:
+ * - A pan must never end in a pin: that's what the DRAG_PX guard is for.
+ * - Touch has no hover, so a tap pins (tap again to release). Vertical swipes still scroll the
+ *   page because the canvas has `touch-action: pan-y`.
+ * Background: legacy/CLAUDE.md, "The readout: pinning…" and "Gotchas that have bitten before"
+ * ("Holding the key is holding the mouse button").
+ * Concepts:
+ * - Pointer Events: https://developer.mozilla.org/en-US/docs/Web/API/Pointer_events
+ * - setPointerCapture: https://developer.mozilla.org/en-US/docs/Web/API/Element/setPointerCapture
+ * - touch-action: https://developer.mozilla.org/en-US/docs/Web/CSS/touch-action
+ * - Svelte attachments ({@attach}): https://svelte.dev/docs/svelte/@attach
+ * Check in the app (desktop): drag the chart sideways, it follows the mouse; click a bar, it
+ * pins (the readout says "pinned"); a drag that ends on a bar doesn't pin it. On a phone, or
+ * Chrome DevTools' device mode with touch: tap pins, one-finger drag pans, two fingers zoom.
+ * Spoiler: `onMove()`, `onTouchStart()` and `onTouchMove()` in legacy/running-history.html.
+ */
 /** Pointer down (not the second finger of a pinch): a primary press starts a drag. */
 function startDrag(canvas: HTMLCanvasElement, e: PointerEvent): void {
-  if (e.button !== 0) return;
-  canvas.setPointerCapture(e.pointerId);
-  drag = { x: localX(canvas, e.clientX), center: view.center, moved: false, key: false };
-  canvas.style.cursor = 'grabbing';
+  todo('E33', canvas, e);
 }
 
 /** Mid-drag: the day grabbed stays under the pointer. Past DRAG_PX it counts as a drag, not a click. */
 function panTo(canvas: HTMLCanvasElement, x: number): void {
-  if (!drag) return;
-  if (Math.abs(x - drag.x) > DRAG_PX) drag.moved = true;
-  const barW = plotW(xmapOf(canvas)) / view.span;
-  view.panTo(drag.center - (x - drag.x) / barW);
+  todo('E33', canvas, x);
 }
 
 /** Pointer up (or cancelled): ends a drag; a press that never moved is a click, and pins the day. */
 function endDrag(canvas: HTMLCanvasElement, e: PointerEvent): void {
-  if (!drag || drag.key) return;
-  const wasClick = !drag.moved;
-  drag = null;
-  canvas.style.cursor = '';
-  if (wasClick && e.type === 'pointerup') {
-    const i = dayUnder(canvas, localX(canvas, e.clientX));
-    if (i !== null) view.togglePin(i);
-  }
+  todo('E33', canvas, e);
 }
 
 /** Runs a handler that is (part of) exercise E33, doing nothing until it is written. */
@@ -140,24 +160,12 @@ export function chartPointer(canvas: HTMLCanvasElement): () => void {
 
 /** A second finger went down: from now on the two fingers zoom, anchored between them. */
 function startPinch(canvas: HTMLCanvasElement): void {
-  drag = null;
-  const [a, b] = [...touches.values()] as [number, number];
-  const mid = localX(canvas, (a + b) / 2);
-  pinch = {
-    dist: Math.max(1, Math.abs(a - b)),
-    span: view.span,
-    frac: fracAt(canvas, mid),
-    center: view.center,
-  };
+  todo('E33', canvas);
 }
 
 /** The day under the fingers when the pinch started stays under them as the span scales. */
 function movePinch(): void {
-  if (!pinch || touches.size < 2) return;
-  const [a, b] = [...touches.values()] as [number, number];
-  const span = pinch.span * (pinch.dist / Math.max(1, Math.abs(a - b)));
-  const anchor = pinch.center - pinch.span / 2 + pinch.frac * pinch.span;
-  view.set({ span, center: anchor + (0.5 - pinch.frac) * span });
+  todo('E33');
 }
 
 /**

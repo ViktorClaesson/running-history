@@ -1,6 +1,5 @@
+import { todo } from '../exercise';
 import type { Daily } from './daily';
-import { THRESHOLD_PCT } from './paceZones';
-import { velocityFromVo2 } from './vdot';
 
 /**
  * How hard the running was on the body, not just how much. Every chunk scores
@@ -18,23 +17,27 @@ export interface DayStress {
   rel: Float64Array;
 }
 
+/*
+ * TODO(E12) · stress score · difficulty ★☆☆ · phase 2
+ *   dayStress(daily, vdot)
+ *     For every day, over every chunk of every run (runs with chunks === null are skipped):
+ *       raw  += hours × (km/h)²
+ *       rel  += 100 × hours × (km/h ÷ threshold km/h)²
+ *     where hours = durS ÷ 3600, km/h = (distM ÷ 1000) ÷ hours, and the threshold speed is
+ *     velocityFromVo2(THRESHOLD_PCT × vdot[i]) × 0.06 (m/min → km/h). rel stays 0 on a day
+ *     with no VDOT yet.
+ * Edge cases that matter, and why:
+ * - Always the raw speed (distM), never flatM: stress measures the landing, and a faster stride
+ *   lands harder whatever the gradient. (The legacy app followed the GAP toggle; that changed.)
+ * - Skip chunks with no time: km/h would divide by zero.
+ * - An hour at threshold is exactly 100 relative, the TSS convention.
+ * Background: legacy/CLAUDE.md, "Stress score".
+ * Concepts:
+ * - nested loops over typed arrays: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Loops_and_iteration
+ * Check: npm run exercise E12 (tests/domain/zones.test.ts, "E12 stress"). In the app the stress
+ * panels (turn them on under the settings) and the readout's stress rows appear.
+ * Spoiler: `recomputeDayStress()` in legacy/running-history.html.
+ */
 export function dayStress(daily: Daily, vdot: readonly (number | null)[]): DayStress {
-  const raw = new Float64Array(daily.n);
-  const rel = new Float64Array(daily.n);
-  for (let i = 0; i < daily.n; i++) {
-    const v = vdot[i];
-    const thresholdKmh = v ? velocityFromVo2(THRESHOLD_PCT * v) * 0.06 : 0;
-    for (const run of daily.runs[i]!) {
-      const c = run.chunks;
-      if (!c) continue;
-      for (let k = 0; k < c.durS.length; k++) {
-        const h = c.durS[k]! / 3600;
-        if (!(h > 0)) continue;
-        const kmh = c.distM[k]! / 1000 / h;
-        raw[i] += h * kmh * kmh;
-        if (thresholdKmh > 0) rel[i] += 100 * h * (kmh / thresholdKmh) ** 2;
-      }
-    }
-  }
-  return { raw, rel };
+  return todo('E12', daily, vdot);
 }

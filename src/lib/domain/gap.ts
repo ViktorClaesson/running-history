@@ -1,3 +1,4 @@
+import { todo } from '../exercise';
 /**
  * Gradient and grade-adjusted pace.
  *
@@ -25,10 +26,41 @@ export const GRADE_WINDOW_M = 25;
 /** Minetti measured −0.45 … +0.45; beyond that the polynomial isn't meaningful. */
 export const MINETTI_GRADE_LIMIT = 0.45;
 
+/*
+ * TODO(E17) · grade-adjusted pace · difficulty ★★☆ · phase 3
+ *   minettiCost(g)        energy cost of running (J/kg/m) at gradient g (rise ÷ run), Minetti's
+ *                         fitted polynomial, with g clamped to ±MINETTI_GRADE_LIMIT first:
+ *                         C(g) = 155.4g⁵ − 30.4g⁴ − 43.3g³ + 46.3g² + 19.5g + 3.6
+ *   flatMetresFactor(g, exp = DEFAULT_GAP_EXP)
+ *                         flat-equivalent metres per real metre: (C(g) ÷ C(0))^exp.
+ *   altitudeAt(dist, alt, d)
+ *                         the altitude at distance d along the run, linearly interpolated
+ *                         between the two samples around it, found by binary search (dist is
+ *                         non-decreasing). Before the start or past the end: the end value.
+ *   sampleGrades(dist, alt, windowM = GRADE_WINDOW_M)
+ *                         the gradient at every sample: altitude windowM ÷ 2 ahead minus
+ *                         windowM ÷ 2 behind, over that distance. Clip the window at the ends
+ *                         of the run (don't pad with zeros). 0 where the window is under 1 m.
+ * Edge cases that matter, and why:
+ * - dist repeats while you stand still: two samples at the same distance give a zero-length
+ *   span, so interpolate only when the span is > 0.
+ * - The altimeter has 0.2 m steps and samples are ~3 m apart, so neighbour-to-neighbour slopes
+ *   jump by ~7%: that's why the gradient is read over 25 m (a test checks the smoothing).
+ * - Sum flat-equivalent metres over a stretch, never a flat-equivalent time: then a downhill
+ *   counts as easier, and equal up and down as harder than flat, as the energy does.
+ * Background: the comment at the top of this file; docs/intervals-api-findings.md for how 25 m
+ * and exponent 0.5 were measured.
+ * Concepts:
+ * - Minetti et al. (2002), J Appl Physiol 93:1039–1046: https://doi.org/10.1152/japplphysiol.01177.2001
+ * - binary search: https://en.wikipedia.org/wiki/Binary_search_algorithm
+ * - linear interpolation: https://en.wikipedia.org/wiki/Linear_interpolation
+ * Check: npm run exercise E17 (tests/domain/gap.test.ts). In the app grade-adjusted VDOT and
+ * pace start differing from the raw ones (they were equal until now), and laps count for VDOT.
+ * Spoiler: `gapRatioOf()` in legacy/running-history.html (a different, Runalyze-based model).
+ */
 /** Energy cost of running at gradient `g` (rise/run), J/kg/m. C(0) = 3.6. */
 export function minettiCost(g: number): number {
-  const x = Math.max(-MINETTI_GRADE_LIMIT, Math.min(MINETTI_GRADE_LIMIT, g));
-  return 155.4 * x ** 5 - 30.4 * x ** 4 - 43.3 * x ** 3 + 46.3 * x ** 2 + 19.5 * x + 3.6;
+  return todo('E17', g);
 }
 
 /** The default GAP strength: Minetti's curve to this power (see above). */
@@ -39,7 +71,7 @@ export const DEFAULT_GAP_EXP = 0.5;
  * `exp` softens Minetti's curve (1 = pure Minetti).
  */
 export function flatMetresFactor(g: number, exp = DEFAULT_GAP_EXP): number {
-  return (minettiCost(g) / minettiCost(0)) ** exp;
+  return todo('E17', g, exp);
 }
 
 /**
@@ -47,18 +79,7 @@ export function flatMetresFactor(g: number, exp = DEFAULT_GAP_EXP): number {
  * search. `dist` is non-decreasing (it repeats while standing still).
  */
 export function altitudeAt(dist: ArrayLike<number>, alt: ArrayLike<number>, d: number): number {
-  const n = dist.length;
-  if (d <= dist[0]!) return alt[0]!;
-  if (d >= dist[n - 1]!) return alt[n - 1]!;
-  let lo = 0;
-  let hi = n - 1;
-  while (hi - lo > 1) {
-    const mid = (lo + hi) >> 1;
-    if (dist[mid]! < d) lo = mid;
-    else hi = mid;
-  }
-  const span = dist[hi]! - dist[lo]!;
-  return span > 0 ? alt[lo]! + ((alt[hi]! - alt[lo]!) * (d - dist[lo]!)) / span : alt[hi]!;
+  return todo('E17', dist, alt, d);
 }
 
 /** Fills NaN altitudes from their neighbours. Returns null when there is no altitude at all. */
@@ -80,14 +101,5 @@ export function sampleGrades(
   alt: ArrayLike<number>,
   windowM = GRADE_WINDOW_M,
 ): Float64Array {
-  const g = new Float64Array(dist.length);
-  const half = windowM / 2;
-  const start = dist[0] ?? 0;
-  const end = dist[dist.length - 1] ?? 0;
-  for (let i = 0; i < dist.length; i++) {
-    const a = Math.max(start, dist[i]! - half);
-    const b = Math.min(end, dist[i]! + half);
-    g[i] = b - a > 1 ? (altitudeAt(dist, alt, b) - altitudeAt(dist, alt, a)) / (b - a) : 0;
-  }
-  return g;
+  return todo('E17', dist, alt, windowM);
 }

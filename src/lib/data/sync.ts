@@ -1,6 +1,6 @@
-import { isNotDone } from '../exercise';
+import { isNotDone, todo } from '../exercise';
 import type { SampleSet } from '../domain/sampleTypes';
-import { addDays, daysBetween, type IsoDate } from '../domain/dates';
+import type { IsoDate } from '../domain/dates';
 import type { ActivityId, ActivitySummary, RawActivity } from '../domain/types';
 import type { ActivityRow, RhDb } from './db';
 import { OfflineError, RateLimitPause, sleep, type PauseReason } from './http';
@@ -41,6 +41,28 @@ export interface DateRange {
   to: IsoDate;
 }
 
+/*
+ * TODO(E24) · sync ranges and decisions · difficulty ★★☆ · phase 4
+ *   planRanges(watermark, earliest, today, step)
+ *     The date ranges to list, oldest first, each at most `step` days (inclusive), covering
+ *     from → today. from = earliest when the database is empty (watermark null), otherwise
+ *     watermark − SYNC_OVERLAP_DAYS, but never before earliest. Each range's `to` is
+ *     from + step − 1, or today if that comes first; the next starts the day after.
+ *   decide(listed, stored, hasRaw, hasSamples)
+ *     'fetch' when the run is new, its raw data or samples are missing, or its changeMarker
+ *     moved; else 'summary' when any of SUMMARY_FIELDS differs (a renamed run); else 'skip'.
+ * Edge cases that matter, and why:
+ * - The overlap: an earlier sync may have run between two runs on the same day, or a recent run
+ *   may have been edited since, so a re-sync looks 3 days back.
+ * - A watermark of today still gives one range (today → today).
+ * - 'skip' is what keeps a routine re-sync to a handful of requests.
+ * Background: the comment at the top of this file.
+ * Concepts:
+ * - loops with dates via addDays / daysBetween (E01).
+ * - Array.prototype.every: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/every
+ * Check: npm run exercise E24 (tests/data/sync.test.ts, "E24 planRanges" and "E24 decide").
+ * Spoiler: none, the legacy app read a file.
+ */
 /**
  * The date ranges to list, oldest first, each at most `step` days long.
  * Empty database → from `earliest`; otherwise from the watermark minus the overlap (but
@@ -52,16 +74,7 @@ export function planRanges(
   today: IsoDate,
   step: number = LIST_STEP_DAYS,
 ): DateRange[] {
-  let from = watermark === null ? earliest : addDays(watermark, -SYNC_OVERLAP_DAYS);
-  if (daysBetween(earliest, from) < 0) from = earliest;
-  const ranges: DateRange[] = [];
-  while (daysBetween(from, today) >= 0) {
-    const end = addDays(from, step - 1);
-    const to = daysBetween(end, today) < 0 ? today : end;
-    ranges.push({ from, to });
-    from = addDays(to, 1);
-  }
-  return ranges;
+  return todo('E24', watermark, earliest, today, step);
 }
 
 export type SyncDecision = 'fetch' | 'summary' | 'skip';
@@ -79,9 +92,7 @@ export function decide(
   hasRaw: boolean,
   hasSamples: boolean,
 ): SyncDecision {
-  if (!stored || !hasRaw || !hasSamples) return 'fetch';
-  if (stored.changeMarker !== listed.changeMarker) return 'fetch';
-  return sameSummary(listed, stored) ? 'skip' : 'summary';
+  return todo('E24', listed, stored, hasRaw, hasSamples);
 }
 
 /** The fields a listed run is compared on, for `decide`'s summary-only update. */
@@ -97,10 +108,6 @@ export const SUMMARY_FIELDS = [
   'elevGainM',
   'fileSportIndex',
 ] as const satisfies readonly (keyof ActivitySummary)[];
-
-function sameSummary(a: ActivitySummary, b: ActivitySummary): boolean {
-  return SUMMARY_FIELDS.every((k) => a[k] === b[k]);
-}
 
 export interface SyncProgress {
   phase: 'listing' | 'fetching' | 'paused' | 'done';
@@ -300,6 +307,33 @@ interface InOrderHandlers<T, R> {
   step(): void;
 }
 
+/*
+ * TODO(E25) · ordered downloads · difficulty ★★★ · phase 4
+ *   fetchInOrder(items, concurrency, h)
+ *     Fetch with up to `concurrency` downloads in flight (h.fetch), but commit strictly in input
+ *     order: item k is committed (h.commit, awaited) only once items 0 … k − 1 have been
+ *     committed or failed. A failed fetch calls h.fail(item, error) at its turn instead of
+ *     commit. After each item's turn, h.step().
+ *     If commit or fail throws, stop: no new fetches start, and wait for the ones in flight to
+ *     settle before rethrowing.
+ * A way to do it: give every item a Promise of its outcome, made up front, with its resolve
+ * function kept aside; start `concurrency` workers that each take the next index and resolve
+ * that item's promise with {ok, value} or {ok: false, error} (never reject); meanwhile the main
+ * loop awaits outcome 0, then 1, then 2, …
+ * Edge cases that matter, and why:
+ * - Committing in date order keeps "everything older than the newest stored run is present"
+ *   true at every moment, so an interrupted backfill leaves a valid watermark.
+ * - A later item finishing first must wait (the test makes it do exactly that).
+ * - An unhandled rejected promise is an error in the console: settle every outcome.
+ * Background: the comment at the top of this file (Backfill, Idempotent).
+ * Concepts:
+ * - the Promise constructor: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise/Promise
+ * - Promise.allSettled: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise/allSettled
+ * - try…finally: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/try...catch
+ * Check: npm run exercise E25 (tests/data/sync.test.ts, "E25 runSync" and "E25 fetchInOrder").
+ * Sync works once E27 is done too (each run is processed in the worker).
+ * Spoiler: none, the legacy app read a file.
+ */
 /**
  * Fetches with up to `concurrency` downloads in flight, but commits strictly in input
  * order: item k is only written once items 0…k−1 are written (or have failed). That keeps
@@ -310,35 +344,5 @@ export async function fetchInOrder<T, R>(
   concurrency: number,
   h: InOrderHandlers<T, R>,
 ): Promise<void> {
-  type Outcome = { ok: true; value: R } | { ok: false; error: unknown };
-  const outcomes: Promise<Outcome>[] = new Array(items.length);
-  const resolvers: ((o: Outcome) => void)[] = new Array(items.length);
-  items.forEach((_, k) => (outcomes[k] = new Promise<Outcome>((res) => (resolvers[k] = res))));
-
-  let next = 0;
-  let stop = false;
-  const worker = async () => {
-    while (!stop && next < items.length) {
-      const k = next++;
-      try {
-        resolvers[k]!({ ok: true, value: await h.fetch(items[k]!) });
-      } catch (error) {
-        resolvers[k]!({ ok: false, error });
-      }
-    }
-  };
-  const workers = Array.from({ length: Math.min(concurrency, items.length) }, worker);
-
-  try {
-    for (let k = 0; k < items.length; k++) {
-      const o = await outcomes[k]!;
-      if (o.ok) await h.commit(o.value);
-      else h.fail(items[k]!, o.error);
-      h.step();
-    }
-  } finally {
-    stop = true;
-    // Unblock nothing-awaited promises so the workers can wind down.
-    await Promise.allSettled(workers);
-  }
+  todo('E25', items, concurrency, h);
 }
