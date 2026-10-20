@@ -24,14 +24,14 @@ Needs Node 20.19+ (`nvm use` picks up `.nvmrc`).
  Intervals.icu ──fetch──▶ sync.ts ──────────────────────────▶ IndexedDB (Dexie, db.ts)
   (list + FIT files)      │ list, decide what's new,            activities  small summaries
                           │ download raw FIT                    raw         FIT files as fetched
-                          ▼                                     chunks      100 m pieces per run
+                          ▼                                     samples     cleaned per-second data
                  Web Worker (process.worker.ts)                 meta        last sync, pending
-                   decodeFit → detectSegments → chunkRun          ▲
-                          │                                       │ reprocess.ts rebuilds chunks
+                   decodeFit → detectSegments → buildSamples      ▲
+                          │                                       │ reprocess.ts rebuilds samples
                           └── one transaction per run ────────────┘ from raw, offline
 
- startup: IndexedDB ──▶ app.svelte.ts (runs + chunks, never raw)
-            ──▶ model.svelte.ts: buildDaily → windows, verdict, VDOT, zones, stress … ($derived)
+ startup: IndexedDB ──▶ app.svelte.ts (runs + samples, never raw)
+            ──▶ model.svelte.ts: buildDaily (time chunks) → windows, verdict, VDOT, zones, stress … ($derived)
             ──▶ components: ChartCard (canvas drawers in ui/charts), Readout, ZoneCard, table
                  settings.svelte.ts (prefs) and view.svelte.ts (zoom, hover, pin) feed both
 ```
@@ -44,7 +44,7 @@ the finished code, this order follows the data:
 1. **Domain** (`src/lib/domain/`, pure TypeScript, start here): `dates.ts`, `daily.ts`,
    `rolling.ts`, `windows.ts`, `verdict.ts`, then `vdot.ts`, `paceZones.ts`, `workoutType.ts`,
    `stress.ts`, `zoneVolume.ts`, `weeklyTarget.ts`; and the processing side, `laps.ts`,
-   `gap.ts`, `chunking.ts`. Each has tests in `tests/domain/`.
+   `gap.ts`, `samples.ts`, `chunks.ts`. Each has tests in `tests/domain/`.
 2. **Data** (`src/lib/data/`): `db.ts` (tables), `sources/intervalsIcu.ts`, `http.ts`
    (rate limits, retries), `sync.ts`, `fit.ts`, `reprocess.ts`, `processClient.ts` with
    `../workers/`.
@@ -60,7 +60,8 @@ the finished code, this order follows the data:
 |---|---|
 | the verdict rule | `src/lib/domain/verdict.ts` (`classify`) |
 | the default windows (1 / 4 / 16 / 64 weeks) | `PREF_DEFAULTS.windowBase` / `windowMult` in `src/lib/state/prefs.ts` |
-| the chunk size | `CHUNK_DISTANCE_M` in `src/lib/data/processingVersion.ts` (bump `PROCESSING_VERSION` too; reprocessing runs by itself) |
+| the chunk length | it's a setting (*Min chunk length*, 0–60 s); its default is `chunkSec` in `src/lib/state/prefs.ts` |
+| the gradient window or GAP model | `GRADE_WINDOW_M` and `minettiCost` in `src/lib/domain/gap.ts` (bump `PROCESSING_VERSION` in `src/lib/data/processingVersion.ts` for the window; reprocessing runs by itself) |
 | which activity types count | the *Types* field in the app (default in `src/lib/state/syncConfig.ts`) |
 | the API politeness | `INTERVALS_LIMITS` in `src/lib/data/http.ts`, `SYNC_CONCURRENCY` in `sync.ts` |
 | a colour | `src/styles/tokens.css` (validated palette: read legacy/CLAUDE.md "Colour system" first) |

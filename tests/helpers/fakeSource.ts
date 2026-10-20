@@ -1,4 +1,4 @@
-import type { ChunkSet } from '../../src/lib/domain/chunkTypes';
+import type { SampleSet } from '../../src/lib/domain/sampleTypes';
 import { daysBetween, isoDate, localDateOf, type IsoDate } from '../../src/lib/domain/dates';
 import type { ActivitySummary, RawActivity } from '../../src/lib/domain/types';
 import type { ActivitySource } from '../../src/lib/data/sources/types';
@@ -51,23 +51,19 @@ export class FakeSource implements ActivitySource {
   }
 }
 
-/** A stand-in for the worker: one chunk per run. */
-export async function fakeProcess(raw: RawActivity): Promise<ChunkSet> {
+/** A stand-in for the worker: one sample per run. */
+export async function fakeProcess(raw: RawActivity): Promise<SampleSet> {
   return {
     activityId: raw.id,
     processingVersion: 1,
-    chunkDistanceM: 100,
     lapRule: 'none',
-    gapMethod: 'none',
     segmentCount: 1,
     seg: new Uint16Array([0]),
-    startM: new Float32Array([0]),
-    distM: new Float32Array([100]),
-    durS: new Float32Array([30]),
-    flatDurS: new Float32Array([30]),
+    dt: new Float32Array([30]),
+    dist: new Float32Array([100]),
+    speed: new Float32Array([100 / 30]),
+    grade: new Float32Array([0]),
     hr: new Float32Array([140]),
-    gainM: new Float32Array([0]),
-    lossM: new Float32Array([0]),
   };
 }
 

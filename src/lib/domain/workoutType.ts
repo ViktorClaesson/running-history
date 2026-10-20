@@ -1,7 +1,7 @@
-import type { ChunkSet } from './chunkTypes';
+import { chunkVelocity, type Chunks } from './chunks';
 import {
-  binForVelocity,
-  chunkVelocity,
+  binEdges,
+  binWithEdges,
   RECOVERY_BIN,
   STANDING_BIN,
   WALKING_BIN,
@@ -35,16 +35,16 @@ export interface WorkoutType {
 }
 
 /** Score per type [recovery, endurance … repetition] for one run, at that day's VDOT. */
-export function zoneScores(set: ChunkSet, vdot: number, exp: number, gapPace: boolean): number[] {
+export function zoneScores(c: Chunks, vdot: number, exp: number, gapPace: boolean): number[] {
   const sc = new Array<number>(WORKOUT_TYPES.length).fill(0);
-  for (let i = 0; i < set.distM.length; i++) {
-    const vel = chunkVelocity(set, i, gapPace);
+  const edges = binEdges(vdot, 1);
+  for (let i = 0; i < c.durS.length; i++) {
+    const vel = chunkVelocity(c, i, gapPace);
     if (vel === null) continue;
-    const bin = binForVelocity(vel, vdot, 1);
+    const bin = binWithEdges(vel, edges);
     if (bin === STANDING_BIN || bin === WALKING_BIN) continue;
     const t = bin === RECOVERY_BIN ? 0 : 1 + (bin - ZONE_BIN_OFFSET);
-    const km = set.distM[i]! / 1000;
-    sc[t]! += (vel * 0.06) ** exp * km; // m/min × 0.06 = km/h
+    sc[t]! += (vel * 0.06) ** exp * (c.distM[i]! / 1000); // m/min × 0.06 = km/h
   }
   return sc;
 }

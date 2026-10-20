@@ -10,8 +10,14 @@ for processing, vite-plugin-pwa for offline/install. Data comes from Intervals.i
   `docs/intervals-api-findings.md` what the API really returns; `docs/GUIDE.md` the exercises.
 - Layers, dependencies pointing one way: `src/lib/domain` (pure TS, no DOM/Svelte/IDB/fetch)
   ← `src/lib/data` (Dexie, Intervals client, sync, reprocess) ← `src/lib/state` + `src/lib/ui`.
-- Pace zones, workout type, stress and zone volume read 100 m **chunks**; VDOT reads whole
-  runs and manual-lap/workout-step **segments**. Chunks never cross a segment.
+- Processing stores cleaned per-second **samples** (timer time, distance, the watch's
+  `enhancedSpeed`, 25 m-window gradient, HR, segment). Pace zones, workout type, stress and
+  zone volume read **time-based chunks** built from them in memory (setting `chunkSec`,
+  0–60 s); VDOT reads whole runs and manual-lap/workout-step **segments**. Chunks never
+  cross a segment.
+- GAP is pure Minetti, combined by energy: sum flat-equivalent *metres*
+  (distance × C(g)/C(0)) over real time, never a flat-equivalent time. Stress always reads
+  raw speed.
 - Colours live in `src/styles/tokens.css`, copied verbatim from legacy. Don't change them
   without asking and re-validating.
 - Svelte 5 strips whitespace at the start/end of an element's content: use `{' · '}`.

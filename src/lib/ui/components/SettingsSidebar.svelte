@@ -101,9 +101,9 @@
           </p>
         {:else if p.barColour === 'workout'}
           <p>
-            <strong>Workout type:</strong> each 100 m chunk scores its speed (km/h) to the power below, times its
-            distance, towards the zone it was run in. Then, hardest first, each zone is pooled with every faster
-            one, and the first pool to reach the share below is the run&rsquo;s type.
+            <strong>Workout type:</strong> each chunk (Min chunk length, under Pace zones) scores its speed (km/h)
+            to the power below, times its distance, towards the zone it was run in. Then, hardest first, each zone
+            is pooled with every faster one, and the first pool to reach the share below is the run&rsquo;s type.
           </p>
         {/if}
       </Info>
@@ -236,7 +236,9 @@
         onchange={(e) => setPanel('runs', e.currentTarget.checked)}
       /> Runs/week panel</label
     >
-    <label class="chk" title="Every chunk scores hours × (km/h)², summed over the week."
+    <label
+      class="chk"
+      title="Every chunk scores hours × (km/h)², summed over the week, at the raw speed (the watch's own, never grade-adjusted): it measures the pounding of landing."
       ><input
         type="checkbox"
         checked={p.panels.sraw}
@@ -353,7 +355,7 @@
   <section class="group">
     <h2 class="title">
       Pace-zone volume<Info
-        >One rolling window&rsquo;s running, split by which pace zone each 100 m was run in, so the bands add
+        >One rolling window&rsquo;s running, split by which pace zone each chunk was run in, so the bands add
         up to that window&rsquo;s own distance-per-week line. Slowest band at the bottom, so the hard running
         is the band on top. Whole zones only, never the histogram&rsquo;s sub-bands.</Info
       >
@@ -422,6 +424,18 @@
       Bar height <select bind:value={settings.p.zoneAxis}
         ><option value="time">time (min)</option><option value="dist">distance (km)</option></select
       >
+    </label>
+    <label
+      class="chk"
+      title="Runs are cut into chunks of at least this many seconds (never across a manual lap) before their speed is read; 0 reads every second on its own. Moves the histogram, the pace-zone volume, the workout types and the stress scores. VDOT reads whole laps and runs, so it doesn't move."
+    >
+      Min chunk length <NumField
+        value={p.chunkSec}
+        min={0}
+        max={60}
+        step={1}
+        onset={(v) => (settings.p.chunkSec = v)}
+      /> s
     </label>
     <label
       class="chk"

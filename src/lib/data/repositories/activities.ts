@@ -1,6 +1,6 @@
 import type { IsoDate } from '../../domain/dates';
 import type { ActivityId, ActivitySummary, RawActivity } from '../../domain/types';
-import type { ActivityRow, ChunksRow, RhDb } from '../db';
+import type { ActivityRow, RhDb, SamplesRow } from '../db';
 
 /** Every stored run, oldest first. Small rows: this is what startup loads. */
 export async function allActivities(db: RhDb): Promise<ActivityRow[]> {
@@ -26,20 +26,20 @@ export async function activityIdsBetween(db: RhDb, from: IsoDate, to: IsoDate): 
 export interface RunToSave {
   summary: ActivitySummary;
   raw: RawActivity;
-  chunks: ChunksRow;
+  samples: SamplesRow;
 }
 
 /**
- * Writes a run's summary, raw data and chunks in ONE transaction: either all three land
+ * Writes a run's summary, raw data and samples in ONE transaction: either all three land
  * or none does, so a half-synced run can't exist, even if the tab closes mid-write.
  * https://dexie.org/docs/Dexie/Dexie.transaction()
  */
 export async function saveRun(db: RhDb, run: RunToSave, now: Date = new Date()): Promise<void> {
   const row: ActivityRow = { ...run.summary, syncedAt: now.toISOString() };
-  await db.transaction('rw', db.activities, db.raw, db.chunks, async () => {
+  await db.transaction('rw', db.activities, db.raw, db.samples, async () => {
     await db.activities.put(row);
     await db.raw.put(run.raw);
-    await db.chunks.put(run.chunks);
+    await db.samples.put(run.samples);
   });
 }
 
@@ -51,9 +51,9 @@ export async function saveSummary(db: RhDb, summary: ActivitySummary, now: Date 
 /** Removes runs entirely (all three tables), in one transaction. */
 export async function deleteRuns(db: RhDb, ids: ActivityId[]): Promise<void> {
   if (!ids.length) return;
-  await db.transaction('rw', db.activities, db.raw, db.chunks, async () => {
+  await db.transaction('rw', db.activities, db.raw, db.samples, async () => {
     await db.activities.bulkDelete(ids);
     await db.raw.bulkDelete(ids);
-    await db.chunks.bulkDelete(ids);
+    await db.samples.bulkDelete(ids);
   });
 }

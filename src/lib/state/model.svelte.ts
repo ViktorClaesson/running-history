@@ -21,7 +21,7 @@ import { settings } from './settings.svelte';
 class ModelStore {
   readonly today = todayLocal();
 
-  daily: Daily | null = $derived(buildDaily(app.runs, app.chunks, this.today));
+  daily: Daily | null = $derived(buildDaily(app.runs, app.samples, settings.p.chunkSec, this.today));
   windows = $derived(buildWindows(settings.p.windowBase, settings.p.windowMult));
   series = $derived(this.daily ? windowSeries(this.daily, this.windows) : null);
 
@@ -37,7 +37,7 @@ class ModelStore {
   /** The rolling peak VDOT per day; null before the first reading. */
   vdot = $derived(this.vdotDays ? rollingMax(this.vdotDays.value, settings.p.windowVdot) : []);
 
-  stress = $derived(this.daily ? dayStress(this.daily, this.vdot, settings.p.gapPace) : null);
+  stress = $derived(this.daily ? dayStress(this.daily, this.vdot) : null);
   stressSeries = $derived(
     this.stress
       ? {

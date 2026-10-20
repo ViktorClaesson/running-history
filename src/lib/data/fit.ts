@@ -6,9 +6,9 @@ import type { ParsedRun, Pause, WatchLap } from '../domain/parsedRun';
  * https://developer.garmin.com/fit/protocol/  (the format)
  * https://github.com/garmin/fit-javascript-sdk  (the decoder)
  *
- * Only what chunking needs is kept: per-sample time, distance, altitude and heart rate,
- * the timer's stop/start events (pauses), and the laps with their trigger, workout step
- * and grade-adjusted speed.
+ * Only what processing needs is kept: per-sample time, distance, altitude, heart rate and
+ * the watch's smoothed speed, the timer's stop/start events (pauses), and the laps with
+ * their trigger and workout step.
  *
  * `sessionIndex` picks one session out of a multisport file (swim → bike → run in one
  * recording): only that session's samples, laps and events are kept. 0 for a normal run.
@@ -64,6 +64,8 @@ interface RecordLike {
   enhancedAltitude?: unknown;
   altitude?: unknown;
   heartRate?: unknown;
+  enhancedSpeed?: unknown;
+  speed?: unknown;
 }
 
 function samplesFrom(records: RecordLike[], secs: (d: unknown) => number) {
@@ -72,6 +74,7 @@ function samplesFrom(records: RecordLike[], secs: (d: unknown) => number) {
   const dist = new Float64Array(n);
   const alt = new Float64Array(n);
   const hr = new Float64Array(n);
+  const speed = new Float64Array(n);
   let lastDist = finite(records[0]?.distance) ?? 0;
   const dist0 = lastDist;
   for (let i = 0; i < n; i++) {
@@ -83,8 +86,9 @@ function samplesFrom(records: RecordLike[], secs: (d: unknown) => number) {
     dist[i] = lastDist - dist0;
     alt[i] = finite(r.enhancedAltitude) ?? finite(r.altitude) ?? NaN;
     hr[i] = finite(r.heartRate) ?? NaN;
+    speed[i] = finite(r.enhancedSpeed) ?? finite(r.speed) ?? NaN;
   }
-  return { t, dist, alt, hr };
+  return { t, dist, alt, hr, speed };
 }
 
 interface LapLike {
@@ -93,7 +97,6 @@ interface LapLike {
   wktStepIndex?: unknown;
   totalDistance?: unknown;
   totalTimerTime?: unknown;
-  avgGradeAdjustedSpeed?: unknown;
 }
 
 function lapFrom(l: LapLike, secs: (d: unknown) => number): WatchLap {
@@ -103,7 +106,6 @@ function lapFrom(l: LapLike, secs: (d: unknown) => number): WatchLap {
     wktStepIndex: finite(l.wktStepIndex),
     distM: finite(l.totalDistance) ?? 0,
     timerS: finite(l.totalTimerTime) ?? 0,
-    avgGapSpeed: finite(l.avgGradeAdjustedSpeed),
   };
 }
 

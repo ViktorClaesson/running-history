@@ -1,4 +1,4 @@
-import type { ChunkSet } from '../domain/chunkTypes';
+import type { SampleSet } from '../domain/sampleTypes';
 import { addDays, daysBetween, type IsoDate } from '../domain/dates';
 import type { ActivityId, ActivitySummary, RawActivity } from '../domain/types';
 import type { ActivityRow, RhDb } from './db';
@@ -68,7 +68,7 @@ export type SyncDecision = 'fetch' | 'summary' | 'skip';
 /**
  * What to do with one listed run:
  * - `fetch` the raw data when it's new, when the source's change marker moved, or when
- *   our raw or chunks are missing;
+ *   our raw or samples are missing;
  * - only update the `summary` when just the small fields differ (a renamed run);
  * - otherwise `skip`: this is what keeps a routine re-sync to a handful of requests.
  */
@@ -76,9 +76,9 @@ export function decide(
   listed: ActivitySummary,
   stored: ActivityRow | undefined,
   hasRaw: boolean,
-  hasChunks: boolean,
+  hasSamples: boolean,
 ): SyncDecision {
-  if (!stored || !hasRaw || !hasChunks) return 'fetch';
+  if (!stored || !hasRaw || !hasSamples) return 'fetch';
   if (stored.changeMarker !== listed.changeMarker) return 'fetch';
   return sameSummary(listed, stored) ? 'skip' : 'summary';
 }
@@ -125,8 +125,8 @@ export interface SyncResult {
 export interface SyncOptions {
   db: RhDb;
   source: ActivitySource;
-  /** Raw → chunks. The app runs this in a Web Worker; tests pass a plain function. */
-  process: (raw: RawActivity, summary: ActivitySummary) => Promise<ChunkSet>;
+  /** Raw → samples. The app runs this in a Web Worker; tests pass a plain function. */
+  process: (raw: RawActivity, summary: ActivitySummary) => Promise<SampleSet>;
   includedTypes: ReadonlySet<string>;
   earliest: IsoDate;
   today: IsoDate;
@@ -194,7 +194,7 @@ export async function runSync(opts: SyncOptions): Promise<SyncResult> {
   await fetchInOrder(work.toFetch, opts.concurrency ?? SYNC_CONCURRENCY, {
     async fetch(summary) {
       const raw = await politely(() => opts.source.fetchRaw(summary.id, opts.signal));
-      return { summary, raw, chunks: await opts.process(raw, summary) };
+      return { summary, raw, samples: await opts.process(raw, summary) };
     },
     // No abort check here: a run already downloaded is still worth keeping on cancel.
     async commit(run) {
@@ -268,7 +268,7 @@ async function planWork(db: RhDb, listed: ActivitySummary[], pending: ActivitySu
       a,
       await getActivity(db, a.id),
       await hasRow(db.raw, a.id),
-      await hasRow(db.chunks, a.id),
+      await hasRow(db.samples, a.id),
     );
     if (decision === 'fetch') work.toFetch.push(a);
     else if (decision === 'summary') work.summaryOnly.push(a);

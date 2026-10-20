@@ -1,4 +1,4 @@
-import type { ChunkSet } from '../domain/chunkTypes';
+import type { SampleSet } from '../domain/sampleTypes';
 import type { RawActivity } from '../domain/types';
 import { processRaw } from '../data/processing';
 
@@ -17,20 +17,20 @@ export interface ProcessRequest {
 }
 
 export type ProcessResponse =
-  | { kind: 'processed'; requestId: number; chunks: ChunkSet }
+  | { kind: 'processed'; requestId: number; samples: SampleSet }
   | { kind: 'error'; requestId: number; message: string };
 
 /**
- * One request → one response, plus the buffers to *transfer* rather than copy: the chunk
+ * One request → one response, plus the buffers to *transfer* rather than copy: the sample
  * arrays move to the page without a copy (the worker can't use them afterwards).
  * https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Transferable_objects
  */
 export function handleRequest(req: ProcessRequest): { response: ProcessResponse; transfer: ArrayBuffer[] } {
   try {
-    const chunks = processRaw(req.raw, { fileSportIndex: req.fileSportIndex });
+    const samples = processRaw(req.raw, { fileSportIndex: req.fileSportIndex });
     return {
-      response: { kind: 'processed', requestId: req.requestId, chunks },
-      transfer: chunkBuffers(chunks),
+      response: { kind: 'processed', requestId: req.requestId, samples },
+      transfer: sampleBuffers(samples),
     };
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
@@ -38,7 +38,7 @@ export function handleRequest(req: ProcessRequest): { response: ProcessResponse;
   }
 }
 
-function chunkBuffers(c: ChunkSet): ArrayBuffer[] {
-  const arrays = [c.seg, c.startM, c.distM, c.durS, c.flatDurS, c.hr, c.gainM, c.lossM];
+function sampleBuffers(c: SampleSet): ArrayBuffer[] {
+  const arrays = [c.seg, c.dt, c.dist, c.speed, c.grade, c.hr];
   return arrays.map((a) => a.buffer).filter((b): b is ArrayBuffer => b instanceof ArrayBuffer);
 }

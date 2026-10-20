@@ -144,3 +144,21 @@ advantage is those 62 entries.
 - **Real numbers:** full backfill of 671 runs = 676 requests in 150 s, 0 failures; a second
   sync straight after = 1 request. Decoding + chunking averages 14 ms per run; reprocessing
   all 671 from raw with the network off takes 9 s in the browser.
+
+## Revisited: samples, time chunks and the GAP model (20 Oct 2026)
+
+- **No gradient field per sample**, only barometric altitude in 0.2 m steps with samples
+  3.2 m apart (median while moving), so the slope between neighbours jumps in ~7% steps.
+  On a hill session (22 Jul 2026, 5 × 90″ at a real 5.0%) and Lidingöloppet (26 Sep 2026):
+  neighbouring samples jitter 3.4–4.1%; a centred 25 m window (about 8 samples) brings that
+  to 0.4–0.6% while keeping the reps' shape; 100 m and Intervals' `grade_smooth` flatten them.
+- **The watch's own speed** (`enhanced_speed`, on 141/141 sampled runs) varies 4.4% second to
+  second on a steady easy run, against 11.3% for distance ÷ time. Speed is read from it.
+- **Combining GAP:** Minetti gives energy per metre, so flat-equivalent *metres* are summed.
+  Summing flat-equivalent *time* instead rewards downhills too much and made rolling courses
+  read as easier than flat. Combined by energy, pure Minetti puts the whole hill session at
+  1.034 and Lidingöloppet at 1.044 (Garmin 1.037 / 1.030), with much bigger swings on single
+  climbs and descents than Garmin (+36% / −26% against +13.5% / −3%).
+- **Size:** 2.08 M samples for 671 runs, reprocessed from raw in 9.6 s in the browser,
+  loaded in 56 ms; rebuilding everything after a chunk-length change takes 240 ms at 10 s and
+  661 ms at 0 s on desktop. Phone startup under 4× CPU throttling: chart drawn in 1.5 s.

@@ -1,48 +1,41 @@
-import type { WatchLap } from './parsedRun';
-
 /**
- * Grade-adjusted ("flat-equivalent") time.
+ * Gradient and grade-adjusted pace.
  *
- * Running uphill costs more energy per metre than running on the flat, so a slow climb
- * can be as hard as a fast flat stretch. The flat-equivalent time of a stretch is how long
- * the same effort would have taken on level ground.
+ * **Gradient.** The watch records altitude (barometric, 0.2 m steps), not gradient, and
+ * samples ~3 m apart, so the slope between neighbouring samples jumps in ~7% steps. The
+ * gradient at a sample is therefore read over GRADE_WINDOW_M of distance centred on it
+ * (about 8 samples): long enough to smooth the altimeter, short enough that a 300 m hill rep
+ * keeps its real shape. Measured on a hill session and Lidingöloppet in docs/intervals-api-findings.md.
  *
- * Model: Minetti et al. (2002), "Energy cost of walking and running at extreme uphill and
- * downhill slopes", J Appl Physiol 93:1039-1046, https://doi.org/10.1152/japplphysiol.01177.2001
- * gives the energy cost per metre as a polynomial in the grade. Equal effort means equal
- * power (cost × speed), so the flat-equivalent speed is v × C(g) / C(0), and the
- * flat-equivalent time is dt × C(0) / C(g).
- *
- * Minetti on its own gives downhills their full energy saving, which neither Garmin's nor
- * Strava's model does (they come out ~1% higher over a run). So per sample we use
- * Minetti's *shape* (where in the lap the hills were), then scale each watch lap so its
- * total matches the watch's own grade-adjusted speed for that lap. See
- * docs/intervals-api-findings.md, "GAP".
+ * **Grade-adjusted pace.** Minetti et al. (2002), "Energy cost of walking and running at
+ * extreme uphill and downhill slopes", J Appl Physiol 93:1039–1046,
+ * https://doi.org/10.1152/japplphysiol.01177.2001 gives the energy cost per metre C(g)
+ * at gradient g. A metre at gradient g costs as much as C(g) ÷ C(0) metres on the flat, so a
+ * stretch's grade-adjusted speed is (flat-equivalent metres) ÷ (time). Energy adds up, so the
+ * *flat-equivalent metres* are what gets summed, never a flat-equivalent time: that way a
+ * downhill counts as easier and a course with equal up and down counts as harder than flat.
  */
 
-/** Grade is measured over this much distance, centred on the sample: smooths altimeter noise. */
-export const GRADE_WINDOW_M = 50;
+export const GRADE_WINDOW_M = 25;
 /** Minetti measured −0.45 … +0.45; beyond that the polynomial isn't meaningful. */
 export const MINETTI_GRADE_LIMIT = 0.45;
-/** A lap's flat/raw ratio is trusted only inside this range (the real max seen is 1.17). */
-const RATIO_LIMITS = [0.5, 2] as const;
 
-/** Energy cost of running at `grade` (rise/run), J/kg/m. C(0) = 3.6. */
-export function minettiCost(grade: number): number {
-  const g = Math.max(-MINETTI_GRADE_LIMIT, Math.min(MINETTI_GRADE_LIMIT, grade));
-  return 155.4 * g ** 5 - 30.4 * g ** 4 - 43.3 * g ** 3 + 46.3 * g ** 2 + 19.5 * g + 3.6;
+/** Energy cost of running at gradient `g` (rise/run), J/kg/m. C(0) = 3.6. */
+export function minettiCost(g: number): number {
+  const x = Math.max(-MINETTI_GRADE_LIMIT, Math.min(MINETTI_GRADE_LIMIT, g));
+  return 155.4 * x ** 5 - 30.4 * x ** 4 - 43.3 * x ** 3 + 46.3 * x ** 2 + 19.5 * x + 3.6;
 }
 
-/** Flat-equivalent seconds per real second at `grade`: < 1 uphill, > 1 downhill. */
-export function flatTimeFactor(grade: number): number {
-  return minettiCost(0) / minettiCost(grade);
+/** Flat-equivalent metres per real metre at gradient `g`: > 1 uphill, < 1 downhill. */
+export function flatMetresFactor(g: number): number {
+  return minettiCost(g) / minettiCost(0);
 }
 
 /**
- * Altitude at distance `d` along the run, linearly interpolated between samples.
- * `dist` is non-decreasing (it repeats while standing still).
+ * Altitude at distance `d` along the run, linearly interpolated between samples by binary
+ * search. `dist` is non-decreasing (it repeats while standing still).
  */
-export function altitudeAt(dist: Float64Array, alt: Float64Array, d: number): number {
+export function altitudeAt(dist: ArrayLike<number>, alt: ArrayLike<number>, d: number): number {
   const n = dist.length;
   if (d <= dist[0]!) return alt[0]!;
   if (d >= dist[n - 1]!) return alt[n - 1]!;
@@ -67,8 +60,15 @@ export function fillAltitude(alt: Float64Array): Float64Array | null {
   return out;
 }
 
-/** Grade at each sample over a GRADE_WINDOW_M window centred on it. */
-export function sampleGrades(dist: Float64Array, alt: Float64Array, windowM = GRADE_WINDOW_M): Float64Array {
+/**
+ * Gradient at each sample: altitude `windowM / 2` ahead minus altitude `windowM / 2` behind,
+ * over that distance (the window is clipped at the ends of the run, not zero-padded).
+ */
+export function sampleGrades(
+  dist: ArrayLike<number>,
+  alt: ArrayLike<number>,
+  windowM = GRADE_WINDOW_M,
+): Float64Array {
   const g = new Float64Array(dist.length);
   const half = windowM / 2;
   const start = dist[0] ?? 0;
@@ -79,41 +79,4 @@ export function sampleGrades(dist: Float64Array, alt: Float64Array, windowM = GR
     g[i] = b - a > 1 ? (altitudeAt(dist, alt, b) - altitudeAt(dist, alt, a)) / (b - a) : 0;
   }
   return g;
-}
-
-/**
- * Rescales `flatDt` in place so each watch lap's flat/raw ratio equals the watch's own:
- * avgGapSpeed / (distance / timer time). `lapOf[i]` is interval i's lap (−1 for none).
- * Returns whether any lap was scaled.
- */
-export function scaleToWatchLaps(
-  dt: Float64Array,
-  flatDt: Float64Array,
-  lapOf: Int32Array,
-  laps: readonly WatchLap[],
-): boolean {
-  const sumDt = new Float64Array(laps.length);
-  const sumFlat = new Float64Array(laps.length);
-  for (let i = 0; i < dt.length; i++) {
-    const k = lapOf[i]!;
-    if (k < 0) continue;
-    sumDt[k] += dt[i]!;
-    sumFlat[k] += flatDt[i]!;
-  }
-  const scale = laps.map((lap, k) => {
-    const target = watchRatio(lap);
-    return target !== null && sumFlat[k]! > 0 ? sumDt[k]! / sumFlat[k]! / target : null;
-  });
-  for (let i = 0; i < dt.length; i++) {
-    const s = lapOf[i]! >= 0 ? scale[lapOf[i]!] : null;
-    if (s != null) flatDt[i] = flatDt[i]! * s;
-  }
-  return scale.some((s) => s !== null);
-}
-
-/** The watch's flat/raw speed ratio for a lap, or null when it didn't record one. */
-function watchRatio(lap: WatchLap): number | null {
-  if (!(lap.avgGapSpeed! > 0) || !(lap.distM > 0) || !(lap.timerS > 0)) return null;
-  const ratio = lap.avgGapSpeed! / (lap.distM / lap.timerS);
-  return ratio >= RATIO_LIMITS[0] && ratio <= RATIO_LIMITS[1] ? ratio : null;
 }

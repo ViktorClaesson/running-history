@@ -1,4 +1,4 @@
-import type { ChunkSet } from '../domain/chunkTypes';
+import type { SampleSet } from '../domain/sampleTypes';
 import type { ActivitySummary, RawActivity } from '../domain/types';
 import type { ProcessRequest, ProcessResponse } from '../workers/protocol';
 
@@ -6,7 +6,7 @@ import type { ProcessRequest, ProcessResponse } from '../workers/protocol';
 const REQUEST_TIMEOUT_MS = 30_000;
 
 interface Waiting {
-  resolve: (c: ChunkSet) => void;
+  resolve: (s: SampleSet) => void;
   reject: (e: Error) => void;
   timer: ReturnType<typeof setTimeout>;
 }
@@ -29,7 +29,7 @@ export class ProcessClient {
     this.ensureWorker();
   }
 
-  process(raw: RawActivity, summary: Pick<ActivitySummary, 'fileSportIndex'>): Promise<ChunkSet> {
+  process(raw: RawActivity, summary: Pick<ActivitySummary, 'fileSportIndex'>): Promise<SampleSet> {
     const worker = this.ensureWorker();
     const requestId = this.nextId++;
     const req: ProcessRequest = { kind: 'process', requestId, raw, fileSportIndex: summary.fileSportIndex };
@@ -54,7 +54,7 @@ export class ProcessClient {
     if (!w) return;
     clearTimeout(w.timer);
     this.waiting.delete(res.requestId);
-    if (res.kind === 'processed') w.resolve(res.chunks);
+    if (res.kind === 'processed') w.resolve(res.samples);
     else w.reject(new Error(res.message));
   }
 

@@ -1,4 +1,4 @@
-import type { ChunkSet } from '../domain/chunkTypes';
+import type { SampleSet } from '../domain/sampleTypes';
 import { todayLocal } from '../domain/dates';
 import type { ActivityId } from '../domain/types';
 import { openDb, type ActivityRow, type RhDb } from '../data/db';
@@ -7,7 +7,7 @@ import { PROCESSING_VERSION } from '../data/processingVersion';
 import { ProcessClient } from '../data/processClient';
 import { reprocess } from '../data/reprocess';
 import { allActivities } from '../data/repositories/activities';
-import { allChunks, staleChunkIds } from '../data/repositories/chunks';
+import { allSamples, staleSampleIds } from '../data/repositories/samples';
 import { getLastSync, type LastSync } from '../data/repositories/meta';
 import { dbRequestLog } from '../data/repositories/requests';
 import { createIntervalsSource } from '../data/sources/intervalsIcu';
@@ -40,7 +40,7 @@ export class AppStore {
   runs = $state.raw<ActivityRow[]>([]);
   // Replaced as a whole on reload, never mutated in place, so no reactive SvelteMap needed.
   // eslint-disable-next-line svelte/prefer-svelte-reactivity
-  chunks = $state.raw<Map<ActivityId, ChunkSet>>(new Map());
+  samples = $state.raw<Map<ActivityId, SampleSet>>(new Map());
   loaded = $state(false);
   sync = $state<SyncStatus>({ kind: 'idle' });
   pause = $state<PauseBanner | null>(null);
@@ -66,15 +66,15 @@ export class AppStore {
     await this.reprocessStale();
   }
 
-  /** Reads summaries and chunks (never raw) back from IndexedDB. */
+  /** Reads summaries and samples (never raw) back from IndexedDB. */
   async reload(): Promise<void> {
-    const [runs, chunks, lastSync] = await Promise.all([
+    const [runs, samples, lastSync] = await Promise.all([
       allActivities(this.db),
-      allChunks(this.db),
+      allSamples(this.db),
       getLastSync(this.db),
     ]);
     this.runs = runs;
-    this.chunks = chunks;
+    this.samples = samples;
     this.lastSync = lastSync;
   }
 
@@ -137,10 +137,10 @@ export class AppStore {
         : null;
   }
 
-  /** Rebuilds stale chunks automatically on startup (and after a version bump). */
+  /** Rebuilds stale samples automatically on startup (and after a version bump). */
   async reprocessStale(all = false): Promise<void> {
     if (this.reprocessing) return;
-    const stale = all ? this.runs.length : (await staleChunkIds(this.db, PROCESSING_VERSION)).length;
+    const stale = all ? this.runs.length : (await staleSampleIds(this.db, PROCESSING_VERSION)).length;
     if (!stale) return;
     this.reprocessing = { done: 0, total: stale };
     try {

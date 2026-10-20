@@ -8,7 +8,6 @@ const lap = (trigger: string | null, wktStepIndex: number | null = null): WatchL
   wktStepIndex,
   distM: 0,
   timerS: 0,
-  avgGapSpeed: null,
 });
 
 // The shapes are the real ones from docs/intervals-api-findings.md.

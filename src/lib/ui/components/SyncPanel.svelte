@@ -1,6 +1,6 @@
 <script lang="ts">
   import { fmtDate, parseIsoDate, todayLocal } from '../../domain/dates';
-  import { CHUNK_DISTANCE_M, PROCESSING_VERSION } from '../../data/processingVersion';
+  import { PROCESSING_VERSION } from '../../data/processingVersion';
   import { app } from '../../state/app.svelte';
 
   // A local copy of the form, so typing doesn't save on every keystroke; "Save" commits it.
@@ -105,8 +105,9 @@
   <div class="row">
     <button disabled={!!app.reprocessing} onclick={() => app.reprocessStale(true)}>Reprocess all</button>
     <span class="note">
-      {#if app.reprocessing}Reprocessing {app.reprocessing.done} / {app.reprocessing.total}…{:else}chunks {CHUNK_DISTANCE_M}
-        m · v{PROCESSING_VERSION}{/if}
+      {#if app.reprocessing}Reprocessing {app.reprocessing.done} / {app.reprocessing.total}…{:else}processing
+        v{PROCESSING_VERSION}
+      {/if}
     </span>
   </div>
   <button

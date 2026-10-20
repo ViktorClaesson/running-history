@@ -1,5 +1,6 @@
 import type { Daily } from './daily';
-import { binForVelocity, chunkVelocity, effortSec, N_BUCKETS } from './paceZones';
+import { chunkVelocity } from './chunks';
+import { binEdges, binWithEdges, N_BUCKETS } from './paceZones';
 import { perWeek } from './rolling';
 
 /**
@@ -23,15 +24,16 @@ export function dayBuckets(daily: Daily, vdot: readonly (number | null)[], gapPa
   for (let i = 0; i < daily.n; i++) {
     const v = vdot[i];
     if (!v) continue; // no VDOT yet: nothing to judge a pace against
+    const edges = binEdges(v, 1); // zoneBars 1: bin = bucket
     for (const run of daily.runs[i]!) {
-      const set = run.chunks;
-      if (!set) continue;
-      for (let c = 0; c < set.distM.length; c++) {
-        const vel = chunkVelocity(set, c, gapPace);
+      const c = run.chunks;
+      if (!c) continue;
+      for (let k = 0; k < c.durS.length; k++) {
+        const vel = chunkVelocity(c, k, gapPace);
         if (vel === null) continue;
-        const at = i * N_BUCKETS + binForVelocity(vel, v, 1); // zoneBars 1: bin = bucket
-        out.km[at] += set.distM[c]! / 1000;
-        out.min[at] += effortSec(set, c, gapPace) / 60;
+        const at = i * N_BUCKETS + binWithEdges(vel, edges);
+        out.km[at] += c.distM[k]! / 1000;
+        out.min[at] += c.durS[k]! / 60;
       }
     }
   }

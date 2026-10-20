@@ -1,4 +1,4 @@
-import type { LapRule } from './chunkTypes';
+import type { LapRule } from './sampleTypes';
 import type { WatchLap } from './parsedRun';
 
 export interface Segmentation {

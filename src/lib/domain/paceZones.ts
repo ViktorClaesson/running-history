@@ -1,11 +1,11 @@
-import type { ChunkSet } from './chunkTypes';
+import { chunkVelocity, type Chunks } from './chunks';
 import { velocityFromVo2, vo2FromVelocity } from './vdot';
 
 /**
  * Pace zones, read against a VDOT. Five Daniels zones as %VDOT bands, plus three slow
  * buckets in front of them (Standing, Walking, Recovery), all tiling one speed axis.
- * The new app bins *chunks*, not whole laps: finer, and chunks already respect manual
- * laps. See legacy/CLAUDE.md, "VDOT and pace zones" for every number here.
+ * The new app bins *chunks* (a few seconds of a run, never across a manual lap), not
+ * whole laps. See legacy/CLAUDE.md, "VDOT and pace zones" for every number here.
  */
 
 export type ZoneKey = 'endurance' | 'marathon' | 'threshold' | 'interval' | 'repetition';
@@ -90,22 +90,36 @@ export function zoneEdgeVel(vdot: number, zone: number, k: number, zoneBars: num
   return vLo + (k / zoneBars) * (vHi - vLo);
 }
 
-/** Which histogram bin a speed (m/min) falls into at this VDOT. */
-export function binForVelocity(vel: number, vdot: number, zoneBars: number): number {
-  if (vel < STANDING_MAX_VEL) return STANDING_BIN;
-  if (vel < WALKING_MAX_VEL) return WALKING_BIN;
-  const pct = vo2FromVelocity(vel) / vdot;
-  if (pct < enduranceFloorPct(vdot)) return RECOVERY_BIN;
+/**
+ * The lower speed edge (m/min) of every histogram bin from bin 1 up, at this VDOT. Binning
+ * millions of chunks reads these instead of solving the VDOT formula per chunk: compute
+ * once per day, then `binWithEdges`.
+ */
+export function binEdges(vdot: number, zoneBars: number): Float64Array {
+  const edges = new Float64Array(binCount(zoneBars) - 1);
+  edges[STANDING_BIN] = STANDING_MAX_VEL; // bin 1 (walking) starts here
+  edges[WALKING_BIN] = WALKING_MAX_VEL; // bin 2 (recovery)
+  edges[RECOVERY_BIN] = Math.max(WALKING_MAX_VEL, zoneEdgeVel(vdot, 0, 0, zoneBars)); // bin 3 (endurance 0)
   for (let z = 0; z < ZONES.length; z++) {
-    const [, hi] = zoneEdgesPct(z, vdot);
-    if (pct <= hi || z === ZONES.length - 1) {
-      const vLo = zoneEdgeVel(vdot, z, 0, zoneBars);
-      const vHi = zoneEdgeVel(vdot, z, zoneBars, zoneBars);
-      const sub = Math.min(zoneBars - 1, Math.max(0, Math.floor(((vel - vLo) / (vHi - vLo)) * zoneBars)));
-      return ZONE_BIN_OFFSET + z * zoneBars + sub;
+    for (let k = 0; k < zoneBars; k++) {
+      const bin = ZONE_BIN_OFFSET + z * zoneBars + k;
+      if (bin === ZONE_BIN_OFFSET) continue;
+      edges[bin - 1] = zoneEdgeVel(vdot, z, k, zoneBars);
     }
   }
-  return ZONE_BIN_OFFSET + ZONES.length * zoneBars - 1;
+  return edges;
+}
+
+/** The bin a speed (m/min) falls into, given that day's `binEdges`. Faster than the top edge clamps into the top bin. */
+export function binWithEdges(vel: number, edges: Float64Array): number {
+  let bin = 0;
+  while (bin < edges.length && vel >= edges[bin]!) bin++;
+  return bin;
+}
+
+/** Which histogram bin a speed (m/min) falls into at this VDOT. */
+export function binForVelocity(vel: number, vdot: number, zoneBars: number): number {
+  return binWithEdges(vel, binEdges(vdot, zoneBars));
 }
 
 /** A histogram bin down to its whole-zone bucket (sub-bands collapsed). */
@@ -113,35 +127,26 @@ export function bucketOfBin(bin: number, zoneBars: number): number {
   return bin < ZONE_BIN_OFFSET ? bin : ZONE_BIN_OFFSET + Math.floor((bin - ZONE_BIN_OFFSET) / zoneBars);
 }
 
-/** The seconds a chunk is read at: flat-equivalent with `gapPace`, real otherwise. */
-export const effortSec = (set: ChunkSet, i: number, gapPace: boolean): number =>
-  gapPace && set.flatDurS[i]! > 0 ? set.flatDurS[i]! : set.durS[i]!;
-
-/** A chunk's speed in m/min as binning reads it, or null for a chunk with no time. */
-export function chunkVelocity(set: ChunkSet, i: number, gapPace: boolean): number | null {
-  const sec = effortSec(set, i, gapPace);
-  return sec > 0 ? set.distM[i]! / (sec / 60) : null;
-}
-
 export interface Histogram {
-  /** Minutes in each bin (flat-equivalent minutes with gapPace, so a bin's height matches its pace). */
+  /** Minutes in each bin (real timer minutes). */
   mins: Float64Array;
   /** Kilometres in each bin, never grade-adjusted: kilometres run are kilometres run. */
   km: Float64Array;
 }
 
-/** One run's chunks binned against `vdot`. */
-export function paceHistogram(set: ChunkSet, vdot: number, zoneBars: number, gapPace: boolean): Histogram {
+/** One run's chunks binned against `vdot`, by grade-adjusted speed with `gapPace`. */
+export function paceHistogram(c: Chunks, vdot: number, zoneBars: number, gapPace: boolean): Histogram {
   const h: Histogram = {
     mins: new Float64Array(binCount(zoneBars)),
     km: new Float64Array(binCount(zoneBars)),
   };
-  for (let i = 0; i < set.distM.length; i++) {
-    const vel = chunkVelocity(set, i, gapPace);
+  const edges = binEdges(vdot, zoneBars);
+  for (let i = 0; i < c.durS.length; i++) {
+    const vel = chunkVelocity(c, i, gapPace);
     if (vel === null) continue;
-    const bin = binForVelocity(vel, vdot, zoneBars);
-    h.mins[bin] += effortSec(set, i, gapPace) / 60;
-    h.km[bin] += set.distM[i]! / 1000;
+    const bin = binWithEdges(vel, edges);
+    h.mins[bin] += c.durS[i]! / 60;
+    h.km[bin] += c.distM[i]! / 1000;
   }
   return h;
 }

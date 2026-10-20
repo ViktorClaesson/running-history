@@ -1,54 +1,50 @@
-import type { ChunkSet } from '../../src/lib/domain/chunkTypes';
 import { buildDaily, type Daily } from '../../src/lib/domain/daily';
 import { addDays, isoDate, type IsoDate } from '../../src/lib/domain/dates';
+import type { SampleSet } from '../../src/lib/domain/sampleTypes';
 import type { ActivitySummary } from '../../src/lib/domain/types';
 
-/** A run as a list of chunks, each [metres, seconds] (flat time = real unless given), with segment numbers. */
-export interface ChunkSpec {
+/** One interval of a run: `m` metres in `s` seconds, at gradient `grade`, in segment `seg`. */
+export interface SampleSpec {
   m: number;
   s: number;
-  flat?: number;
+  grade?: number;
   seg?: number;
 }
 
-export function chunkSet(id: string, chunks: ChunkSpec[]): ChunkSet {
-  const segs = chunks.map((c) => c.seg ?? 0);
-  let at = 0;
+export function sampleSet(id: string, spec: SampleSpec[]): SampleSet {
+  const segs = spec.map((c) => c.seg ?? 0);
   return {
     activityId: id,
     processingVersion: 1,
-    chunkDistanceM: 100,
     lapRule: Math.max(...segs) > 0 ? 'button' : 'none',
-    gapMethod: 'none',
     segmentCount: Math.max(...segs) + 1,
     seg: Uint16Array.from(segs),
-    startM: Float32Array.from(chunks, (c) => {
-      const s = at;
-      at += c.m;
-      return s;
-    }),
-    distM: Float32Array.from(chunks, (c) => c.m),
-    durS: Float32Array.from(chunks, (c) => c.s),
-    flatDurS: Float32Array.from(chunks, (c) => c.flat ?? c.s),
-    hr: Float32Array.from(chunks, () => 140),
-    gainM: new Float32Array(chunks.length),
-    lossM: new Float32Array(chunks.length),
+    dt: Float32Array.from(spec, (c) => c.s),
+    dist: Float32Array.from(spec, (c) => c.m),
+    speed: Float32Array.from(spec, (c) => (c.s > 0 ? c.m / c.s : 0)),
+    grade: Float32Array.from(spec, (c) => c.grade ?? 0),
+    hr: Float32Array.from(spec, () => 140),
   };
 }
 
-/** Even pace: `km` at `paceSec` per km, as 100 m chunks in one segment. */
-export function evenRun(km: number, paceSec: number): ChunkSpec[] {
+/** Even pace: `km` at `paceSec` per km, as 100 m intervals in one segment. */
+export function evenRun(km: number, paceSec: number): SampleSpec[] {
   const n = Math.round(km * 10);
   return Array.from({ length: n }, () => ({ m: 100, s: paceSec / 10 }));
 }
 
 /**
- * days[i] = the runs on day i (each a chunk list). Day 0 is `start`; the series runs to `today`
- * (default: the last day given).
+ * days[i] = the runs on day i (each a list of intervals). Day 0 is `start`; the series runs
+ * to `today` (default: the last day given). Chunk length 0, so chunks are the intervals.
  */
-export function makeDaily(days: ChunkSpec[][][], start = isoDate('2026-01-01'), today?: IsoDate): Daily {
+export function makeDaily(
+  days: SampleSpec[][][],
+  start = isoDate('2026-01-01'),
+  today?: IsoDate,
+  chunkSec = 0,
+): Daily {
   const acts: ActivitySummary[] = [];
-  const chunks = new Map<string, ChunkSet>();
+  const samples = new Map<string, SampleSet>();
   days.forEach((runs, i) =>
     runs.forEach((spec, k) => {
       const id = `d${i}r${k}`;
@@ -69,8 +65,8 @@ export function makeDaily(days: ChunkSpec[][][], start = isoDate('2026-01-01'), 
         changeMarker: '',
         fileSportIndex: 0,
       });
-      chunks.set(id, chunkSet(id, spec));
+      samples.set(id, sampleSet(id, spec));
     }),
   );
-  return buildDaily(acts, chunks, today ?? addDays(start, days.length - 1))!;
+  return buildDaily(acts, samples, chunkSec, today ?? addDays(start, days.length - 1))!;
 }

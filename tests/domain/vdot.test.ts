@@ -63,7 +63,7 @@ describe('day VDOT', () => {
   });
 
   it('reads flat-equivalent time when asked', () => {
-    const run = evenRun(5, 300).map((c) => ({ ...c, flat: c.s * 0.9 }));
+    const run = evenRun(5, 300).map((c) => ({ ...c, grade: 0.03 })); // uphill all the way
     const d = makeDaily([[run]]);
     const raw = dayVdots(d, { minLapM: 1500, correction: 1, gap: false });
     const gap = dayVdots(d, { minLapM: 1500, correction: 1, gap: true });

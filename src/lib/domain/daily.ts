@@ -1,5 +1,7 @@
-import type { ChunkSet } from './chunkTypes';
+import { buildChunks, type Chunks } from './chunks';
 import { addDays, daysBetween, type IsoDate } from './dates';
+import { flatMetresFactor } from './gap';
+import type { SampleSet } from './sampleTypes';
 import type { ActivityId, ActivitySummary } from './types';
 
 /**
@@ -11,10 +13,11 @@ import type { ActivityId, ActivitySummary } from './types';
  * gluing them together inflates VDOT (legacy/CLAUDE.md, "An effort is an activity, never a day").
  */
 
-/** One segment's (manual lap's) totals: the sums of its chunks. */
+/** One segment's (manual lap's) totals, summed from its samples. */
 export interface SegmentTotals {
   km: number;
   sec: number;
+  /** The time it would have taken at its grade-adjusted speed (sec × raw metres ÷ flat-equivalent metres). */
   flatSec: number;
 }
 
@@ -23,35 +26,33 @@ export interface RunData {
   startLocal: string;
   name: string;
   km: number;
-  /** Timer seconds and flat-equivalent seconds of the whole run. */
+  /** Timer seconds, and the time at grade-adjusted speed, of the whole run. */
   sec: number;
   flatSec: number;
-  /** null until the run has been processed; everything pace-related then skips it. */
-  chunks: ChunkSet | null;
-  /** Per segment, indexed by segment number. A segment with no chunks has zero totals. */
+  /** The run's chunks at the current chunk length; null until the run has been processed. */
+  chunks: Chunks | null;
+  /** Per segment, indexed by segment number. */
   segments: SegmentTotals[];
 }
 
 export interface Daily {
-  /** The first day (index 0). */
   start: IsoDate;
   /** Number of days, first run → today inclusive. */
   n: number;
   /** That day's total distance, km, rounded to metres (see the dust snap in rolling.ts). */
   km: Float64Array;
   nRuns: Int32Array;
-  /** The day's runs, earliest first. */
   runs: RunData[][];
   /** Index of the most recent day with a run, or −1. */
   lastRunIdx: number;
 }
 
-/** Distances are kept to the metre, so anything smaller than this in a sum is float dust. */
 const roundKm = (km: number) => Math.round(km * 1000) / 1000;
 
 export function buildDaily(
   activities: readonly ActivitySummary[],
-  chunks: ReadonlyMap<ActivityId, ChunkSet>,
+  samples: ReadonlyMap<ActivityId, SampleSet>,
+  chunkSec: number,
   today: IsoDate,
 ): Daily | null {
   if (!activities.length) return null;
@@ -59,7 +60,8 @@ export function buildDaily(
   const start = sorted[0]!.localDate;
   const n = Math.max(daysBetween(start, today), daysBetween(start, sorted[sorted.length - 1]!.localDate)) + 1;
   const runs: RunData[][] = Array.from({ length: n }, () => []);
-  for (const a of sorted) runs[daysBetween(start, a.localDate)]!.push(runData(a, chunks.get(a.id) ?? null));
+  for (const a of sorted)
+    runs[daysBetween(start, a.localDate)]!.push(runData(a, samples.get(a.id) ?? null, chunkSec));
   const km = new Float64Array(n);
   const nRuns = new Int32Array(n);
   let lastRunIdx = -1;
@@ -71,39 +73,47 @@ export function buildDaily(
   return { start, n, km, nRuns, runs, lastRunIdx };
 }
 
-function runData(a: ActivitySummary, chunks: ChunkSet | null): RunData {
-  const segments = chunks ? segmentTotals(chunks) : [];
-  const fromChunks = segments.reduce((t, s) => ({ sec: t.sec + s.sec, flatSec: t.flatSec + s.flatSec }), {
-    sec: 0,
-    flatSec: 0,
-  });
+function runData(a: ActivitySummary, s: SampleSet | null, chunkSec: number): RunData {
+  const segments = s ? segmentTotals(s) : [];
+  const sec = s ? segments.reduce((t, x) => t + x.sec, 0) : a.movingS;
+  const flatSec = s ? wholeRunFlatSec(s) : a.movingS;
   return {
     id: a.id,
     startLocal: a.startLocal,
     name: a.name,
     km: a.distanceM / 1000,
-    // Time from the chunks when we have them (so it matches the pace maths), else the summary.
-    sec: chunks ? fromChunks.sec : a.movingS,
-    flatSec: chunks ? fromChunks.flatSec : a.movingS,
-    chunks,
+    sec,
+    flatSec,
+    chunks: s ? buildChunks(s, chunkSec) : null,
     segments,
   };
 }
 
-/** Sums each segment's chunks: lap-level totals are derivable from chunks by construction. */
-export function segmentTotals(set: ChunkSet): SegmentTotals[] {
-  const out: SegmentTotals[] = Array.from({ length: set.segmentCount }, () => ({
-    km: 0,
-    sec: 0,
-    flatSec: 0,
-  }));
-  for (let i = 0; i < set.distM.length; i++) {
-    const s = out[set.seg[i]!]!;
-    s.km += set.distM[i]! / 1000;
-    s.sec += set.durS[i]!;
-    s.flatSec += set.flatDurS[i]!;
+/** Per segment: km and seconds summed from its samples, and the time at its grade-adjusted speed. */
+export function segmentTotals(s: SampleSet): SegmentTotals[] {
+  const acc = Array.from({ length: s.segmentCount }, () => ({ km: 0, sec: 0, move: 0, flat: 0 }));
+  for (let i = 0; i < s.dt.length; i++) {
+    const a = acc[s.seg[i]!]!;
+    const move = s.speed[i]! * s.dt[i]!;
+    a.km += s.dist[i]! / 1000;
+    a.sec += s.dt[i]!;
+    a.move += move;
+    a.flat += move * flatMetresFactor(s.grade[i]!);
   }
-  return out;
+  return acc.map((a) => ({ km: a.km, sec: a.sec, flatSec: a.flat > 0 ? (a.sec * a.move) / a.flat : a.sec }));
+}
+
+function wholeRunFlatSec(s: SampleSet): number {
+  let sec = 0;
+  let move = 0;
+  let flat = 0;
+  for (let i = 0; i < s.dt.length; i++) {
+    const m = s.speed[i]! * s.dt[i]!;
+    sec += s.dt[i]!;
+    move += m;
+    flat += m * flatMetresFactor(s.grade[i]!);
+  }
+  return flat > 0 ? (sec * move) / flat : sec;
 }
 
 /** The calendar date of day `i`. */

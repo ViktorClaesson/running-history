@@ -55,6 +55,8 @@ export interface Prefs {
   wtShare: number;
   zoneBars: number;
   zoneAxis: ZoneAxis;
+  /** Chunks are at least this many timer seconds (0 = every sample on its own). */
+  chunkSec: number;
   panels: Record<PanelKey, boolean>;
   zoneAreaWin: SlotKey;
   zoneAreaMode: ZoneAreaMode;
@@ -87,6 +89,8 @@ export const PREF_DEFAULTS: Readonly<Prefs> = Object.freeze({
   wtShare: 35,
   zoneBars: 3,
   zoneAxis: 'dist',
+  // ~30 m at running pace: a single GPS hiccup can't decide a zone, a stride still shows.
+  chunkSec: 10,
   panels: {
     vol: true,
     freq: false,
@@ -160,6 +164,7 @@ function parseNumbers(r: Record<string, unknown>, p: Prefs): void {
   if (inRange(r.minLapM, 100, 5000)) p.minLapM = roundTo(r.minLapM, 100);
   if (inRange(r.vdotCorr, 0.9, 1)) p.vdotCorr = Math.round(r.vdotCorr * 100) / 100;
   if (inRange(r.zoneBars, 1, 20)) p.zoneBars = Math.round(r.zoneBars);
+  if (inRange(r.chunkSec, 0, 60)) p.chunkSec = Math.round(r.chunkSec);
   if (inRange(r.vdotNearPct, 0, 100)) p.vdotNearPct = Math.round(r.vdotNearPct);
   if (inRange(r.barCapKm, 1, 500)) p.barCapKm = Math.round(r.barCapKm);
   if (inRange(r.wtExp, 0, 4)) p.wtExp = roundTo(r.wtExp, 0.5);

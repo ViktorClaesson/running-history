@@ -17,7 +17,10 @@ import { velocityFromVo2 } from '../../src/lib/domain/vdot';
 import { workoutFromScores, zoneScores } from '../../src/lib/domain/workoutType';
 import { buildWindows, windowSeries } from '../../src/lib/domain/windows';
 import { dayBuckets, zoneArea } from '../../src/lib/domain/zoneVolume';
-import { chunkSet, evenRun, makeDaily } from '../helpers/daily';
+import { buildChunks } from '../../src/lib/domain/chunks';
+import { evenRun, makeDaily, sampleSet, type SampleSpec } from '../helpers/daily';
+
+const chunkSet = (id: string, spec: SampleSpec[]) => buildChunks(sampleSet(id, spec), 0);
 
 const V = 52;
 const kmhToMpm = (kmh: number) => kmh / 0.06;
@@ -99,9 +102,15 @@ describe('stress', () => {
     const vT = velocityFromVo2(V * 0.88) * 0.06; // km/h
     const d = makeDaily([[evenRun(12, 300)], [[{ m: vT * 1000, s: 3600 }]]]);
     const vdot = [V, V];
-    const s = dayStress(d, vdot, false);
+    const s = dayStress(d, vdot);
     expect(s.raw[0]).toBeCloseTo(144, 6);
     expect(s.rel[1]).toBeCloseTo(100, 4);
+  });
+
+  it('reads the raw speed: the same run uphill scores the same (landing stress, not effort)', () => {
+    const flat = makeDaily([[evenRun(10, 300)]]);
+    const hilly = makeDaily([[evenRun(10, 300).map((c) => ({ ...c, grade: 0.06 }))]]);
+    expect(dayStress(hilly, [V]).raw[0]).toBeCloseTo(dayStress(flat, [V]).raw[0]!, 9);
   });
 });
 

@@ -1,5 +1,5 @@
 import Dexie, { type EntityTable } from 'dexie';
-import type { ChunkSet } from '../domain/chunkTypes';
+import type { SampleSet } from '../domain/sampleTypes';
 import type { ActivitySummary, RawActivity } from '../domain/types';
 
 /**
@@ -11,7 +11,7 @@ import type { ActivitySummary, RawActivity } from '../domain/types';
  *
  * Two separate ideas are versioned (don't mix them up):
  * - the *schema version* below (`db.version(n)`): which tables and indexes exist;
- * - `PROCESSING_VERSION` (processing.ts): what the numbers inside `chunks` mean.
+ * - `PROCESSING_VERSION` (processingVersion.ts): what the numbers inside `samples` mean.
  */
 
 export interface ActivityRow extends ActivitySummary {
@@ -19,7 +19,7 @@ export interface ActivityRow extends ActivitySummary {
   syncedAt: string;
 }
 
-export type ChunksRow = ChunkSet;
+export type SamplesRow = SampleSet;
 
 export interface MetaRow {
   key: string;
@@ -36,7 +36,7 @@ export interface RequestRow {
 export type RhDb = Dexie & {
   activities: EntityTable<ActivityRow, 'id'>;
   raw: EntityTable<RawActivity, 'id'>;
-  chunks: EntityTable<ChunksRow, 'activityId'>;
+  samples: EntityTable<SamplesRow, 'activityId'>;
   meta: EntityTable<MetaRow, 'key'>;
   requests: EntityTable<RequestRow, 'seq'>;
 };
@@ -57,6 +57,13 @@ export function openDb(name = DB_NAME, options?: ConstructorParameters<typeof De
     chunks: 'activityId, processingVersion',
     meta: 'key',
     requests: '++seq, at',
+  });
+  // v2: per-run cleaned samples replace the 100 m distance chunks (chunks are now built in
+  // memory, by time). `null` deletes the old table; the samples are rebuilt from raw on the
+  // next start by the automatic reprocessing. https://dexie.org/docs/Tutorial/Design#database-versioning
+  db.version(2).stores({
+    chunks: null,
+    samples: 'activityId, processingVersion',
   });
   return db;
 }
