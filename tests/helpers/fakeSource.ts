@@ -1,5 +1,5 @@
 import type { SampleSet } from '../../src/lib/domain/sampleTypes';
-import { daysBetween, isoDate, localDateOf, type IsoDate } from '../../src/lib/domain/dates';
+import { isoDate, type IsoDate } from '../../src/lib/domain/dates';
 import type { ActivitySummary, RawActivity } from '../../src/lib/domain/types';
 import type { ActivitySource } from '../../src/lib/data/sources/types';
 
@@ -11,7 +11,7 @@ export function summary(
   return {
     id,
     startLocal,
-    localDate: localDateOf(startLocal),
+    localDate: startLocal.slice(0, 10) as IsoDate, // not localDateOf: helpers mustn't need an exercise
     name: `run ${id}`,
     type: 'Run',
     distanceM: 10000,
@@ -37,8 +37,8 @@ export class FakeSource implements ActivitySource {
 
   async listActivities(oldest: IsoDate, newest: IsoDate) {
     this.lists.push({ oldest, newest });
-    const within = (a: ActivitySummary) =>
-      daysBetween(oldest, a.localDate) >= 0 && daysBetween(a.localDate, newest) >= 0;
+    // ISO dates sort as text, so no date maths (and no exercise) is needed here.
+    const within = (a: ActivitySummary) => oldest <= a.localDate && a.localDate <= newest;
     return { activities: this.activities.filter(within), skipped: 0 };
   }
 

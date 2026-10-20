@@ -24,6 +24,10 @@ for processing, vite-plugin-pwa for offline/install. Data comes from Intervals.i
 - The readout must not change height from day to day (verify by sweeping every day with
   `window.__rh` in a dev build; currently 804 px on all days × all zone modes).
 - Node 22 via nvm: `export PATH=~/.nvm/versions/node/v22.23.3/bin:$PATH` (default is 18).
+- Learning mode: `v2-exercises` = `v2-solution` with 33 bodies replaced by `todo('Exx', …)`
+  plus `TODO(Exx)` blocks (and minus the imports and private helpers only those bodies used). Scaffolding (ExerciseBoundary, `whenDone`
+  fallbacks) lives on both. Tests carry the exercise id in their name; test helpers must not
+  call exercise code. `docs/GUIDE.md` is the learner's guide.
 - Verify with `npm run check`, `npm run test`, `npm run lint`, `npm run build`.
 - Never put API keys, FIT files or other personal data in the repo (it is public).
 - Commit messages: never end with "Co-authored by model". Branch + PR, never push to main.

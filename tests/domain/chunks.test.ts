@@ -84,6 +84,7 @@ describe('E19 buildChunks', () => {
         expect(r.km).toBeCloseTo(h.km, 9);
         expect(r.sec).toBeCloseTo(h.sec, 4);
         expect(r.segments.map((g) => g.km)).toEqual(h.segments.map((g) => expect.closeTo(g.km, 9)));
+        expect(r.chunks).toEqual(buildChunks(samples.get(r.id)!, 0, 0.5));
         expect(Array.from(r.chunks!.durS)).toEqual(Array.from(h.chunks!.durS));
         expect(Array.from(r.chunks!.distM)).toEqual(Array.from(h.chunks!.distM));
         expect(Array.from(r.chunks!.seg)).toEqual(Array.from(h.chunks!.seg));

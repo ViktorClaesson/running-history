@@ -125,7 +125,11 @@ describe('E25 runSync', () => {
     src.beforeRaw = (id) => {
       if (id === 'r3') ac.abort();
     };
-    await expect(runSync({ ...base(db, src), signal: ac.signal, concurrency: 1 })).rejects.toThrow();
+    const err = await runSync({ ...base(db, src), signal: ac.signal, concurrency: 1 }).catch(
+      (e: unknown) => e,
+    );
+    expect(err).toBeInstanceOf(Error);
+    if ((err as Error).name !== 'AbortError') throw err; // e.g. an exercise not done yet
     // Everything before the interruption is stored; nothing after it.
     const stored = (await allActivities(db)).map((a) => a.id);
     expect(stored).toEqual(['r1', 'r2']);

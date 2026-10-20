@@ -168,7 +168,7 @@ function drawNote(f: Frame, text: string): void {
   ctx.fillStyle = theme.muted;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
-  ctx.fillText(text, PAD.l + 6, TOP);
+  ctx.fillText(text, PAD.l + 24, TOP); // clear of the window chevrons at the left edge
 }
 
 function drawGrid(f: Frame, axis: BarAxis, scale: BarScale, base: number): void {

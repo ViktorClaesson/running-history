@@ -29,7 +29,7 @@ describe('the exercise helper', () => {
     expect(isNotDone(new Error('x'))).toBe(false);
   });
 
-  it('numbers the exercises E01 … E33 in order', () => {
+  it('numbers the 33 exercises in order, with no gaps', () => {
     const ids = Object.keys(EXERCISES);
     expect(ids).toEqual(Array.from({ length: 33 }, (_, k) => `E${String(k + 1).padStart(2, '0')}`));
   });

@@ -16,6 +16,8 @@ Needs Node 20.19+ (`nvm use` picks up `.nvmrc`).
 | `npm run build` | type-check, then build static files into `dist/` |
 | `npm run preview` | serve the built `dist/` locally |
 | `npm run test` | run the unit tests once ([Vitest](https://vitest.dev/)) |
+| `npm run exercise E04` | run one exercise's tests (also `npm run test -- E04`) |
+| `npm run exercises` | list the exercises still open |
 | `npm run lint` | ESLint + Prettier check |
 
 ## How the data flows
@@ -36,10 +38,20 @@ Needs Node 20.19+ (`nvm use` picks up `.nvmrc`).
                  settings.svelte.ts (prefs) and view.svelte.ts (zoom, hover, pin) feed both
 ```
 
+## Learning mode
+
+The app doubles as a set of 33 exercises. Branch `v2-solution` is the finished app; branch
+`v2-exercises` is the same code with those 33 function bodies replaced by `todo('E04', …)`
+and a `TODO(E04)` block saying what to build. The app still builds and runs there: whatever
+needs an unfinished exercise shows "Exercise E04 not done yet: window series" in its place
+(`src/lib/exercise.ts`, `ExerciseBoundary.svelte`), and every exercise's tests (named by
+its id) fail until it is done. **[`docs/GUIDE.md`](docs/GUIDE.md)** takes you through them,
+phase by phase.
+
 ## Reading guide
 
-Start with [`docs/GUIDE.md`](docs/GUIDE.md) if you are working through the exercises. To read
-the finished code, this order follows the data:
+Working through the exercises? Start with [`docs/GUIDE.md`](docs/GUIDE.md). To read the
+finished code, this order follows the data:
 
 1. **Domain** (`src/lib/domain/`, pure TypeScript, start here): `dates.ts`, `daily.ts`,
    `rolling.ts`, `windows.ts`, `verdict.ts`, then `vdot.ts`, `paceZones.ts`, `workoutType.ts`,
