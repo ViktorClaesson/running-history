@@ -1,3 +1,4 @@
+import { whenDone } from '../exercise';
 import { dayNumber, type IsoDate } from '../domain/dates';
 import type { Window } from '../domain/windows';
 import { clampView, zoomAbout, type ViewState } from '../ui/charts/geometry';
@@ -66,10 +67,15 @@ class ViewStore {
     this.zoomToWindow(this.windows.length - 1);
   }
 
-  /** Cursor-anchored zoom; `factor` > 1 zooms out. */
+  /** Cursor-anchored zoom; `factor` > 1 zooms out. Does nothing until exercise E28 is done. */
   zoom(frac: number, factor: number): void {
     this.stopAnimation();
-    this.apply(zoomAbout(this.state, frac, factor, this.n));
+    this.apply(
+      whenDone(
+        () => zoomAbout(this.state, frac, factor, this.n),
+        () => this.state,
+      ),
+    );
   }
 
   /** Moves the view so that `center` is the new centre (used while dragging). */
@@ -89,7 +95,7 @@ class ViewStore {
   }
 
   private apply(v: ViewState): void {
-    const c = clampView(v, this.n);
+    const c = clamp(v, this.n);
     this.span = c.span;
     this.center = c.center;
     settings.p.view = this.toSaved();
@@ -113,7 +119,7 @@ class ViewStore {
   }
 
   private animateTo(t: ViewState): void {
-    this.target = clampView(t, this.n);
+    this.target = clamp(t, this.n);
     if (!this.frame) this.frame = requestAnimationFrame(() => this.step());
   }
 
@@ -137,5 +143,12 @@ class ViewStore {
     this.target = null;
   }
 }
+
+/** clampView, or until exercise E28 is done the view as asked for (it can then drift past the ends). */
+const clamp = (v: ViewState, n: number): ViewState =>
+  whenDone(
+    () => clampView(v, n),
+    () => v,
+  );
 
 export const view = new ViewStore();

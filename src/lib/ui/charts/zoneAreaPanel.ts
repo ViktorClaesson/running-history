@@ -3,7 +3,7 @@ import { drawDayDot, drawXLabels, drawYGrid, drawYTitle, markedDays } from './ax
 import { bottomInset, INSET_TOP, type Frame } from './frame';
 import { PAD, plotW, visibleRange, xMid } from './geometry';
 import { drawWindowStarts } from './marks';
-import { niceTicks } from './ticks';
+import { axisTicks } from './ticks';
 
 /**
  * One window's running stacked by pace zone, slowest at the bottom, so the hard running is
@@ -32,7 +32,7 @@ export function drawZoneArea(f: Frame, d: ZoneAreaInput): void {
   else {
     let peak = 0;
     for (let i = i0; i <= i1; i++) peak = Math.max(peak, d.total[i]!);
-    ({ ticks, step } = niceTicks(Math.max(peak * 1.12, 1)));
+    ({ ticks, step } = axisTicks(Math.max(peak * 1.12, 1)));
   }
   const yMax = ticks[ticks.length - 1]!;
   const yOf = (v: number) => INSET_TOP + plotH * (1 - v / yMax);

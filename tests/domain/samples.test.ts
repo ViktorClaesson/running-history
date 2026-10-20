@@ -5,7 +5,7 @@ import { makeRun } from '../helpers/runs';
 
 const sum = (a: Float32Array) => a.reduce((x, y) => x + y, 0);
 
-describe('buildSamples', () => {
+describe('E18 buildSamples', () => {
   it('keeps every interval: distances and timer seconds sum to the stream', () => {
     const run = makeRun([{ seconds: 600, speed: 3 }]);
     const s = buildSamples('a', run, 2);

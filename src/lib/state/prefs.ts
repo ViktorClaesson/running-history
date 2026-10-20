@@ -1,3 +1,4 @@
+import { rethrowIfNotDone } from '../exercise';
 import { SLOT_KEYS, type SlotKey } from '../domain/windows';
 import type { Plan } from '../domain/weeklyTarget';
 
@@ -141,11 +142,14 @@ export function defaultPrefs(phone = false): Prefs {
   return { ...PREF_DEFAULTS, panels: { ...panels }, lines: { ...PREF_DEFAULTS.lines } };
 }
 
-const inRange = (v: unknown, lo: number, hi: number): v is number =>
+/** A finite number in [lo, hi]. */
+export const inRange = (v: unknown, lo: number, hi: number): v is number =>
   typeof v === 'number' && Number.isFinite(v) && v >= lo && v <= hi;
-const oneOf = <T extends string>(v: unknown, options: readonly T[]): v is T =>
+/** One of the allowed strings. */
+export const oneOf = <T extends string>(v: unknown, options: readonly T[]): v is T =>
   typeof v === 'string' && (options as readonly string[]).includes(v);
-const roundTo = (v: number, step: number) => Math.round(v / step) * step;
+/** The nearest multiple of `step`. */
+export const roundTo = (v: number, step: number): number => Math.round(v / step) * step;
 
 export function parsePrefs(raw: unknown, phone = false): Prefs {
   const p = defaultPrefs(phone);
@@ -246,7 +250,8 @@ export function isDefault(p: Prefs, phone = false): boolean {
 export function loadPrefs(storage: Storage = localStorage, phone = false): Prefs {
   try {
     return parsePrefs(JSON.parse(storage.getItem(PREFS_KEY) ?? 'null'), phone);
-  } catch {
+  } catch (e) {
+    rethrowIfNotDone(e);
     return defaultPrefs(phone);
   }
 }
@@ -256,7 +261,8 @@ export function savePrefs(p: Prefs, storage: Storage = localStorage, phone = fal
   try {
     if (isDefault(p, phone)) storage.removeItem(PREFS_KEY);
     else storage.setItem(PREFS_KEY, JSON.stringify(p));
-  } catch {
+  } catch (e) {
+    rethrowIfNotDone(e);
     // Private browsing can refuse storage: the settings just aren't remembered.
   }
 }

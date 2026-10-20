@@ -44,7 +44,7 @@ function fakeClock(start = 1_000_000): Clock & { t: number; slept: number[] } {
 
 const limits = { perWindow: 3, perDay: 5, minIntervalMs: 250 };
 
-describe('RequestBudget', () => {
+describe('E21 RequestBudget', () => {
   it('paces requests at least minIntervalMs apart', async () => {
     const clock = fakeClock();
     const b = new RequestBudget(memoryLog(), limits, clock);
@@ -82,7 +82,7 @@ describe('RequestBudget', () => {
   });
 });
 
-describe('fetchWithRetry', () => {
+describe('E22 fetchWithRetry', () => {
   const ok = () => new Response('ok', { status: 200 });
 
   it('retries 429 honouring Retry-After, then succeeds', async () => {

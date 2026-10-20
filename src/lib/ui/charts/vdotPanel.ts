@@ -3,7 +3,7 @@ import { drawDayDot, drawXLabels, drawYGrid, drawYTitle, markedDays } from './ax
 import { bottomInset, INSET_TOP, type Frame } from './frame';
 import { PAD, plotW, visibleRange, xMid } from './geometry';
 import { drawWindowStarts } from './marks';
-import { niceTicks } from './ticks';
+import { axisTicks } from './ticks';
 
 /**
  * The rolling-max VDOT line (a gap, not a zero, before the first run), with dots for the
@@ -34,7 +34,7 @@ export function drawVdot(f: Frame, d: VdotInput): { dashSeen: boolean } {
   // The dots sit below the line, so they must be inside the extent; only the floor can move.
   for (let i = i0; i <= i1; i++) if (near(i)) yMin = Math.min(yMin, d.dayValue[i]!);
   if (!(yMax > 0)) [yMin, yMax] = [0, 1];
-  const { ticks, step } = niceTicks(Math.max(yMax * 1.06, 1));
+  const { ticks, step } = axisTicks(Math.max(yMax * 1.06, 1));
   const top = ticks[ticks.length - 1]!;
   const floor = Math.max(0, Math.floor((yMin * 0.94) / step) * step);
   const yOf = (v: number) => INSET_TOP + plotH * (1 - (v - floor) / (top - floor || 1));

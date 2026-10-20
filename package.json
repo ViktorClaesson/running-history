@@ -11,8 +11,10 @@
     "build": "npm run check && vite build",
     "preview": "vite preview",
     "check": "svelte-check --tsconfig ./tsconfig.app.json --fail-on-warnings && tsc -p tsconfig.node.json && tsc -p tsconfig.test.json --noEmit",
-    "test": "vitest run",
+    "test": "node scripts/test.mjs",
     "test:watch": "vitest",
+    "exercise": "node scripts/test.mjs",
+    "exercises": "node scripts/exercises.mjs",
     "lint": "eslint . && prettier --check .",
     "format": "prettier --write ."
   },

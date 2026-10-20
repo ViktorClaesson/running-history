@@ -7,7 +7,7 @@
 </script>
 
 <div class="buttons">
-  {#each model.windows as w (w.key)}
+  {#each model.windowsOrNone as w (w.key)}
     <button onclick={() => view.zoomToWindow(w.slot)} title="Zoom to the {w.label} window">{w.label}</button>
   {/each}
   <button onclick={() => view.reset()}>Reset</button>

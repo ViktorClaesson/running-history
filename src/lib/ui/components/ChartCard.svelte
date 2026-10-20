@@ -15,6 +15,7 @@
   import { drawWindowPanel } from '../charts/windowPanel';
   import { drawZoneArea } from '../charts/zoneAreaPanel';
   import { theme } from '../theme.svelte';
+  import ExerciseBoundary from './ExerciseBoundary.svelte';
   import Info from './Info.svelte';
   import Panel from './Panel.svelte';
   import { layout } from '../layout.svelte';
@@ -109,99 +110,115 @@
     </Info>
   </h2>
 
-  <Panel
-    height={300}
-    draw={(ctx, w, h) => {
-      const f = frame('bars', ctx, w, h);
-      if (!f || !model.daily) return;
-      const t = f.theme;
-      drawBars(f, {
-        km: model.daily.km,
-        segments: (i) => barSegments(i, t),
-        scale: p.barScale,
-        capKm: p.barCap ? p.barCapKm : null,
-        marks: model.windows
-          .filter((w) => p.lines[w.key])
-          .map((w) => ({ days: w.days, colour: t.windows[w.slot]!, slot: w.slot, yAt: null })),
-      });
-    }}
-  >
-    {#snippet title()}Distance per day{/snippet}
-  </Panel>
-
-  {#if p.panels.vol}
-    <Panel height={layout.phone ? 130 : 156} draw={windowPanel('vol', model.series?.vol, 'km / week')}>
-      {#snippet title()}Distance per week — {winsN}-week rolling averages{/snippet}
-    </Panel>
-  {/if}
-  {#if p.panels.freq}
+  <ExerciseBoundary height={300}>
     <Panel
-      height={layout.phone ? 130 : 156}
-      draw={windowPanel('freq', model.series?.freq, 'run days / week', true)}
-    >
-      {#snippet title()}Run days per week — {winsN}-week rolling averages{/snippet}
-    </Panel>
-  {/if}
-  {#if p.panels.runs}
-    <Panel height={layout.phone ? 130 : 156} draw={windowPanel('runs', model.series?.runs, 'runs / week')}>
-      {#snippet title()}Runs per week — {winsN}-week rolling averages{/snippet}
-    </Panel>
-  {/if}
-  {#if p.panels.sraw}
-    <Panel
-      height={layout.phone ? 130 : 156}
-      draw={windowPanel('sraw', model.stressSeries?.raw, 'raw / week')}
-    >
-      {#snippet title()}Raw stress score per week — {winsN}-week rolling averages{/snippet}
-    </Panel>
-  {/if}
-  {#if p.panels.srel}
-    <Panel
-      height={layout.phone ? 130 : 156}
-      draw={windowPanel('srel', model.stressSeries?.rel, 'rel. / week')}
-    >
-      {#snippet title()}Relative stress score per week — {winsN}-week rolling averages{/snippet}
-    </Panel>
-  {/if}
-  {#if p.panels.vdot}
-    <Panel
-      height={156}
+      height={300}
       draw={(ctx, w, h) => {
-        const f = frame('vdot', ctx, w, h);
-        if (!f || !model.vdotDays) return;
-        dashSeen = drawVdot(f, {
-          vdot: model.vdot,
-          dayValue: model.vdotDays.value,
-          nearDots: p.vdotNearDots,
-          nearPct: p.vdotNearPct,
-          windowDays: p.windowVdot,
-        }).dashSeen;
-      }}
-    >
-      {#snippet title()}Highest VDOT in the trailing {p.windowVdot} days{vdotNote}{/snippet}
-    </Panel>
-  {/if}
-  {#if p.panels.zarea}
-    <Panel
-      height={156}
-      draw={(ctx, w, h) => {
-        const f = frame('zarea', ctx, w, h);
-        const za = model.zoneArea;
-        if (!f || !za) return;
-        const k = model.zoneAreaSlot;
-        drawZoneArea(f, {
-          bands: za.bands,
-          total: za.total,
-          pct: p.zoneAreaMode.startsWith('pct'),
-          colours: bucketColours(f.theme),
-          axisLabel: zaAxis,
-          windowDays: model.windows[k]!.days,
-          windowColour: f.theme.windows[k]!,
+        const f = frame('bars', ctx, w, h);
+        if (!f || !model.daily) return;
+        const t = f.theme;
+        drawBars(f, {
+          km: model.daily.km,
+          segments: (i) => barSegments(i, t),
+          scale: p.barScale,
+          capKm: p.barCap ? p.barCapKm : null,
+          marks: model.windowsOrNone
+            .filter((w) => p.lines[w.key])
+            .map((w) => ({ days: w.days, colour: t.windows[w.slot]!, slot: w.slot, yAt: null })),
         });
       }}
     >
-      {#snippet title()}{zaMeasure} by pace zone — {model.windows[model.zoneAreaSlot]?.label} rolling{/snippet}
+      {#snippet title()}Distance per day{/snippet}
     </Panel>
+  </ExerciseBoundary>
+
+  {#if p.panels.vol}
+    <ExerciseBoundary height={layout.phone ? 130 : 156}>
+      <Panel height={layout.phone ? 130 : 156} draw={windowPanel('vol', model.series?.vol, 'km / week')}>
+        {#snippet title()}Distance per week — {winsN}-week rolling averages{/snippet}
+      </Panel>
+    </ExerciseBoundary>
+  {/if}
+  {#if p.panels.freq}
+    <ExerciseBoundary height={layout.phone ? 130 : 156}>
+      <Panel
+        height={layout.phone ? 130 : 156}
+        draw={windowPanel('freq', model.series?.freq, 'run days / week', true)}
+      >
+        {#snippet title()}Run days per week — {winsN}-week rolling averages{/snippet}
+      </Panel>
+    </ExerciseBoundary>
+  {/if}
+  {#if p.panels.runs}
+    <ExerciseBoundary height={layout.phone ? 130 : 156}>
+      <Panel height={layout.phone ? 130 : 156} draw={windowPanel('runs', model.series?.runs, 'runs / week')}>
+        {#snippet title()}Runs per week — {winsN}-week rolling averages{/snippet}
+      </Panel>
+    </ExerciseBoundary>
+  {/if}
+  {#if p.panels.sraw}
+    <ExerciseBoundary height={layout.phone ? 130 : 156}>
+      <Panel
+        height={layout.phone ? 130 : 156}
+        draw={windowPanel('sraw', model.stressSeries?.raw, 'raw / week')}
+      >
+        {#snippet title()}Raw stress score per week — {winsN}-week rolling averages{/snippet}
+      </Panel>
+    </ExerciseBoundary>
+  {/if}
+  {#if p.panels.srel}
+    <ExerciseBoundary height={layout.phone ? 130 : 156}>
+      <Panel
+        height={layout.phone ? 130 : 156}
+        draw={windowPanel('srel', model.stressSeries?.rel, 'rel. / week')}
+      >
+        {#snippet title()}Relative stress score per week — {winsN}-week rolling averages{/snippet}
+      </Panel>
+    </ExerciseBoundary>
+  {/if}
+  {#if p.panels.vdot}
+    <ExerciseBoundary height={156}>
+      <Panel
+        height={156}
+        draw={(ctx, w, h) => {
+          const f = frame('vdot', ctx, w, h);
+          if (!f || !model.vdotDays) return;
+          dashSeen = drawVdot(f, {
+            vdot: model.vdot,
+            dayValue: model.vdotDays.value,
+            nearDots: p.vdotNearDots,
+            nearPct: p.vdotNearPct,
+            windowDays: p.windowVdot,
+          }).dashSeen;
+        }}
+      >
+        {#snippet title()}Highest VDOT in the trailing {p.windowVdot} days{vdotNote}{/snippet}
+      </Panel>
+    </ExerciseBoundary>
+  {/if}
+  {#if p.panels.zarea}
+    <ExerciseBoundary height={156}>
+      <Panel
+        height={156}
+        draw={(ctx, w, h) => {
+          const f = frame('zarea', ctx, w, h);
+          const za = model.zoneArea;
+          if (!f || !za) return;
+          const k = model.zoneAreaSlot;
+          drawZoneArea(f, {
+            bands: za.bands,
+            total: za.total,
+            pct: p.zoneAreaMode.startsWith('pct'),
+            colours: bucketColours(f.theme),
+            axisLabel: zaAxis,
+            windowDays: model.windows[k]!.days,
+            windowColour: f.theme.windows[k]!,
+          });
+        }}
+      >
+        {#snippet title()}{zaMeasure} by pace zone — {model.windows[model.zoneAreaSlot]?.label} rolling{/snippet}
+      </Panel>
+    </ExerciseBoundary>
   {/if}
 
   <div class="hint" hidden={layout.phone}>

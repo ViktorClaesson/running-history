@@ -1,10 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { whenDone } from './lib/exercise';
   import { app } from './lib/state/app.svelte';
   import { model } from './lib/state/model.svelte';
   import { view } from './lib/state/view.svelte';
   import ChartCard from './lib/ui/components/ChartCard.svelte';
   import DataTable from './lib/ui/components/DataTable.svelte';
+  import ExerciseBoundary from './lib/ui/components/ExerciseBoundary.svelte';
   import Info from './lib/ui/components/Info.svelte';
   import InfoPop from './lib/ui/components/InfoPop.svelte';
   import Readout from './lib/ui/components/Readout.svelte';
@@ -12,6 +14,7 @@
   import StatTiles from './lib/ui/components/StatTiles.svelte';
   import ZoneCard from './lib/ui/components/ZoneCard.svelte';
   import { lastSyncedText } from './lib/ui/lastSynced';
+  import { isTyping, keyAction } from './lib/ui/keys';
   import { layout } from './lib/ui/layout.svelte';
   import PhoneApp from './lib/ui/components/PhoneApp.svelte';
   import UpdateBanner from './lib/ui/components/UpdateBanner.svelte';
@@ -25,23 +28,18 @@
   // Tell the view how long the history is (and which windows exist) whenever that changes.
   $effect(() => {
     const d = model.daily;
-    if (d) view.setContext(d.n, d.start, model.windows);
+    if (d) view.setContext(d.n, d.start, model.windowsOrNone);
   });
 
-  /**
-   * Keys for what's worth doing without aiming: 1–4 zoom to a window, r resets the view,
-   * t or Esc releases the pin. Modified presses are left alone (⌘R still reloads), and so is
-   * anything typed into an input, where "r" is just a letter.
-   */
+  // The keys (1–4, r, t, Esc) are mapped in ui/keys.ts; nothing happens until E31 is done.
   function onKey(e: KeyboardEvent) {
-    if (e.ctrlKey || e.metaKey || e.altKey) return;
-    const t = e.target;
-    if (t instanceof HTMLElement && (t.isContentEditable || /^(INPUT|SELECT|TEXTAREA)$/.test(t.tagName)))
-      return;
-    const k = e.key.toLowerCase();
-    if (k === 'r') view.reset();
-    else if (/^[1-4]$/.test(k)) view.zoomToWindow(Number(k) - 1);
-    else if (k === 'escape' || k === 't') view.selected = null;
+    const action = whenDone(
+      () => keyAction(e, isTyping(e.target)),
+      () => null,
+    );
+    if (action?.kind === 'reset') view.reset();
+    else if (action?.kind === 'window') view.zoomToWindow(action.slot);
+    else if (action?.kind === 'unpin') view.selected = null;
   }
 </script>
 
@@ -70,7 +68,12 @@
         {#if app.reprocessing}· reprocessing {app.reprocessing.done} / {app.reprocessing.total}…{/if}
       </div>
 
-      {#if app.loaded && !model.daily}
+      {#if model.dailyTodo}
+        <div class="card empty">
+          <h2>{model.dailyTodo.message}</h2>
+          <p>Your runs are loaded; the charts appear once the daily series can be built.</p>
+        </div>
+      {:else if app.loaded && !model.daily}
         <div class="card empty">
           <h2>No runs yet</h2>
           <p>
@@ -80,13 +83,13 @@
         </div>
       {/if}
 
-      <StatTiles />
-      {#if model.daily}<ChartCard />{/if}
-      <ZoneCard />
-      <DataTable />
+      <ExerciseBoundary card><StatTiles /></ExerciseBoundary>
+      {#if model.daily}<ExerciseBoundary card><ChartCard /></ExerciseBoundary>{/if}
+      <ExerciseBoundary card><ZoneCard /></ExerciseBoundary>
+      <ExerciseBoundary card><DataTable /></ExerciseBoundary>
     </div>
 
-    <aside class="sidebar"><Readout /></aside>
+    <aside class="sidebar"><ExerciseBoundary card><Readout /></ExerciseBoundary></aside>
   </div>
 {/if}
 

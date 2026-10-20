@@ -3,7 +3,6 @@ import { saveRun } from '../../src/lib/data/repositories/activities';
 import { allSamples, staleSampleIds } from '../../src/lib/data/repositories/samples';
 import { reprocess } from '../../src/lib/data/reprocess';
 import type { SampleSet } from '../../src/lib/domain/sampleTypes';
-import { handleRequest } from '../../src/lib/workers/protocol';
 import { freshDb } from '../helpers/fakeDb';
 import { fakeProcess, summary } from '../helpers/fakeSource';
 
@@ -26,7 +25,7 @@ const rebuild =
     processingVersion: version,
   });
 
-describe('reprocess', () => {
+describe('E20 reprocess', () => {
   it('rebuilds only the runs on an old version, from raw', async () => {
     const db = freshDb();
     await seed(db, ['a', 'b'], 1);
@@ -66,18 +65,5 @@ describe('reprocess', () => {
     });
     expect(res.failed).toEqual([{ id: 'a', error: 'bad file' }]);
     expect(res.rebuilt).toBe(1);
-  });
-});
-
-describe('worker protocol', () => {
-  it('answers an undecodable file with an error message rather than throwing', () => {
-    const { response } = handleRequest({
-      kind: 'process',
-      requestId: 7,
-      raw: { id: 'x', format: 'fit', bytes: new ArrayBuffer(4), fetchedAt: 'x' },
-      fileSportIndex: 0,
-    });
-    expect(response.kind).toBe('error');
-    expect(response.requestId).toBe(7);
   });
 });

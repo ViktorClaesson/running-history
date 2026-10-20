@@ -2,7 +2,7 @@ import { binCount, ZONE_BIN_OFFSET, ZONES } from '../../domain/paceZones';
 import { leadColours, zoneRamps } from './ramps';
 import type { Theme } from './theme';
 import { FONT } from './theme';
-import { niceTicks } from './ticks';
+import { axisTicks } from './ticks';
 
 /**
  * One run's pace-zone histogram: Standing, Walking, Recovery, then every zone's sub-bands,
@@ -30,7 +30,7 @@ export function drawZoneHistogram(
 ): void {
   const pw = w - PAD.l - PAD.r;
   const ph = h - PAD.t - PAD.b;
-  const { ticks, step } = niceTicks(d.maxVal * 1.12);
+  const { ticks, step } = axisTicks(d.maxVal * 1.12);
   const yMax = ticks[ticks.length - 1]!;
   const yOf = (v: number) => PAD.t + ph * (1 - v / yMax);
   const slots = binCount(d.zoneBars);

@@ -15,7 +15,7 @@ const base = (db: ReturnType<typeof freshDb>, source: FakeSource): SyncOptions =
   today: d('2026-10-17'),
 });
 
-describe('planRanges', () => {
+describe('E24 planRanges', () => {
   it('backfills from the earliest date a year at a time', () => {
     const r = planRanges(null, d('2023-01-01'), d('2024-06-01'));
     expect(r).toEqual([
@@ -35,7 +35,7 @@ describe('planRanges', () => {
   });
 });
 
-describe('decide', () => {
+describe('E24 decide', () => {
   const s = summary('a', '2026-10-14T18:00:00');
   const row = { ...s, syncedAt: 'x' };
   it('fetches new, changed, or incomplete runs', () => {
@@ -50,7 +50,7 @@ describe('decide', () => {
   });
 });
 
-describe('runSync', () => {
+describe('E25 runSync', () => {
   const history = [
     summary('r1', '2023-02-01T18:51:02'),
     summary('r2', '2024-07-20T23:36:46'), // late-evening: stays on the 20th
@@ -170,7 +170,7 @@ describe('runSync', () => {
   });
 });
 
-describe('fetchInOrder', () => {
+describe('E25 fetchInOrder', () => {
   it('commits in input order even when later items finish first', async () => {
     const committed: number[] = [];
     const delays = [30, 5, 15, 0];

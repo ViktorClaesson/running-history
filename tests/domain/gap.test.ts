@@ -8,7 +8,7 @@ import {
   sampleGrades,
 } from '../../src/lib/domain/gap';
 
-describe('Minetti cost of running', () => {
+describe('E17 Minetti cost of running', () => {
   it('has the published shape: 3.6 J/kg/m on the flat, cheapest around −20%', () => {
     expect(minettiCost(0)).toBeCloseTo(3.6, 10);
     let best = 0;
@@ -28,7 +28,7 @@ describe('Minetti cost of running', () => {
   });
 });
 
-describe('GAP strength (an exponent on the Minetti curve)', () => {
+describe('E17 GAP strength (an exponent on the Minetti curve)', () => {
   // Runalyze's own unit tests (Runalyze 4.3, MinettiTest.php, "verified by own spreadsheet"):
   // energy cost ratios and their time factors at exponent 0.83. An independent implementation.
   const runalyze: [number, number, number][] = [
@@ -51,7 +51,7 @@ describe('GAP strength (an exponent on the Minetti curve)', () => {
   });
 });
 
-describe('grades', () => {
+describe('E17 grades', () => {
   it('interpolates altitude over distance, and handles standing still', () => {
     const dist = Float64Array.from([0, 10, 10, 20]);
     const alt = Float64Array.from([0, 1, 1, 3]);

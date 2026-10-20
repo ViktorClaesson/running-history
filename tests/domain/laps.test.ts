@@ -11,7 +11,7 @@ const lap = (trigger: string | null, wktStepIndex: number | null = null): WatchL
 });
 
 // The shapes are the real ones from docs/intervals-api-findings.md.
-describe('detectSegments', () => {
+describe('E16 detectSegments', () => {
   it('an easy run with autolap off is one segment', () => {
     expect(detectSegments([lap('sessionEnd')])).toEqual({ rule: 'none', segmentOfLap: [0], count: 1 });
   });

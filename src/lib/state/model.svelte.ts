@@ -1,3 +1,4 @@
+import { isNotDone, whenDone, type ExerciseNotDoneError } from '../exercise';
 import { buildDaily, dateAt, type Daily } from '../domain/daily';
 import { todayLocal } from '../domain/dates';
 import { perWeek } from '../domain/rolling';
@@ -17,14 +18,32 @@ import { settings } from './settings.svelte';
  * when something it read changes. So moving a drawing-only setting (bar scale) recomputes
  * nothing here, and moving the VDOT window recomputes VDOT and what hangs off it, not the
  * distance windows. https://svelte.dev/docs/svelte/$derived
+ *
+ * On the exercise branch a field whose code isn't written yet throws ExerciseNotDoneError
+ * when read, and the component reading it shows a placeholder instead. Only the two fields
+ * the page frame itself needs are caught here: `daily` (null, with `dailyTodo` saying
+ * which exercise is missing) and `windowsOrNone` (empty until E04).
  */
 class ModelStore {
   readonly today = todayLocal();
 
-  daily: Daily | null = $derived(
-    buildDaily(app.runs, app.samples, settings.p.chunkSec, settings.p.gapExp, this.today),
+  private dailyOrTodo: Daily | ExerciseNotDoneError | null = $derived(
+    whenDone<Daily | ExerciseNotDoneError | null>(
+      () => buildDaily(app.runs, app.samples, settings.p.chunkSec, settings.p.gapExp, this.today),
+      (e) => e,
+    ),
   );
+  daily: Daily | null = $derived(isNotDone(this.dailyOrTodo) ? null : this.dailyOrTodo);
+  /** The exercise standing between the synced runs and the daily series, if any. */
+  dailyTodo: ExerciseNotDoneError | null = $derived(isNotDone(this.dailyOrTodo) ? this.dailyOrTodo : null);
   windows = $derived(buildWindows(settings.p.windowBase, settings.p.windowMult));
+  /** `windows`, or none until E04 is done: for the page frame (settings, view, buttons). */
+  windowsOrNone = $derived(
+    whenDone(
+      () => this.windows,
+      () => [],
+    ),
+  );
   series = $derived(this.daily ? windowSeries(this.daily, this.windows) : null);
 
   vdotDays = $derived(

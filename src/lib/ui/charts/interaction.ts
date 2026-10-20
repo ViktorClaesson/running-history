@@ -1,3 +1,4 @@
+import { whenDone } from '../../exercise';
 import { model } from '../../state/model.svelte';
 import { view } from '../../state/view.svelte';
 import { dayAt, PAD, plotW, type XMap } from './geometry';
@@ -14,8 +15,11 @@ import { dayAt, PAD, plotW, type XMap } from './geometry';
  *   on the canvas).
  * A pan must never end in a pin: a press that moved more than DRAG_PX is a drag, not a click.
  * https://developer.mozilla.org/en-US/docs/Web/API/Pointer_events
+ *
+ * Hover, wheel zoom and double-click are wired in `chartPointer`; pressing, dragging,
+ * releasing and pinching are the functions below it (exercise E33 on the exercise branch).
  */
-const DRAG_PX = 3;
+export const DRAG_PX = 3;
 /** Wheel delta → zoom factor; the legacy feel. */
 const WHEEL_ZOOM = 0.0022;
 
@@ -49,6 +53,15 @@ function dayUnder(canvas: HTMLCanvasElement, x: number): number | null {
 const fracAt = (canvas: HTMLCanvasElement, x: number) =>
   Math.min(1, Math.max(0, (x - PAD.l) / plotW(xmapOf(canvas))));
 
+/** Pointer down (not the second finger of a pinch): a primary press starts a drag. */
+function startDrag(canvas: HTMLCanvasElement, e: PointerEvent): void {
+  if (e.button !== 0) return;
+  canvas.setPointerCapture(e.pointerId);
+  drag = { x: localX(canvas, e.clientX), center: view.center, moved: false, key: false };
+  canvas.style.cursor = 'grabbing';
+}
+
+/** Mid-drag: the day grabbed stays under the pointer. Past DRAG_PX it counts as a drag, not a click. */
 function panTo(canvas: HTMLCanvasElement, x: number): void {
   if (!drag) return;
   if (Math.abs(x - drag.x) > DRAG_PX) drag.moved = true;
@@ -56,35 +69,40 @@ function panTo(canvas: HTMLCanvasElement, x: number): void {
   view.panTo(drag.center - (x - drag.x) / barW);
 }
 
+/** Pointer up (or cancelled): ends a drag; a press that never moved is a click, and pins the day. */
+function endDrag(canvas: HTMLCanvasElement, e: PointerEvent): void {
+  if (!drag || drag.key) return;
+  const wasClick = !drag.moved;
+  drag = null;
+  canvas.style.cursor = '';
+  if (wasClick && e.type === 'pointerup') {
+    const i = dayUnder(canvas, localX(canvas, e.clientX));
+    if (i !== null) view.togglePin(i);
+  }
+}
+
+/** Runs a handler that is (part of) exercise E33, doing nothing until it is written. */
+const unlessTodo = (f: () => void) => whenDone(f, () => {});
+
 /** A Svelte attachment: `<canvas {@attach chartPointer}>`. Returns its own cleanup. */
 export function chartPointer(canvas: HTMLCanvasElement): () => void {
   const onDown = (e: PointerEvent) => {
     if (e.pointerType === 'touch') touches.set(e.pointerId, e.clientX);
-    if (e.pointerType === 'touch' && touches.size === 2) return startPinch(canvas);
-    if (e.button !== 0) return;
-    canvas.setPointerCapture(e.pointerId);
-    drag = { x: localX(canvas, e.clientX), center: view.center, moved: false, key: false };
-    canvas.style.cursor = 'grabbing';
+    if (e.pointerType === 'touch' && touches.size === 2) unlessTodo(() => startPinch(canvas));
+    else unlessTodo(() => startDrag(canvas, e));
   };
   const onMove = (e: PointerEvent) => {
     const x = localX(canvas, e.clientX);
     if (e.pointerType === 'touch' && touches.has(e.pointerId)) touches.set(e.pointerId, e.clientX);
-    if (pinch) return movePinch();
+    if (pinch) return unlessTodo(movePinch);
     lastPointer = { canvas, x };
-    if (drag) return panTo(canvas, x);
+    if (drag) return unlessTodo(() => panTo(canvas, x));
     if (e.pointerType !== 'touch') view.hover = dayUnder(canvas, x);
   };
   const onUp = (e: PointerEvent) => {
     touches.delete(e.pointerId);
     if (touches.size < 2) pinch = null;
-    if (!drag || drag.key) return;
-    const wasClick = !drag.moved;
-    drag = null;
-    canvas.style.cursor = '';
-    if (wasClick && e.type === 'pointerup') {
-      const i = dayUnder(canvas, localX(canvas, e.clientX));
-      if (i !== null) view.togglePin(i);
-    }
+    unlessTodo(() => endDrag(canvas, e));
   };
   const onLeave = (e: PointerEvent) => {
     if (e.pointerType === 'touch') return;
@@ -120,6 +138,7 @@ export function chartPointer(canvas: HTMLCanvasElement): () => void {
   };
 }
 
+/** A second finger went down: from now on the two fingers zoom, anchored between them. */
 function startPinch(canvas: HTMLCanvasElement): void {
   drag = null;
   const [a, b] = [...touches.values()] as [number, number];

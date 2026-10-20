@@ -1,7 +1,9 @@
 <script lang="ts">
-  import { fmtDate, parseIsoDate, todayLocal } from '../../domain/dates';
+  import { todayLocal } from '../../domain/dates';
   import { PROCESSING_VERSION } from '../../data/processingVersion';
   import { app } from '../../state/app.svelte';
+  import { parseEarliest } from '../../state/syncConfig';
+  import { dayText } from '../lastSynced';
 
   // A local copy of the form, so typing doesn't save on every keystroke; "Save" commits it.
   let athleteId = $state(app.config.athleteId);
@@ -13,7 +15,7 @@
     app.saveConfig({
       athleteId: athleteId.trim(),
       apiKey: apiKey.trim(),
-      earliest: parseIsoDate(earliest) ?? app.config.earliest,
+      earliest: parseEarliest(earliest) ?? app.config.earliest,
       types: types
         .split(',')
         .map((t) => t.trim())
@@ -25,9 +27,8 @@
     const s = app.lastSync;
     if (!s) return 'never synced';
     const local = new Date(s.at);
-    const day = parseIsoDate(todayLocal(local));
     const time = local.toTimeString().slice(0, 5);
-    return `last synced ${day ? fmtDate(day) : ''} ${time} · ${s.requests} requests`;
+    return `last synced ${dayText(todayLocal(local))} ${time} · ${s.requests} requests`;
   });
 
   const progressText = $derived.by(() => {

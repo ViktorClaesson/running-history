@@ -12,6 +12,7 @@
   import { durStr, km2, nf0, nf1, paceOfVel, paceStr, perMonthKm, perYearKm, plural } from '../format';
   import { shownDay } from '../shownDay.svelte';
   import { theme } from '../theme.svelte';
+  import ExerciseBoundary from './ExerciseBoundary.svelte';
   import Info from './Info.svelte';
 
   const shown = $derived(shownDay());
@@ -46,14 +47,12 @@
 </script>
 
 <div class={['card', 'readout', !shown && 'idle']}>
-  {#if !shown || !model.daily || !model.series}
+  {#if !shown || !model.daily}
     <span class="date">Hover a bar to see that day&rsquo;s numbers</span>
   {:else}
     {@const i = shown.i}
     {@const d = model.daily}
-    {@const s = model.series}
     {@const runs = d.runs[i] ?? []}
-    {@const verdict = model.verdicts[i] ?? -1}
     <span class="date"
       >{fmtDate(dateAt(d, i))}{#if shown.tag}<span class="pin">{shown.tag}</span>{/if}</span
     >
@@ -68,130 +67,154 @@
       <span class="v2">{runs.length > 1 ? runs.map((r) => km2(r.km)).join(' + ') + ' km' : ''}</span>
     </span>
 
-    <span class="pair">
-      <span class="k">Distance per week</span>
-      <span class="wingrid">
-        {#each model.windows as w (w.key)}
-          <span class="sw" style:background="var({WINDOW_CSS[w.slot]})"></span>
-          <span class="wl">{w.label}</span>
-          <span class="wv">{s.vol[w.slot]![i]!.toFixed(1)} km</span>
-          <span class="wx"
-            ><span class="seg">{nf0.format(perMonthKm(s.vol[w.slot]![i]!))} km/mo</span> ·
-            <span class="seg">{nf0.format(perYearKm(s.vol[w.slot]![i]!))} km/yr</span></span
-          >
-        {/each}
-      </span>
-    </span>
-
-    <span class="pair">
-      <span class="k">Run days/Runs per week</span>
-      <span class="wingrid">
-        {#each model.windows as w (w.key)}
-          <span class="sw" style:background="var({WINDOW_CSS[w.slot]})"></span>
-          <span class="wl">{w.label}</span>
-          <span class="wv"
-            >{s.runs[w.slot]![i]!.toFixed(1)}<span class="wu">{' runs in '}</span>{s.freq[w.slot]![
-              i
-            ]!.toFixed(1)}<span class="wu">{' days'}</span></span
-          >
-          <span class="wx has-info"
-            ><Info
-              >{plural(s.runsIn[w.slot]![i]!, 'run')} in {plural(s.runDaysIn[w.slot]![i]!, 'day')} (out of {w.days}
-              days)</Info
-            ></span
-          >
-        {/each}
-      </span>
-    </span>
-
-    <span class="pair">
-      <span class="k">Stress that day</span>
-      <span class="v"
-        >{#if d.km[i]! > 0}{nf0.format(model.stress?.raw[i] ?? 0)} raw<span class="sub-v"
-            >{` · ${nf0.format(model.stress?.rel[i] ?? 0)} relative`}</span
-          >{:else}no run{/if}</span
-      >
-    </span>
-
-    <span class="pair">
-      <span class="k">Raw/Relative stress per week</span>
-      <span class="wingrid stressgrid">
-        {#each model.windows as w (w.key)}
-          {@const raw = model.stressSeries?.raw[w.slot]![i] ?? 0}
-          {@const rel = model.stressSeries?.rel[w.slot]![i] ?? 0}
-          <span class="sw" style:background="var({WINDOW_CSS[w.slot]})"></span>
-          <span class="wl">{w.label}</span>
-          <span class="wv">{nf0.format(raw)}</span>
-          <span class="wx">{nf0.format(raw / 7)}/day</span>
-          <span class="wv rel">{nf0.format(rel)}</span>
-          <span class="wx">{nf0.format(rel / 7)}/day</span>
-        {/each}
-      </span>
-    </span>
-
-    <span class="pair">
-      <span class="k"
-        >By pace zone, {model.windows[model.zoneAreaSlot]?.label}
-        {model.zoneAreaByMin ? 'min' : 'km'}/week</span
-      >
-      <span class="wingrid zonegrid">
-        {#if model.zoneArea}
-          {@const za = model.zoneArea}
-          {@const colours = bucketColours(theme.current)}
-          {@const tot = za.total[i]!}
-          {#each Array.from({ length: N_BUCKETS }, (_, k) => N_BUCKETS - 1 - k) as b (b)}
-            {@const x = za.bands[b]![i]!}
-            <span class="sw fill" style:background={colours[b]}></span>
-            <span class="wl">{BUCKET_LABELS[b]}</span>
-            <span class="wv"
-              >{(model.zoneAreaByMin ? nf0 : nf1).format(x)} {model.zoneAreaByMin ? 'min' : 'km'}</span
-            >
-            <span class="wx wp">{tot > 0 ? nf0.format((x / tot) * 100) + '%' : ''}</span>
-            <span class="wx">{bucketPace(b, model.vdot[i] ?? null)}</span>
-          {/each}
-        {/if}
-      </span>
-    </span>
-
-    <span class="pair">
-      <span class="k">VDOT (peak, trailing {Math.round(p.windowVdot / 7)}w)</span>
-      <span class="v">{model.vdot[i] != null ? model.vdot[i]!.toFixed(1) : '—'}</span>
-      {#if true}
-        {@const [line1, line2] = vdotBasis(i)}
-        <span class="v2"
-          >{line1}{#if line2}<br /><span class="seg">{line2}</span>{/if}</span
-        >
-      {/if}
-    </span>
-
-    {#if p.barColour === 'workout' && verdict >= 0}
-      {@const ws = model.workouts[i] ?? []}
-      {@const known = ws.filter((w) => w !== null)}
-      {@const top = known.reduce<WorkoutType | null>((a, b) => (a === null || b.type > a.type ? b : a), null)}
-      {#if top === null}
-        <span class="badge" style:color="var(--text-secondary)"
-          >no timing data<span class="why">&nbsp;</span></span
-        >
-      {:else}
-        <span class="badge" style:color={workoutColour(theme.current, top.type)}>
-          <span
-            >{#each ws as w, k (k)}{k > 0 ? ' + ' : ''}<span
-                style:color={workoutColour(theme.current, w?.type ?? null)}
-                >{w ? WORKOUT_TYPES[w.type].label : '?'}</span
-              >{/each}</span
-          >
-          <span class="why" title={ws.map(why).join(' · ')}>{ws.map(why).join(' · ')}</span>
+    <ExerciseBoundary>
+      {#if model.series}
+        {@const s = model.series}
+        <span class="pair">
+          <span class="k">Distance per week</span>
+          <span class="wingrid">
+            {#each model.windows as w (w.key)}
+              <span class="sw" style:background="var({WINDOW_CSS[w.slot]})"></span>
+              <span class="wl">{w.label}</span>
+              <span class="wv">{s.vol[w.slot]![i]!.toFixed(1)} km</span>
+              <span class="wx"
+                ><span class="seg">{nf0.format(perMonthKm(s.vol[w.slot]![i]!))} km/mo</span> ·
+                <span class="seg">{nf0.format(perYearKm(s.vol[w.slot]![i]!))} km/yr</span></span
+              >
+            {/each}
+          </span>
         </span>
       {/if}
-    {:else}
-      <span
-        class="badge"
-        style:color={verdict >= 0 ? `var(${WINDOW_CSS[verdict]})` : 'var(--text-secondary)'}
-      >
-        {verdict >= 0 ? `${VERDICTS[verdict]!.arrow} ${VERDICTS[verdict]!.label}` : '— rest day'}
-        <span class="why">{verdict >= 0 ? `${model.windows[verdict]!.label} highest` : '\u00a0'}</span>
+    </ExerciseBoundary>
+
+    <ExerciseBoundary>
+      {#if model.series}
+        {@const s = model.series}
+        <span class="pair">
+          <span class="k">Run days/Runs per week</span>
+          <span class="wingrid">
+            {#each model.windows as w (w.key)}
+              <span class="sw" style:background="var({WINDOW_CSS[w.slot]})"></span>
+              <span class="wl">{w.label}</span>
+              <span class="wv"
+                >{s.runs[w.slot]![i]!.toFixed(1)}<span class="wu">{' runs in '}</span>{s.freq[w.slot]![
+                  i
+                ]!.toFixed(1)}<span class="wu">{' days'}</span></span
+              >
+              <span class="wx has-info"
+                ><Info
+                  >{plural(s.runsIn[w.slot]![i]!, 'run')} in {plural(s.runDaysIn[w.slot]![i]!, 'day')} (out of {w.days}
+                  days)</Info
+                ></span
+              >
+            {/each}
+          </span>
+        </span>
+      {/if}
+    </ExerciseBoundary>
+
+    <ExerciseBoundary>
+      <span class="pair">
+        <span class="k">Stress that day</span>
+        <span class="v"
+          >{#if d.km[i]! > 0}{nf0.format(model.stress?.raw[i] ?? 0)} raw<span class="sub-v"
+              >{` · ${nf0.format(model.stress?.rel[i] ?? 0)} relative`}</span
+            >{:else}no run{/if}</span
+        >
       </span>
-    {/if}
+    </ExerciseBoundary>
+
+    <ExerciseBoundary>
+      <span class="pair">
+        <span class="k">Raw/Relative stress per week</span>
+        <span class="wingrid stressgrid">
+          {#each model.windows as w (w.key)}
+            {@const raw = model.stressSeries?.raw[w.slot]![i] ?? 0}
+            {@const rel = model.stressSeries?.rel[w.slot]![i] ?? 0}
+            <span class="sw" style:background="var({WINDOW_CSS[w.slot]})"></span>
+            <span class="wl">{w.label}</span>
+            <span class="wv">{nf0.format(raw)}</span>
+            <span class="wx">{nf0.format(raw / 7)}/day</span>
+            <span class="wv rel">{nf0.format(rel)}</span>
+            <span class="wx">{nf0.format(rel / 7)}/day</span>
+          {/each}
+        </span>
+      </span>
+    </ExerciseBoundary>
+
+    <ExerciseBoundary>
+      <span class="pair">
+        <span class="k"
+          >By pace zone, {model.windows[model.zoneAreaSlot]?.label}
+          {model.zoneAreaByMin ? 'min' : 'km'}/week</span
+        >
+        <span class="wingrid zonegrid">
+          {#if model.zoneArea}
+            {@const za = model.zoneArea}
+            {@const colours = bucketColours(theme.current)}
+            {@const tot = za.total[i]!}
+            {#each Array.from({ length: N_BUCKETS }, (_, k) => N_BUCKETS - 1 - k) as b (b)}
+              {@const x = za.bands[b]![i]!}
+              <span class="sw fill" style:background={colours[b]}></span>
+              <span class="wl">{BUCKET_LABELS[b]}</span>
+              <span class="wv"
+                >{(model.zoneAreaByMin ? nf0 : nf1).format(x)} {model.zoneAreaByMin ? 'min' : 'km'}</span
+              >
+              <span class="wx wp">{tot > 0 ? nf0.format((x / tot) * 100) + '%' : ''}</span>
+              <span class="wx">{bucketPace(b, model.vdot[i] ?? null)}</span>
+            {/each}
+          {/if}
+        </span>
+      </span>
+    </ExerciseBoundary>
+
+    <ExerciseBoundary>
+      <span class="pair">
+        <span class="k">VDOT (peak, trailing {Math.round(p.windowVdot / 7)}w)</span>
+        <span class="v">{model.vdot[i] != null ? model.vdot[i]!.toFixed(1) : '—'}</span>
+        {#if true}
+          {@const [line1, line2] = vdotBasis(i)}
+          <span class="v2"
+            >{line1}{#if line2}<br /><span class="seg">{line2}</span>{/if}</span
+          >
+        {/if}
+      </span>
+    </ExerciseBoundary>
+
+    <ExerciseBoundary>
+      {@const verdict = model.verdicts[i] ?? -1}
+      {#if p.barColour === 'workout' && verdict >= 0}
+        {@const ws = model.workouts[i] ?? []}
+        {@const known = ws.filter((w) => w !== null)}
+        {@const top = known.reduce<WorkoutType | null>(
+          (a, b) => (a === null || b.type > a.type ? b : a),
+          null,
+        )}
+        {#if top === null}
+          <span class="badge" style:color="var(--text-secondary)"
+            >no timing data<span class="why">&nbsp;</span></span
+          >
+        {:else}
+          <span class="badge" style:color={workoutColour(theme.current, top.type)}>
+            <span
+              >{#each ws as w, k (k)}{k > 0 ? ' + ' : ''}<span
+                  style:color={workoutColour(theme.current, w?.type ?? null)}
+                  >{w ? WORKOUT_TYPES[w.type].label : '?'}</span
+                >{/each}</span
+            >
+            <span class="why" title={ws.map(why).join(' · ')}>{ws.map(why).join(' · ')}</span>
+          </span>
+        {/if}
+      {:else}
+        <span
+          class="badge"
+          style:color={verdict >= 0 ? `var(${WINDOW_CSS[verdict]})` : 'var(--text-secondary)'}
+        >
+          {verdict >= 0 ? `${VERDICTS[verdict]!.arrow} ${VERDICTS[verdict]!.label}` : '— rest day'}
+          <span class="why">{verdict >= 0 ? `${model.windows[verdict]!.label} highest` : '\u00a0'}</span>
+        </span>
+      {/if}
+    </ExerciseBoundary>
   {/if}
 </div>
 

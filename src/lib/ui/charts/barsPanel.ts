@@ -1,3 +1,4 @@
+import { whenDone } from '../../exercise';
 import type { BarScale } from '../../state/prefs';
 import { drawXLabels } from './axes';
 import { bottomInset, type Frame } from './frame';
@@ -31,11 +32,17 @@ export interface BarsInput {
   marks: Mark[];
 }
 
-interface YAxis {
+/** The bar panel's y-axis for the days in view. */
+export interface BarAxis {
+  /** Distance (km) → canvas y (pixels, growing downwards). */
   yOf: (v: number) => number;
+  /** Gridline values, km, bottom to top. */
   ticks: number[];
+  /** The value at the top of the plot. */
   top: number;
+  /** The axis stops at the cap (its top tick is labelled "45+"). */
   capped: boolean;
+  /** Linear tick step (decides the label decimals); 1 on log. */
   step: number;
 }
 
@@ -43,12 +50,18 @@ export function drawBars(f: Frame, d: BarsInput): void {
   const plotH = f.height - TOP - bottomInset(f);
   const base = TOP + plotH;
   const [i0, i1] = visibleRange(f.x, f.n);
-  const shown = (i: number) => (d.capKm !== null ? Math.min(d.km[i]!, d.capKm) : d.km[i]!);
   const isCut = (i: number) => d.capKm !== null && d.km[i]! > d.capKm;
-  const axis = yAxis(d, i0, i1, shown, isCut, plotH, base);
+  let note = '';
+  const axis = whenDone(
+    () => barYAxis(d, i0, i1, plotH, base),
+    (e) => {
+      note = `${e.message} (a plain linear axis for now)`;
+      return plainBarAxis(d, i0, i1, plotH, base);
+    },
+  );
   // Every height goes through here: a rest day is a stub, never log(0).
   const topOf = (i: number) =>
-    d.km[i]! > 0 ? Math.min(axis.yOf(shown(i)), base - MIN_RUN_H) : base - REST_STUB;
+    d.km[i]! > 0 ? Math.min(axis.yOf(shownKm(d, i)), base - MIN_RUN_H) : base - REST_STUB;
 
   drawGrid(f, axis, d.scale, base);
   const { ctx } = f;
@@ -64,18 +77,30 @@ export function drawBars(f: Frame, d: BarsInput): void {
   // Dashed lines only, no dots: a window isn't a series here, a dot would float.
   drawWindowStarts(f, TOP, plotH, i0, i1, d.marks, false);
   ctx.restore();
+  if (note) drawNote(f, note);
   if (f.isBottom) drawXLabels(f, TOP, plotH, i0, i1);
 }
 
-function yAxis(
-  d: BarsInput,
+/** A day's distance as drawn: cut off at the cap, when there is one. */
+const shownKm = (d: Pick<BarsInput, 'km' | 'capKm'>, i: number): number =>
+  d.capKm !== null ? Math.min(d.km[i]!, d.capKm) : d.km[i]!;
+
+/**
+ * The y-axis for days i0…i1, on a plot `plotH` pixels tall whose floor is at y = `base`.
+ * Linear: 0 on the floor, niceTicks up to the tallest bar. Log: from a 1/2/5 value under
+ * the shortest bar to one over the tallest, at least a decade, with that bottom value
+ * MIN_RUN_H above the floor so even the shortest run is a visible bar. Either way the axis
+ * stops at the cap when the cap is on and something reaches it. Rest days don't count.
+ */
+export function barYAxis(
+  d: Pick<BarsInput, 'km' | 'scale' | 'capKm'>,
   i0: number,
   i1: number,
-  shown: (i: number) => number,
-  isCut: (i: number) => boolean,
   plotH: number,
   base: number,
-): YAxis {
+): BarAxis {
+  const shown = (i: number) => shownKm(d, i);
+  const isCut = (i: number) => d.capKm !== null && d.km[i]! > d.capKm;
   let vMax = 0;
   let vMin = Infinity;
   let anyCut = false;
@@ -89,7 +114,7 @@ function yAxis(
   // The axis stops at the cap whenever it would otherwise reach past it (a cut run, or
   // rounding 42 km up to 50), so it never rounds out to a height no bar can reach.
   const capAt = (top: number) => (d.capKm !== null && (anyCut || top > d.capKm) ? d.capKm : null);
-  let axis: YAxis;
+  let axis: BarAxis;
   if (d.scale === 'log') {
     const cap = capAt(logUp(vMax));
     const top = cap ?? logUp(vMax);
@@ -123,7 +148,30 @@ function yAxis(
   return axis;
 }
 
-function drawGrid(f: Frame, axis: YAxis, scale: BarScale, base: number): void {
+/** Until exercise E30 (or E29, the ticks it uses) is done: 0 to the tallest bar, no gridlines. */
+function plainBarAxis(
+  d: Pick<BarsInput, 'km' | 'capKm'>,
+  i0: number,
+  i1: number,
+  plotH: number,
+  base: number,
+): BarAxis {
+  let top = 0;
+  for (let i = i0; i <= i1; i++) top = Math.max(top, shownKm(d, i));
+  if (!(top > 0)) top = 10;
+  return { yOf: (v) => base - (plotH * v) / top, ticks: [], top, capped: false, step: 1 };
+}
+
+function drawNote(f: Frame, text: string): void {
+  const { ctx, theme } = f;
+  ctx.font = FONT;
+  ctx.fillStyle = theme.muted;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillText(text, PAD.l + 6, TOP);
+}
+
+function drawGrid(f: Frame, axis: BarAxis, scale: BarScale, base: number): void {
   const { ctx, theme } = f;
   ctx.font = FONT;
   ctx.textAlign = 'right';

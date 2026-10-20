@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { buildDaily } from '../../src/lib/domain/daily';
+import { buildDaily, segmentTotals } from '../../src/lib/domain/daily';
 import { isoDate } from '../../src/lib/domain/dates';
 import { DUST, perWeek, rollingSum } from '../../src/lib/domain/rolling';
 import { classify, highestSlot } from '../../src/lib/domain/verdict';
 import { buildWindows, windowSeries } from '../../src/lib/domain/windows';
-import { evenRun, makeDaily } from '../helpers/daily';
+import { evenRun, makeDaily, sampleSet } from '../helpers/daily';
 
 /** A deterministic pseudo-random sequence, so the "random" tests are repeatable. */
 function rng(seed: number) {
@@ -12,7 +12,7 @@ function rng(seed: number) {
   return () => (s = (s * 1103515245 + 12345) % 2 ** 31) / 2 ** 31;
 }
 
-describe('rolling sums', () => {
+describe('E02 rolling sums', () => {
   it('equal a brute-force sum over the window, and never go negative', () => {
     const r = rng(1);
     const v = Array.from({ length: 500 }, () => (r() < 0.5 ? 0 : Math.round(r() * 20000) / 1000));
@@ -41,7 +41,7 @@ describe('rolling sums', () => {
   });
 });
 
-describe('windows', () => {
+describe('E04 windows', () => {
   it('derive 1/4/16/64 weeks from base 1 and multiple 4, keyed by slot', () => {
     expect(buildWindows(1, 4).map((w) => [w.key, w.weeks, w.days, w.label])).toEqual([
       ['s0', 1, 7, '1w'],
@@ -61,31 +61,66 @@ describe('windows', () => {
     expect(s.freq[0]![2]).toBeCloseTo(2, 9);
     expect(s.runs[0]![2]).toBeCloseTo(3, 9);
   });
+});
 
-  it('run the daily series to today, with a late-evening run on its own day', () => {
-    const run = {
-      id: 'x',
-      startLocal: '2026-10-10T23:36:46',
-      localDate: isoDate('2026-10-10'),
-      name: '',
-      type: 'Run',
-      distanceM: 5000,
-      movingS: 1500,
-      elapsedS: 1500,
-      avgHr: null,
-      elevGainM: null,
-      changeMarker: '',
-      fileSportIndex: 0,
-    };
+const activity = (id: string, startLocal: string, distanceM: number) => ({
+  id,
+  startLocal,
+  localDate: isoDate(startLocal.slice(0, 10)),
+  name: '',
+  type: 'Run',
+  distanceM,
+  movingS: 1500,
+  elapsedS: 1500,
+  avgHr: null,
+  elevGainM: null,
+  changeMarker: '',
+  fileSportIndex: 0,
+});
+
+describe('E03 daily series', () => {
+  it('runs to today, with a late-evening run on its own day', () => {
+    const run = activity('x', '2026-10-10T23:36:46', 5000);
     const d = buildDaily([run], new Map(), 30, 0.5, isoDate('2026-10-17'))!;
+    expect(d.start).toBe('2026-10-10');
     expect(d.n).toBe(8);
     expect(d.km[0]).toBe(5);
     expect(d.km[7]).toBe(0);
     expect(d.lastRunIdx).toBe(0);
+    expect(buildDaily([], new Map(), 30, 0.5, isoDate('2026-10-17'))).toBeNull();
+  });
+
+  it('keeps each run apart, earliest first, and rounds the day to the metre', () => {
+    const acts = [
+      activity('b', '2026-10-12T18:00:00', 200.0004),
+      activity('a', '2026-10-12T07:00:00', 100),
+      activity('c', '2026-10-14T07:00:00', 3000),
+    ];
+    const d = buildDaily(acts, new Map(), 30, 0.5, isoDate('2026-10-14'))!;
+    expect(d.runs[0]!.map((r) => r.id)).toEqual(['a', 'b']);
+    expect(Array.from(d.nRuns)).toEqual([2, 0, 1]);
+    expect(d.km[0]).toBe(0.3); // 0.1 + 0.2000004, rounded: not 0.30000040000000003
+    expect(d.lastRunIdx).toBe(2);
+    expect(d.runs[0]![0]!.chunks).toBeNull(); // no samples: not processed yet
+  });
+
+  it('totals each segment, with the time at its grade-adjusted speed', () => {
+    const s = sampleSet('s', [
+      { m: 500, s: 150, seg: 0 },
+      { m: 500, s: 150, seg: 0, grade: 0.1 },
+      { m: 400, s: 100, seg: 1 },
+    ]);
+    const factor = (g: number) => 1 + 2 * g; // 0.1 → 1.2 flat metres per metre
+    const t = segmentTotals(s, factor);
+    expect(t).toHaveLength(2);
+    expect(t[0]!.km).toBeCloseTo(1, 9);
+    expect(t[0]!.sec).toBe(300);
+    expect(t[0]!.flatSec).toBeCloseTo((300 * 1000) / 1100, 6); // 1000 m that count as 1100
+    expect(t[1]).toEqual({ km: 0.4, sec: 100, flatSec: 100 });
   });
 });
 
-describe('verdict', () => {
+describe('E05 verdict', () => {
   it('is the highest window, shortest winning ties, none on a rest day', () => {
     const vol = [[5], [5], [3], [1]].map((a) => Float64Array.from(a));
     expect(classify(vol, 4, 0)).toBe(0);

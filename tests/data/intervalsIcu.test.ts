@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { looksLikeFit, parseActivityList } from '../../src/lib/data/sources/intervalsIcu';
 
-describe('Intervals.icu list parsing', () => {
+describe('E23 Intervals.icu list parsing', () => {
   it('normalizes real-shaped entries and skips the Strava stubs', () => {
     const body = [
       {
@@ -53,9 +53,11 @@ describe('Intervals.icu list parsing', () => {
   });
 
   it('rejects a non-array body', () => {
-    expect(() => parseActivityList({ error: 'x' })).toThrow();
+    expect(() => parseActivityList({ error: 'x' })).toThrow(/not an array/);
   });
+});
 
+describe('FIT header', () => {
   it('recognizes a FIT header', () => {
     const fit = new Uint8Array([14, 32, 0, 0, 0, 0, 0, 0, 46, 70, 73, 84]).buffer;
     expect(looksLikeFit(fit)).toBe(true);

@@ -4,6 +4,7 @@
   import { lastSyncedText } from '../lastSynced';
   import ChartCard from './ChartCard.svelte';
   import DataTable from './DataTable.svelte';
+  import ExerciseBoundary from './ExerciseBoundary.svelte';
   import ReadoutStrip from './ReadoutStrip.svelte';
   import SettingsSidebar from './SettingsSidebar.svelte';
   import StatTiles from './StatTiles.svelte';
@@ -24,24 +25,26 @@
 </script>
 
 <div class="phone">
-  {#if tab !== 'settings' && model.daily}<ReadoutStrip />{/if}
+  {#if tab !== 'settings' && model.daily}<ExerciseBoundary><ReadoutStrip /></ExerciseBoundary>{/if}
   <div class="status" class:offline={!app.online}>
     {app.runs.length} runs · {app.online ? 'Online' : 'Offline'} · {lastSyncedText(app.lastSync)}
   </div>
 
   {#if tab === 'chart'}
     {#if model.daily}
-      <ChartCard />
+      <ExerciseBoundary card><ChartCard /></ExerciseBoundary>
       <ViewButtons />
-      <div class="below"><StatTiles /></div>
+      <div class="below"><ExerciseBoundary card><StatTiles /></ExerciseBoundary></div>
+    {:else if model.dailyTodo}
+      <div class="card empty">{model.dailyTodo.message}: the charts appear once it is.</div>
     {:else if app.loaded}
       <div class="card empty">
         No runs yet: open <b>Settings</b>, enter your Intervals.icu details and press Sync.
       </div>
     {/if}
   {:else if tab === 'zones'}
-    <ZoneCard />
-    <DataTable />
+    <ExerciseBoundary card><ZoneCard /></ExerciseBoundary>
+    <ExerciseBoundary card><DataTable /></ExerciseBoundary>
   {:else}
     <SettingsSidebar />
   {/if}

@@ -14,7 +14,7 @@ import { buildSamples, timerSeconds } from '../../src/lib/domain/samples';
 const dir = process.env.RH_FIT_DIR;
 const sum = (a: Float32Array) => a.reduce((x, y) => x + y, 0);
 
-describe.runIf(dir)('real FIT files', () => {
+describe.runIf(dir)('E19 real FIT files', () => {
   it('decode into samples and chunks with every invariant holding', () => {
     const files = readdirSync(dir!).filter((f) => /^file-.*\.bin$/.test(f));
     const list = JSON.parse(readFileSync(join(dir!, 'list.json'), 'utf8')) as {

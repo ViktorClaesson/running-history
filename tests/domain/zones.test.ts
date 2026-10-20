@@ -17,15 +17,13 @@ import { velocityFromVo2 } from '../../src/lib/domain/vdot';
 import { workoutFromScores, zoneScores } from '../../src/lib/domain/workoutType';
 import { buildWindows, windowSeries } from '../../src/lib/domain/windows';
 import { dayBuckets, zoneArea } from '../../src/lib/domain/zoneVolume';
-import { buildChunks } from '../../src/lib/domain/chunks';
-import { evenRun, makeDaily, sampleSet, type SampleSpec } from '../helpers/daily';
-
-const chunkSet = (id: string, spec: SampleSpec[]) => buildChunks(sampleSet(id, spec), 0);
+import { chunkVelocity } from '../../src/lib/domain/chunks';
+import { chunksOf, evenRun, makeDaily } from '../helpers/daily';
 
 const V = 52;
 const kmhToMpm = (kmh: number) => kmh / 0.06;
 
-describe('pace-zone binning', () => {
+describe('E09 pace-zone binning', () => {
   it('sorts the slow end by fixed paces, then into zones', () => {
     expect(binForVelocity(kmhToMpm(2), V, 3)).toBe(STANDING_BIN); // 30:00/km
     expect(binForVelocity(kmhToMpm(5), V, 3)).toBe(WALKING_BIN); // 12:00/km
@@ -46,9 +44,21 @@ describe('pace-zone binning', () => {
       expect(binVelocityRange(binCount(bars) - 1, V, bars).hi).toBeNull();
     }
   });
+});
+
+describe('E10 pace histogram', () => {
+  it("reads a chunk's speed in m/min: raw from metres, grade-adjusted from flat-equivalent metres", () => {
+    const c = chunksOf([
+      { m: 30, s: 10, flat: 1.2 },
+      { m: 0, s: 0 },
+    ]);
+    expect(chunkVelocity(c, 0, false)).toBeCloseTo(180, 4); // 3 m/s
+    expect(chunkVelocity(c, 0, true)).toBeCloseTo(216, 4);
+    expect(chunkVelocity(c, 1, false)).toBeNull(); // no time, no speed
+  });
 
   it("a histogram's km sum to the run's chunk distances; zone bars never move the buckets", () => {
-    const set = chunkSet('x', [
+    const set = chunksOf([
       ...evenRun(2, 360),
       ...evenRun(1, 230),
       { m: 0, s: 40 }, // stood at a light
@@ -67,7 +77,7 @@ describe('pace-zone binning', () => {
   });
 });
 
-describe('workout type', () => {
+describe('E11 workout type', () => {
   // legacy/CLAUDE.md: shares across endurance/marathon/threshold/interval/repetition.
   // Those were recorded at a 50% share; at today's 35% default, repetition alone (36%)
   // would already win 30 Sep.
@@ -87,7 +97,7 @@ describe('workout type', () => {
   });
   it('scores speed^exp × km, and ignores standing and walking', () => {
     const tempo = velocityFromVo2(V * 0.88); // threshold pace
-    const set = chunkSet('t', [
+    const set = chunksOf([
       { m: 1000, s: 60_000 / tempo },
       { m: 100, s: 120 }, // walking pace: scores nothing
     ]);
@@ -97,7 +107,7 @@ describe('workout type', () => {
   });
 });
 
-describe('stress', () => {
+describe('E12 stress', () => {
   it('1 h at 12 km/h is 144 raw; 1 h at threshold is exactly 100 relative', () => {
     const vT = velocityFromVo2(V * 0.88) * 0.06; // km/h
     const d = makeDaily([[evenRun(12, 300)], [[{ m: vT * 1000, s: 3600 }]]]);
@@ -109,12 +119,12 @@ describe('stress', () => {
 
   it('reads the raw speed: the same run uphill scores the same (landing stress, not effort)', () => {
     const flat = makeDaily([[evenRun(10, 300)]]);
-    const hilly = makeDaily([[evenRun(10, 300).map((c) => ({ ...c, grade: 0.06 }))]]);
+    const hilly = makeDaily([[evenRun(10, 300).map((c) => ({ ...c, flat: 1.3 }))]]);
     expect(dayStress(hilly, [V]).raw[0]).toBeCloseTo(dayStress(flat, [V]).raw[0]!, 9);
   });
 });
 
-describe('zone volume', () => {
+describe('E13 zone volume', () => {
   it('the stack adds up to the distance-per-week line', () => {
     const days = Array.from({ length: 40 }, (_, i) =>
       i % 3 ? [] : [evenRun(5 + (i % 4), 300 + 10 * (i % 5))],

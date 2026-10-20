@@ -1,3 +1,4 @@
+import { whenDone } from '../exercise';
 import { PHONE_QUERY } from '../ui/layout.svelte';
 import { defaultPrefs, loadPrefs, savePrefs, type Prefs } from './prefs';
 
@@ -9,10 +10,16 @@ const SAVE_DELAY_MS = 400;
 
 /**
  * The display settings, reactive. Components read and write `settings.p.whatever`
- * directly (or `bind:` to it); every change is saved shortly afterwards.
+ * directly (or `bind:` to it); every change is saved shortly afterwards. Until exercise E26
+ * is done they start from the defaults and aren't saved.
  */
 class SettingsStore {
-  p = $state<Prefs>(loadPrefs(localStorage, PHONE));
+  p = $state<Prefs>(
+    whenDone(
+      () => loadPrefs(localStorage, PHONE),
+      () => defaultPrefs(PHONE),
+    ),
+  );
   private timer: ReturnType<typeof setTimeout> | undefined;
 
   constructor() {
@@ -23,7 +30,14 @@ class SettingsStore {
       $effect(() => {
         const snapshot = $state.snapshot(this.p);
         clearTimeout(this.timer);
-        this.timer = setTimeout(() => savePrefs(snapshot, localStorage, PHONE), SAVE_DELAY_MS);
+        this.timer = setTimeout(
+          () =>
+            whenDone(
+              () => savePrefs(snapshot, localStorage, PHONE),
+              () => {},
+            ),
+          SAVE_DELAY_MS,
+        );
       });
     });
   }

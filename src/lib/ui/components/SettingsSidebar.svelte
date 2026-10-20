@@ -19,8 +19,8 @@
    */
   const p = $derived(settings.p);
   const lead = $derived(leadColours(theme.current));
-  const winLabel = (slot: number) => model.windows[slot]?.label ?? '';
-  const winsN = $derived(model.windows.map((w) => w.weeks).join(' / '));
+  const winLabel = (slot: number) => model.windowsOrNone[slot]?.label ?? '';
+  const winsN = $derived(model.windowsOrNone.map((w) => w.weeks).join(' / '));
   void PANEL_KEYS;
 
   function setPanel(k: PanelKey, on: boolean) {

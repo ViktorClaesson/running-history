@@ -1,3 +1,4 @@
+import { isNotDone } from '../exercise';
 import type { SampleSet } from '../domain/sampleTypes';
 import { addDays, daysBetween, type IsoDate } from '../domain/dates';
 import type { ActivityId, ActivitySummary, RawActivity } from '../domain/types';
@@ -83,7 +84,8 @@ export function decide(
   return sameSummary(listed, stored) ? 'skip' : 'summary';
 }
 
-const SUMMARY_FIELDS = [
+/** The fields a listed run is compared on, for `decide`'s summary-only update. */
+export const SUMMARY_FIELDS = [
   'startLocal',
   'localDate',
   'name',
@@ -139,8 +141,12 @@ export interface SyncOptions {
   waitUntil?: (until: number, signal?: AbortSignal) => Promise<void>;
 }
 
-/** Errors that end the whole sync rather than just one run: nothing else would work either. */
+/**
+ * Errors that end the whole sync rather than just one run: nothing else would work either.
+ * An unfinished exercise is one of them, so it shows as the sync's error, not as a failed run.
+ */
 const isFatal = (e: unknown): boolean =>
+  isNotDone(e) ||
   e instanceof AuthError ||
   e instanceof OfflineError ||
   (e instanceof DOMException && e.name === 'AbortError');

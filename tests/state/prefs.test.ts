@@ -22,7 +22,7 @@ function memoryStorage(): Storage {
   };
 }
 
-describe('prefs', () => {
+describe('E26 prefs', () => {
   it('falls back to defaults for garbage, field by field', () => {
     expect(parsePrefs(null)).toEqual(defaultPrefs());
     const p = parsePrefs({

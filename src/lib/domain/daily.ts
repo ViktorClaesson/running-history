@@ -1,3 +1,4 @@
+import { whenDone } from '../exercise';
 import { buildChunks, type Chunks } from './chunks';
 import { addDays, daysBetween, type IsoDate } from './dates';
 import { flatMetresFactor } from './gap';
@@ -74,10 +75,19 @@ export function buildDaily(
   return { start, n, km, nRuns, runs, lastRunIdx };
 }
 
-function runData(a: ActivitySummary, s: SampleSet | null, chunkSec: number, gapExp: number): RunData {
-  const segments = s ? segmentTotals(s, gapExp) : [];
+/**
+ * One run's entry in the daily series: the summary's distance, and from its samples (when
+ * it has been processed) the segment totals, the grade-adjusted time and the chunks.
+ *
+ * On the exercise branch the samples side is built from later exercises, so until those
+ * are done it falls back: no grade adjustment before E17 (gap.ts), and the whole run as a
+ * single chunk before E19 (chunks.ts). The charts work from the start and sharpen as you go.
+ */
+export function runData(a: ActivitySummary, s: SampleSet | null, chunkSec: number, gapExp: number): RunData {
+  const factor = flatFactor(gapExp);
+  const segments = s ? segmentTotals(s, factor) : [];
   const sec = s ? segments.reduce((t, x) => t + x.sec, 0) : a.movingS;
-  const flatSec = s ? wholeRunFlatSec(s, gapExp) : a.movingS;
+  const flatSec = s ? wholeRunFlatSec(s, factor) : a.movingS;
   return {
     id: a.id,
     startLocal: a.startLocal,
@@ -85,19 +95,36 @@ function runData(a: ActivitySummary, s: SampleSet | null, chunkSec: number, gapE
     km: a.distanceM / 1000,
     sec,
     flatSec,
-    chunks: s ? buildChunks(s, chunkSec, gapExp) : null,
+    chunks: s
+      ? whenDone(
+          () => buildChunks(s, chunkSec, gapExp),
+          () => wholeRunChunk(s),
+        )
+      : null,
     segments,
   };
 }
 
+/** Flat-equivalent metres per metre at a gradient, at this GAP strength (1 everywhere before E17). */
+function flatFactor(gapExp: number): (grade: number) => number {
+  const f = (g: number) => flatMetresFactor(g, gapExp);
+  return whenDone(
+    () => {
+      f(0); // throws here, once, if E17 isn't done
+      return f;
+    },
+    () => () => 1,
+  );
+}
+
 /** Per segment: km and seconds summed from its samples, and the time at its grade-adjusted speed. */
-export function segmentTotals(s: SampleSet, gapExp: number): SegmentTotals[] {
+export function segmentTotals(s: SampleSet, flatFactor: (grade: number) => number): SegmentTotals[] {
   const acc = Array.from({ length: s.segmentCount }, () => ({ m: 0, sec: 0, flat: 0 }));
   for (let i = 0; i < s.dt.length; i++) {
     const a = acc[s.seg[i]!]!;
     a.m += s.dist[i]!;
     a.sec += s.dt[i]!;
-    a.flat += s.dist[i]! * flatMetresFactor(s.grade[i]!, gapExp);
+    a.flat += s.dist[i]! * flatFactor(s.grade[i]!);
   }
   return acc.map((a) => ({
     km: a.m / 1000,
@@ -106,16 +133,29 @@ export function segmentTotals(s: SampleSet, gapExp: number): SegmentTotals[] {
   }));
 }
 
-function wholeRunFlatSec(s: SampleSet, gapExp: number): number {
+function wholeRunFlatSec(s: SampleSet, flatFactor: (grade: number) => number): number {
   let sec = 0;
   let m = 0;
   let flat = 0;
   for (let i = 0; i < s.dt.length; i++) {
     sec += s.dt[i]!;
     m += s.dist[i]!;
-    flat += s.dist[i]! * flatMetresFactor(s.grade[i]!, gapExp);
+    flat += s.dist[i]! * flatFactor(s.grade[i]!);
   }
   return flat > 0 ? (sec * m) / flat : sec;
+}
+
+/** The whole run as one chunk: the stand-in for the chunks until exercise E19 is done. */
+function wholeRunChunk(s: SampleSet): Chunks {
+  const sum = (a: Float32Array) => a.reduce((x, y) => x + y, 0);
+  const distM = sum(s.dist);
+  return {
+    seg: Uint16Array.of(0),
+    durS: Float32Array.of(sum(s.dt)),
+    distM: Float32Array.of(distM),
+    flatM: Float32Array.of(distM),
+    hr: Float32Array.of(NaN),
+  };
 }
 
 /** The calendar date of day `i`. */

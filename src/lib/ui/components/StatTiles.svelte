@@ -1,6 +1,7 @@
 <script lang="ts">
   import { app } from '../../state/app.svelte';
   import { model } from '../../state/model.svelte';
+  import ExerciseBoundary from './ExerciseBoundary.svelte';
   import WeeklyTarget from './WeeklyTarget.svelte';
 
   // All-time figures, then the weekly-target what-if (legacy `renderTiles`).
@@ -20,13 +21,15 @@
 
 {#if model.daily}
   <div class="tiles">
-    {#each tiles as t (t.k)}
-      <div class="card tile">
-        <div class="k">{t.k}</div>
-        <div class="v">{t.v}<span class="u">{t.u}</span></div>
-      </div>
-    {/each}
-    <WeeklyTarget />
+    <ExerciseBoundary card>
+      {#each tiles as t (t.k)}
+        <div class="card tile">
+          <div class="k">{t.k}</div>
+          <div class="v">{t.v}<span class="u">{t.u}</span></div>
+        </div>
+      {/each}
+    </ExerciseBoundary>
+    <ExerciseBoundary card><WeeklyTarget /></ExerciseBoundary>
   </div>
 {/if}
 

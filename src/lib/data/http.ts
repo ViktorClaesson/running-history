@@ -154,8 +154,8 @@ export interface RetryOptions {
   isOnline?: () => boolean;
 }
 
-/** After this many 429s in a row on one request we stop and pause for a whole window. */
-const SERVER_429_PAUSE_MS = WINDOW_MS;
+/** When a request keeps getting 429 until its last attempt, sync pauses for this long. */
+export const SERVER_429_PAUSE_MS = WINDOW_MS;
 
 /**
  * Runs `request` under the budget, retrying with exponential backoff on 429 (honouring

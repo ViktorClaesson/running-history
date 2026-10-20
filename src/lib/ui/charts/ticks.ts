@@ -1,3 +1,5 @@
+import { whenDone } from '../../exercise';
+
 /** Axis ticks. */
 
 /** About four even steps from 0 to at least `max`, on 1/2/2.5/5 × 10ⁿ. */
@@ -7,6 +9,17 @@ export function niceTicks(max: number): { ticks: number[]; step: number } {
   const step = ([1, 2, 2.5, 5, 10].find((m) => m * mag >= raw) ?? 10) * mag;
   const n = Math.ceil(max / step - 1e-9);
   return { ticks: Array.from({ length: n + 1 }, (_, k) => k * step), step };
+}
+
+/**
+ * The ticks the linear panels use: niceTicks, or until exercise E29 is done four plain
+ * equal steps, so every panel can draw from the start.
+ */
+export function axisTicks(max: number): { ticks: number[]; step: number } {
+  return whenDone(
+    () => niceTicks(max),
+    () => ({ ticks: [0, 1, 2, 3, 4].map((k) => (k * max) / 4), step: max / 4 }),
+  );
 }
 
 /**

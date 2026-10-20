@@ -13,7 +13,7 @@ import {
   weekdayMon0,
 } from '../../src/lib/domain/dates';
 
-describe('dates', () => {
+describe('E01 dates', () => {
   it('parses and validates calendar dates', () => {
     expect(parseIsoDate('2026-10-14')).toBe('2026-10-14');
     expect(parseIsoDate('2026-02-29')).toBeNull(); // not a leap year
@@ -49,7 +49,9 @@ describe('dates', () => {
     expect(weekdayMon0(isoDate('2026-10-12'))).toBe(0); // a Monday
     expect(weekdayMon0(isoDate('2026-10-18'))).toBe(6); // a Sunday
   });
+});
 
+describe('today', () => {
   it('reads today from the local clock', () => {
     expect(todayLocal(new Date(2026, 9, 17, 23, 30))).toBe('2026-10-17');
     expect(todayLocal(new Date(2026, 0, 1, 0, 5))).toBe('2026-01-01');

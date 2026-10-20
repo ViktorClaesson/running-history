@@ -1,14 +1,19 @@
-import { buildDaily, type Daily } from '../../src/lib/domain/daily';
-import { addDays, isoDate, type IsoDate } from '../../src/lib/domain/dates';
+import type { Chunks } from '../../src/lib/domain/chunks';
+import type { Daily, RunData, SegmentTotals } from '../../src/lib/domain/daily';
+import type { IsoDate } from '../../src/lib/domain/dates';
 import type { SampleSet } from '../../src/lib/domain/sampleTypes';
-import type { ActivitySummary } from '../../src/lib/domain/types';
 
-/** One interval of a run: `m` metres in `s` seconds, at gradient `grade`, in segment `seg`. */
+/**
+ * One interval of a run: `m` metres in `s` seconds, at gradient `grade`, in segment `seg`.
+ * `flat` is the flat-equivalent metres per metre (default 1): the hand-built series below
+ * take it as given, so the tests of the fitness maths don't depend on the GAP exercise.
+ */
 export interface SampleSpec {
   m: number;
   s: number;
   grade?: number;
   seg?: number;
+  flat?: number;
 }
 
 export function sampleSet(id: string, spec: SampleSpec[]): SampleSet {
@@ -32,40 +37,64 @@ export function evenRun(km: number, paceSec: number): SampleSpec[] {
   return Array.from({ length: n }, () => ({ m: 100, s: paceSec / 10 }));
 }
 
+/** Every interval its own chunk (what buildChunks does at chunk length 0), built by hand. */
+export function chunksOf(spec: SampleSpec[]): Chunks {
+  return {
+    seg: Uint16Array.from(spec, (c) => c.seg ?? 0),
+    durS: Float32Array.from(spec, (c) => c.s),
+    distM: Float32Array.from(spec, (c) => c.m),
+    flatM: Float32Array.from(spec, (c) => c.m * (c.flat ?? 1)),
+    hr: Float32Array.from(spec, () => 140),
+  };
+}
+
+/** "YYYY-MM-DD" `days` after `start`, without the dates exercise. */
+const dayAfter = (start: IsoDate, days: number): IsoDate =>
+  new Date(Date.parse(`${start}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10) as IsoDate;
+
+function runOf(id: string, startLocal: string, spec: SampleSpec[]): RunData {
+  const chunks = chunksOf(spec);
+  const segments: SegmentTotals[] = [];
+  let m = 0;
+  let sec = 0;
+  let flat = 0;
+  spec.forEach((c, k) => {
+    const g = (segments[c.seg ?? 0] ??= { km: 0, sec: 0, flatSec: 0 });
+    g.km += c.m / 1000;
+    g.sec += c.s;
+    g.flatSec += chunks.flatM[k]!; // flat metres for now, turned into a time below
+    m += c.m;
+    sec += c.s;
+    flat += chunks.flatM[k]!;
+  });
+  for (const g of segments) g.flatSec = g.flatSec > 0 ? (g.sec * g.km * 1000) / g.flatSec : g.sec;
+  return {
+    id,
+    startLocal,
+    name: id,
+    km: m / 1000,
+    sec,
+    flatSec: flat > 0 ? (sec * m) / flat : sec,
+    chunks,
+    segments,
+  };
+}
+
 /**
- * days[i] = the runs on day i (each a list of intervals). Day 0 is `start`; the series runs
- * to `today` (default: the last day given). Chunk length 0, so chunks are the intervals.
+ * days[i] = the runs on day i (each a list of intervals), built by hand into the shape
+ * buildDaily makes (tests/domain/chunks.test.ts checks the two agree). Day 0 is `start`;
+ * the series runs to `today`, given as a number of extra rest days after the last one.
+ * Chunks are the intervals themselves, as at chunk length 0.
  */
-export function makeDaily(
-  days: SampleSpec[][][],
-  start = isoDate('2026-01-01'),
-  today?: IsoDate,
-  chunkSec = 0,
-): Daily {
-  const acts: ActivitySummary[] = [];
-  const samples = new Map<string, SampleSet>();
-  days.forEach((runs, i) =>
-    runs.forEach((spec, k) => {
-      const id = `d${i}r${k}`;
-      const date = addDays(start, i);
-      const m = spec.reduce((a, c) => a + c.m, 0);
-      const s = spec.reduce((a, c) => a + c.s, 0);
-      acts.push({
-        id,
-        startLocal: `${date}T${String(8 + k).padStart(2, '0')}:00:00`,
-        localDate: date,
-        name: id,
-        type: 'Run',
-        distanceM: m,
-        movingS: s,
-        elapsedS: s,
-        avgHr: null,
-        elevGainM: null,
-        changeMarker: '',
-        fileSportIndex: 0,
-      });
-      samples.set(id, sampleSet(id, spec));
-    }),
+export function makeDaily(days: SampleSpec[][][], start = '2026-01-01' as IsoDate, restDays = 0): Daily {
+  const n = days.length + restDays;
+  const runs = Array.from({ length: n }, (_, i) =>
+    (days[i] ?? []).map((spec, k) =>
+      runOf(`d${i}r${k}`, `${dayAfter(start, i)}T${String(8 + k).padStart(2, '0')}:00:00`, spec),
+    ),
   );
-  return buildDaily(acts, samples, chunkSec, 0.5, today ?? addDays(start, days.length - 1))!;
+  const km = Float64Array.from(runs, (r) => Math.round(r.reduce((a, x) => a + x.km, 0) * 1000) / 1000);
+  let lastRunIdx = -1;
+  km.forEach((v, i) => (lastRunIdx = v > 0 ? i : lastRunIdx));
+  return { start, n, km, nRuns: Int32Array.from(runs, (r) => r.length), runs, lastRunIdx };
 }

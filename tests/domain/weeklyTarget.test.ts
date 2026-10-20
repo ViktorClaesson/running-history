@@ -13,7 +13,7 @@ import { evenRun, makeDaily } from '../helpers/daily';
 const LONG = { long: true, weight: 2 };
 const NOLONG = { long: false, weight: 2 };
 
-describe('weekly target', () => {
+describe('E14 weekly target', () => {
   it('splits 60 km / 4 days / 6 runs into a 24 km long run and 7.2 km runs (w = 2), 20 / 8 at w = 1.5', () => {
     expect(targetFor({ km: 60, days: 4, runs: 6 }, LONG)).toMatchObject({
       long: true,
@@ -25,6 +25,26 @@ describe('weekly target', () => {
     expect(t.perRun).toBeCloseTo(8, 12);
   });
 
+  it('splits evenly without a long run, and below three days', () => {
+    expect(targetFor({ km: 40, days: 4, runs: 5 }, NOLONG)).toMatchObject({
+      long: false,
+      longKm: 0,
+      perRun: 8,
+    });
+    expect(targetFor({ km: 20, days: 2, runs: 2 }, LONG)).toMatchObject({ long: false, perRun: 10 });
+    expect(targetFor({ km: 20, days: 0, runs: 0 }, LONG).perRun).toBe(0);
+  });
+
+  it('seeds from the window ending yesterday when the last day is today', () => {
+    const d = makeDaily([[evenRun(10, 300)], [], [evenRun(8, 300)], [evenRun(6, 300)]]);
+    const s = targetSeed(d, 2, true); // days 1-2
+    expect(s).toMatchObject({ kmSum: 8, runDays: 1, nRuns: 1, end: 2 });
+    expect(s.km).toBeCloseTo(28, 12);
+    expect(targetSeed(d, 2, false)).toMatchObject({ kmSum: 14, end: 3 });
+  });
+});
+
+describe('E15 template week', () => {
   it('caps runs per days exactly as the legacy table', () => {
     const caps = (o: typeof LONG) => Array.from({ length: PLAN_MAX_DAYS }, (_, i) => maxRunsFor(i + 1, o));
     expect(caps(LONG)).toEqual([1, 2, 3, 7, 9, 14, 15]);
@@ -66,13 +86,5 @@ describe('weekly target', () => {
     expect(fitPlan({ km: 50, days: 4, runs: 12 }, 'runs', LONG)).toEqual({ km: 50, days: 6, runs: 12 });
     expect(fitPlan({ km: 50, days: 4, runs: 12 }, 'days', LONG)).toEqual({ km: 50, days: 4, runs: 7 });
     expect(fitPlan({ km: 900, days: 4.6, runs: 4.4 }, 'km', LONG)).toEqual({ km: 700, days: 5, runs: 5 });
-  });
-
-  it('seeds from the window ending yesterday when the last day is today', () => {
-    const d = makeDaily([[evenRun(10, 300)], [], [evenRun(8, 300)], [evenRun(6, 300)]]);
-    const s = targetSeed(d, 2, true); // days 1-2
-    expect(s).toMatchObject({ kmSum: 8, runDays: 1, nRuns: 1, end: 2 });
-    expect(s.km).toBeCloseTo(28, 12);
-    expect(targetSeed(d, 2, false)).toMatchObject({ kmSum: 14, end: 3 });
   });
 });

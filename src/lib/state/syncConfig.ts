@@ -1,3 +1,4 @@
+import { whenDone } from '../exercise';
 import { parseIsoDate, type IsoDate } from '../domain/dates';
 
 /**
@@ -33,7 +34,7 @@ export function parseSyncConfig(raw: unknown): SyncConfig {
   const r = raw as Record<string, unknown>;
   if (typeof r.athleteId === 'string') c.athleteId = r.athleteId.trim();
   if (typeof r.apiKey === 'string') c.apiKey = r.apiKey.trim();
-  if (typeof r.earliest === 'string') c.earliest = parseIsoDate(r.earliest) ?? c.earliest;
+  if (typeof r.earliest === 'string') c.earliest = parseEarliest(r.earliest) ?? c.earliest;
   if (Array.isArray(r.types)) {
     const types = r.types
       .filter((t): t is string => typeof t === 'string' && t.trim() !== '')
@@ -42,6 +43,13 @@ export function parseSyncConfig(raw: unknown): SyncConfig {
   }
   return c;
 }
+
+/** parseIsoDate, or until exercise E01 is done, anything date-shaped (so a stored date survives). */
+export const parseEarliest = (text: string): IsoDate | null =>
+  whenDone(
+    () => parseIsoDate(text),
+    () => (/^\d{4}-\d{2}-\d{2}$/.test(text) ? (text as IsoDate) : null),
+  );
 
 export function loadSyncConfig(storage: Storage = localStorage): SyncConfig {
   try {

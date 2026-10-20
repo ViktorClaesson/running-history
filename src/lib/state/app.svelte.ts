@@ -1,3 +1,4 @@
+import { isNotDone } from '../exercise';
 import type { SampleSet } from '../domain/sampleTypes';
 import { todayLocal } from '../domain/dates';
 import type { ActivityId } from '../domain/types';
@@ -140,7 +141,13 @@ export class AppStore {
   /** Rebuilds stale samples automatically on startup (and after a version bump). */
   async reprocessStale(all = false): Promise<void> {
     if (this.reprocessing) return;
-    const stale = all ? this.runs.length : (await staleSampleIds(this.db, PROCESSING_VERSION)).length;
+    let stale: number;
+    try {
+      stale = all ? this.runs.length : (await staleSampleIds(this.db, PROCESSING_VERSION)).length;
+    } catch (e) {
+      if (isNotDone(e)) return; // exercise E20: no way to tell what is stale yet
+      throw e;
+    }
     if (!stale) return;
     this.reprocessing = { done: 0, total: stale };
     try {
