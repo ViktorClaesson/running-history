@@ -15,8 +15,8 @@
 /** A calendar date as "YYYY-MM-DD". Branded so a random string can't be passed by mistake. */
 export type IsoDate = string & { readonly __brand: 'IsoDate' };
 
-const ISO_DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
-const MS_PER_DAY = 86_400_000;
+export const ISO_DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
+export const MS_PER_DAY = 86_400_000;
 
 /** Validates "YYYY-MM-DD" (including that the day exists) and brands it, or returns null. */
 export function parseIsoDate(text: string): IsoDate | null {
@@ -78,7 +78,7 @@ export function weekdayMon0(date: IsoDate): number {
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] as const;
-const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
+export const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
 
 export function monthName(date: IsoDate): string {
   return MONTHS[Number(date.slice(5, 7)) - 1]!;

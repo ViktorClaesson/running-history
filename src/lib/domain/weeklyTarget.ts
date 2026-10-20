@@ -81,7 +81,8 @@ export interface LongRunOptions {
   weight: number;
 }
 
-const longActive = (days: number, o: LongRunOptions) => o.long && days >= LONG_MIN_DAYS;
+/** Whether the week has a long run: asked for, and at least LONG_MIN_DAYS days. */
+export const longActive = (days: number, o: LongRunOptions): boolean => o.long && days >= LONG_MIN_DAYS;
 
 export interface TargetSplit {
   long: boolean;

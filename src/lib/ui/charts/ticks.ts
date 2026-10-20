@@ -26,8 +26,9 @@ export function axisTicks(max: number): { ticks: number[]; step: number } {
  * A log axis wants gridlines on numbers you'd say out loud, so both ends round out to
  * 1/2/5 × 10ⁿ and every such value between becomes a tick (uneven spacing is the point).
  */
-const LOG_MANT = [1, 2, 5];
-const logDec = (v: number) => 10 ** Math.floor(Math.log10(v) + 1e-12);
+export const LOG_MANT = [1, 2, 5];
+/** The power of ten at or below v (2.5 → 1, 12 → 10, 0.7 → 0.1). */
+export const logDec = (v: number): number => 10 ** Math.floor(Math.log10(v) + 1e-12);
 
 export function logUp(v: number): number {
   const d = logDec(v);

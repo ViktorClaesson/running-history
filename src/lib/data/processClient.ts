@@ -3,7 +3,7 @@ import type { ActivitySummary, RawActivity } from '../domain/types';
 import type { ProcessRequest, ProcessResponse } from '../workers/protocol';
 
 /** One run takes ~15 ms; anything near this means the worker is gone, not busy. */
-const REQUEST_TIMEOUT_MS = 30_000;
+export const REQUEST_TIMEOUT_MS = 30_000;
 
 interface Waiting {
   resolve: (s: SampleSet) => void;
@@ -21,7 +21,8 @@ interface Waiting {
  */
 export class ProcessClient {
   private worker: Worker | null = null;
-  private nextId = 1;
+  /** The id for the next request; its answer carries it back. */
+  protected nextId = 1;
   private readonly waiting = new Map<number, Waiting>();
 
   /** Starts the worker now rather than on first use, so its script loads while online. */

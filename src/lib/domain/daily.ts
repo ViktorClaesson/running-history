@@ -48,7 +48,8 @@ export interface Daily {
   lastRunIdx: number;
 }
 
-const roundKm = (km: number) => Math.round(km * 1000) / 1000;
+/** km rounded to the metre: what makes the dust snap in rolling.ts safe. */
+export const roundKm = (km: number): number => Math.round(km * 1000) / 1000;
 
 export function buildDaily(
   activities: readonly ActivitySummary[],

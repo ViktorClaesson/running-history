@@ -95,11 +95,12 @@ export interface BudgetUsage {
 
 /** Counts requests against the limits and paces them. One per app. */
 export class RequestBudget {
-  private lastStart = 0;
+  /** When the last request started (clock ms), for the pacing. */
+  protected lastStart = 0;
 
   constructor(
     private readonly log: RequestLog,
-    private readonly limits: RateLimits = INTERVALS_LIMITS,
+    protected readonly limits: RateLimits = INTERVALS_LIMITS,
     private readonly clock: Clock = realClock,
   ) {}
 
