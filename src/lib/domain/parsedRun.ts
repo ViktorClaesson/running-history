@@ -14,8 +14,6 @@ export interface ParsedRun {
   alt: Float64Array;
   /** Heart rate at each sample, bpm, NaN where missing. */
   hr: Float64Array;
-  /** The watch's smoothed speed at each sample, m/s, NaN where missing. */
-  speed: Float64Array;
   /** Stretches when the watch timer was stopped, [from, to] in seconds. */
   pauses: Pause[];
   /** The watch's laps, in order, autolaps included. */

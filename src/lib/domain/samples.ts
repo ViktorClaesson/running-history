@@ -6,7 +6,9 @@ import type { ActivityId } from './types';
 
 /**
  * Raw recording → cleaned samples: per interval (sample i−1 → sample i) the timer seconds
- * (pauses removed), metres, the watch's speed, the gradient, heart rate and segment.
+ * (pauses removed), metres, the gradient, heart rate and segment. Speed is always read as
+ * metres ÷ seconds over a chunk: the watch's own smoothed speed lags several seconds behind
+ * every acceleration, which under-reads short reps.
  * Chunking happens later and in memory (chunks.ts), so changing the chunk length needs no
  * reprocessing.
  */
@@ -27,7 +29,6 @@ export function buildSamples(id: ActivityId, run: ParsedRun, processingVersion: 
     seg: new Uint16Array(n),
     dt: new Float32Array(n),
     dist: new Float32Array(n),
-    speed: new Float32Array(n),
     grade: new Float32Array(n),
     hr: new Float32Array(n),
   };
@@ -35,9 +36,6 @@ export function buildSamples(id: ActivityId, run: ParsedRun, processingVersion: 
     const i = k + 1; // interval k ends at sample i
     s.dt[k] = timerSeconds(run.t[i - 1]!, run.t[i]!, run.pauses);
     s.dist[k] = Math.max(0, run.dist[i]! - run.dist[i - 1]!);
-    // The watch's smoothed speed; dist ÷ time only if it didn't record one.
-    const watch = run.speed[i]!;
-    s.speed[k] = Number.isFinite(watch) ? watch : s.dt[k]! > 0 ? s.dist[k]! / s.dt[k]! : 0;
     s.grade[k] = grades ? grades[i]! : 0;
     s.hr[k] = run.hr[i]!;
     s.seg[k] = lapOf[i]! >= 0 ? segmentation.segmentOfLap[lapOf[i]!]! : 0;
@@ -52,7 +50,6 @@ function singleSample(run: ParsedRun) {
     seg: Uint16Array.of(0),
     dt: Float32Array.of(timerS),
     dist: Float32Array.of(distM),
-    speed: Float32Array.of(timerS > 0 ? distM / timerS : 0),
     grade: Float32Array.of(0),
     hr: Float32Array.of(NaN),
   };

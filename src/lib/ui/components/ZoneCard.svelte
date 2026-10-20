@@ -6,7 +6,7 @@
   import { model } from '../../state/model.svelte';
   import { settings } from '../../state/settings.svelte';
   import { leadColours, workoutColour } from '../charts/ramps';
-  import { durStr, km2, nf0 } from '../format';
+  import { durStr, km2, nf0, paceStr } from '../format';
   import { shownDay } from '../shownDay.svelte';
   import { theme } from '../theme.svelte';
   import ZoneHist from './ZoneHist.svelte';
@@ -120,6 +120,27 @@
               {/if}
             </div>
           {/if}
+          {#if run && run.segments.length > 1}
+            <details class="laps">
+              <summary>Laps ({run.segments.length}): pace and grade-adjusted pace</summary>
+              <table>
+                <thead><tr><th>Lap</th><th>km</th><th>Time</th><th>Pace</th><th>GAP</th></tr></thead>
+                <tbody>
+                  {#each run.segments as seg, k (k)}
+                    {#if seg.km >= 0.02}
+                      <tr>
+                        <td>{k + 1}</td>
+                        <td>{km2(seg.km)}</td>
+                        <td>{durStr(seg.sec)}</td>
+                        <td>{paceStr(seg.sec / 60 / seg.km)}</td>
+                        <td>{paceStr(seg.flatSec / 60 / seg.km)}</td>
+                      </tr>
+                    {/if}
+                  {/each}
+                </tbody>
+              </table>
+            </details>
+          {/if}
           <div class="canvas-wrap">
             <ZoneHist
               mins={h?.mins ?? zeros}
@@ -213,6 +234,30 @@
   }
   .canvas-wrap {
     position: relative;
+  }
+  .laps {
+    padding: 0 4px 8px;
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+  .laps summary {
+    cursor: pointer;
+    color: var(--muted);
+  }
+  .laps table {
+    border-collapse: collapse;
+    margin-top: 4px;
+    font-variant-numeric: tabular-nums;
+  }
+  .laps th,
+  .laps td {
+    text-align: right;
+    padding: 1px 10px 1px 0;
+  }
+  .laps th {
+    color: var(--muted);
+    font-weight: 500;
+    font-size: 11px;
   }
   .empty {
     position: absolute;

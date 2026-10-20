@@ -12,7 +12,7 @@ export type LapRule = 'button' | 'workout' | 'button+workout' | 'none';
 /**
  * One run's recording, cleaned up: what processing stores and everything else reads.
  * Stored *columnar*: one typed array per field, all the same length, so sample `i` is
- * `s.dist[i]`, `s.speed[i]`, … Compact in IndexedDB (typed arrays are stored natively) and
+ * `s.dist[i]`, `s.grade[i]`, … Compact in IndexedDB (typed arrays are stored natively) and
  * fast to loop over.
  *
  * Each entry is an *interval*: the stretch from the previous sample to this one (about a
@@ -31,8 +31,6 @@ export interface SampleSet {
   dt: Float32Array;
   /** Metres covered in the interval, from the distance record. */
   dist: Float32Array;
-  /** The watch's own smoothed speed, m/s (FIT `enhanced_speed`): steadier than dist ÷ dt. */
-  speed: Float32Array;
   /** Gradient (rise ÷ run) over GRADE_WINDOW_M centred on the sample. */
   grade: Float32Array;
   /** Heart rate, bpm, or NaN when there is none. */

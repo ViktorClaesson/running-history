@@ -9,11 +9,16 @@
  *
  * **Grade-adjusted pace.** Minetti et al. (2002), "Energy cost of walking and running at
  * extreme uphill and downhill slopes", J Appl Physiol 93:1039–1046,
- * https://doi.org/10.1152/japplphysiol.01177.2001 gives the energy cost per metre C(g)
- * at gradient g. A metre at gradient g costs as much as C(g) ÷ C(0) metres on the flat, so a
- * stretch's grade-adjusted speed is (flat-equivalent metres) ÷ (time). Energy adds up, so the
- * *flat-equivalent metres* are what gets summed, never a flat-equivalent time: that way a
- * downhill counts as easier and a course with equal up and down counts as harder than flat.
+ * https://doi.org/10.1152/japplphysiol.01177.2001 gives the energy cost per metre C(g) at
+ * gradient g, measured on a treadmill. Taken at face value it makes a 6% climb worth +36%
+ * in pace, far more than Garmin, Strava/Intervals.icu (+13%) or Runalyze (+17%) credit.
+ * Runalyze's own code softens it with an exponent, (C(g) / C(0))^0.83. The same
+ * construction with exponent 0.5 matches Garmin's per-lap GAP best on 399 of my laps
+ * (median error 0.8%, against 1.4% for the raw curve): see docs/intervals-api-findings.md.
+ * The exponent is a setting, so 1 (pure Minetti) is one change away.
+ *
+ * Flat-equivalent *metres* are what gets summed over a stretch, never a flat-equivalent
+ * time: that way a downhill counts as easier and equal up and down as harder than flat.
  */
 
 export const GRADE_WINDOW_M = 25;
@@ -26,9 +31,15 @@ export function minettiCost(g: number): number {
   return 155.4 * x ** 5 - 30.4 * x ** 4 - 43.3 * x ** 3 + 46.3 * x ** 2 + 19.5 * x + 3.6;
 }
 
-/** Flat-equivalent metres per real metre at gradient `g`: > 1 uphill, < 1 downhill. */
-export function flatMetresFactor(g: number): number {
-  return minettiCost(g) / minettiCost(0);
+/** The default GAP strength: Minetti's curve to this power (see above). */
+export const DEFAULT_GAP_EXP = 0.5;
+
+/**
+ * Flat-equivalent metres per real metre at gradient `g`: > 1 uphill, < 1 downhill.
+ * `exp` softens Minetti's curve (1 = pure Minetti).
+ */
+export function flatMetresFactor(g: number, exp = DEFAULT_GAP_EXP): number {
+  return (minettiCost(g) / minettiCost(0)) ** exp;
 }
 
 /**

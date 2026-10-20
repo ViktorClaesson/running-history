@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   altitudeAt,
+  DEFAULT_GAP_EXP,
   flatMetresFactor,
   GRADE_WINDOW_M,
   minettiCost,
@@ -23,6 +24,29 @@ describe('Minetti cost of running', () => {
     expect(flatMetresFactor(-0.05)).toBeLessThan(1);
     // Energy adds up, so over equal distances up and down the flat-equivalent metres exceed the real ones.
     for (const g of [0.02, 0.05, 0.1, 0.2])
+      expect((flatMetresFactor(g) + flatMetresFactor(-g)) / 2).toBeGreaterThan(1);
+  });
+});
+
+describe('GAP strength (an exponent on the Minetti curve)', () => {
+  // Runalyze's own unit tests (Runalyze 4.3, MinettiTest.php, "verified by own spreadsheet"):
+  // energy cost ratios and their time factors at exponent 0.83. An independent implementation.
+  const runalyze: [number, number, number][] = [
+    [-0.1, 0.5977, 1.5329],
+    [-0.05, 0.7628, 1.252],
+    [0.02, 1.1134, 0.9147],
+    [0.05, 1.3014, 0.8036],
+    [0.1, 1.6578, 0.6573],
+  ];
+  it('matches Runalyze: cost ratio at exponent 1, time factor 1 / factor at 0.83', () => {
+    for (const [g, cost, timeFactor] of runalyze) {
+      expect(flatMetresFactor(g, 1)).toBeCloseTo(cost, 4);
+      expect(1 / flatMetresFactor(g, 0.83)).toBeCloseTo(timeFactor, 4);
+    }
+  });
+  it('defaults to 0.5, which still counts equal up and down as harder than flat', () => {
+    expect(DEFAULT_GAP_EXP).toBe(0.5);
+    for (const g of [0.02, 0.05, 0.1])
       expect((flatMetresFactor(g) + flatMetresFactor(-g)) / 2).toBeGreaterThan(1);
   });
 });

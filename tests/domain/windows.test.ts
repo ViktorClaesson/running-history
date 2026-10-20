@@ -77,7 +77,7 @@ describe('windows', () => {
       changeMarker: '',
       fileSportIndex: 0,
     };
-    const d = buildDaily([run], new Map(), 10, isoDate('2026-10-17'))!;
+    const d = buildDaily([run], new Map(), 30, 0.5, isoDate('2026-10-17'))!;
     expect(d.n).toBe(8);
     expect(d.km[0]).toBe(5);
     expect(d.km[7]).toBe(0);

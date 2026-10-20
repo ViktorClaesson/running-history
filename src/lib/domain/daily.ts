@@ -17,7 +17,7 @@ import type { ActivityId, ActivitySummary } from './types';
 export interface SegmentTotals {
   km: number;
   sec: number;
-  /** The time it would have taken at its grade-adjusted speed (sec × raw metres ÷ flat-equivalent metres). */
+  /** The time it would have taken at its grade-adjusted speed (sec × metres ÷ flat-equivalent metres). */
   flatSec: number;
 }
 
@@ -53,6 +53,7 @@ export function buildDaily(
   activities: readonly ActivitySummary[],
   samples: ReadonlyMap<ActivityId, SampleSet>,
   chunkSec: number,
+  gapExp: number,
   today: IsoDate,
 ): Daily | null {
   if (!activities.length) return null;
@@ -61,7 +62,7 @@ export function buildDaily(
   const n = Math.max(daysBetween(start, today), daysBetween(start, sorted[sorted.length - 1]!.localDate)) + 1;
   const runs: RunData[][] = Array.from({ length: n }, () => []);
   for (const a of sorted)
-    runs[daysBetween(start, a.localDate)]!.push(runData(a, samples.get(a.id) ?? null, chunkSec));
+    runs[daysBetween(start, a.localDate)]!.push(runData(a, samples.get(a.id) ?? null, chunkSec, gapExp));
   const km = new Float64Array(n);
   const nRuns = new Int32Array(n);
   let lastRunIdx = -1;
@@ -73,10 +74,10 @@ export function buildDaily(
   return { start, n, km, nRuns, runs, lastRunIdx };
 }
 
-function runData(a: ActivitySummary, s: SampleSet | null, chunkSec: number): RunData {
-  const segments = s ? segmentTotals(s) : [];
+function runData(a: ActivitySummary, s: SampleSet | null, chunkSec: number, gapExp: number): RunData {
+  const segments = s ? segmentTotals(s, gapExp) : [];
   const sec = s ? segments.reduce((t, x) => t + x.sec, 0) : a.movingS;
-  const flatSec = s ? wholeRunFlatSec(s) : a.movingS;
+  const flatSec = s ? wholeRunFlatSec(s, gapExp) : a.movingS;
   return {
     id: a.id,
     startLocal: a.startLocal,
@@ -84,36 +85,37 @@ function runData(a: ActivitySummary, s: SampleSet | null, chunkSec: number): Run
     km: a.distanceM / 1000,
     sec,
     flatSec,
-    chunks: s ? buildChunks(s, chunkSec) : null,
+    chunks: s ? buildChunks(s, chunkSec, gapExp) : null,
     segments,
   };
 }
 
 /** Per segment: km and seconds summed from its samples, and the time at its grade-adjusted speed. */
-export function segmentTotals(s: SampleSet): SegmentTotals[] {
-  const acc = Array.from({ length: s.segmentCount }, () => ({ km: 0, sec: 0, move: 0, flat: 0 }));
+export function segmentTotals(s: SampleSet, gapExp: number): SegmentTotals[] {
+  const acc = Array.from({ length: s.segmentCount }, () => ({ m: 0, sec: 0, flat: 0 }));
   for (let i = 0; i < s.dt.length; i++) {
     const a = acc[s.seg[i]!]!;
-    const move = s.speed[i]! * s.dt[i]!;
-    a.km += s.dist[i]! / 1000;
+    a.m += s.dist[i]!;
     a.sec += s.dt[i]!;
-    a.move += move;
-    a.flat += move * flatMetresFactor(s.grade[i]!);
+    a.flat += s.dist[i]! * flatMetresFactor(s.grade[i]!, gapExp);
   }
-  return acc.map((a) => ({ km: a.km, sec: a.sec, flatSec: a.flat > 0 ? (a.sec * a.move) / a.flat : a.sec }));
+  return acc.map((a) => ({
+    km: a.m / 1000,
+    sec: a.sec,
+    flatSec: a.flat > 0 ? (a.sec * a.m) / a.flat : a.sec,
+  }));
 }
 
-function wholeRunFlatSec(s: SampleSet): number {
+function wholeRunFlatSec(s: SampleSet, gapExp: number): number {
   let sec = 0;
-  let move = 0;
+  let m = 0;
   let flat = 0;
   for (let i = 0; i < s.dt.length; i++) {
-    const m = s.speed[i]! * s.dt[i]!;
     sec += s.dt[i]!;
-    move += m;
-    flat += m * flatMetresFactor(s.grade[i]!);
+    m += s.dist[i]!;
+    flat += s.dist[i]! * flatMetresFactor(s.grade[i]!, gapExp);
   }
-  return flat > 0 ? (sec * move) / flat : sec;
+  return flat > 0 ? (sec * m) / flat : sec;
 }
 
 /** The calendar date of day `i`. */

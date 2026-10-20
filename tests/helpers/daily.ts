@@ -21,7 +21,6 @@ export function sampleSet(id: string, spec: SampleSpec[]): SampleSet {
     seg: Uint16Array.from(segs),
     dt: Float32Array.from(spec, (c) => c.s),
     dist: Float32Array.from(spec, (c) => c.m),
-    speed: Float32Array.from(spec, (c) => (c.s > 0 ? c.m / c.s : 0)),
     grade: Float32Array.from(spec, (c) => c.grade ?? 0),
     hr: Float32Array.from(spec, () => 140),
   };
@@ -68,5 +67,5 @@ export function makeDaily(
       samples.set(id, sampleSet(id, spec));
     }),
   );
-  return buildDaily(acts, samples, chunkSec, today ?? addDays(start, days.length - 1))!;
+  return buildDaily(acts, samples, chunkSec, 0.5, today ?? addDays(start, days.length - 1))!;
 }

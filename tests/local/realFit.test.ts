@@ -33,7 +33,7 @@ describe.runIf(dir)('real FIT files', () => {
         bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
         sportIndex.get(id) ?? 0,
       );
-      const s = buildSamples(id, run, 2);
+      const s = buildSamples(id, run, 3);
       ms += performance.now() - t0;
       samples += s.dt.length;
       rules[s.lapRule] = (rules[s.lapRule] ?? 0) + 1;

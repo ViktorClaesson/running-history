@@ -21,7 +21,9 @@ import { settings } from './settings.svelte';
 class ModelStore {
   readonly today = todayLocal();
 
-  daily: Daily | null = $derived(buildDaily(app.runs, app.samples, settings.p.chunkSec, this.today));
+  daily: Daily | null = $derived(
+    buildDaily(app.runs, app.samples, settings.p.chunkSec, settings.p.gapExp, this.today),
+  );
   windows = $derived(buildWindows(settings.p.windowBase, settings.p.windowMult));
   series = $derived(this.daily ? windowSeries(this.daily, this.windows) : null);
 

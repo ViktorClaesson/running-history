@@ -1,4 +1,4 @@
-import { flatMetresFactor } from './gap';
+import { DEFAULT_GAP_EXP, flatMetresFactor } from './gap';
 import type { SampleSet } from './sampleTypes';
 
 /**
@@ -7,7 +7,7 @@ import type { SampleSet } from './sampleTypes';
  * samples, so the length is a setting (0 = every sample is its own chunk).
  *
  * Time-based rather than distance-based, so every chunk is the same amount of *effort*
- * whatever the pace, and the watch's speed noise averages out evenly. A segment's last,
+ * whatever the pace, and GPS noise in the distance averages out evenly. A segment's last,
  * short chunk merges into the previous chunk of the same segment when it is under half the
  * length, and otherwise stays as its own shorter chunk.
  */
@@ -15,11 +15,9 @@ export interface Chunks {
   seg: Uint16Array;
   /** Timer seconds. */
   durS: Float32Array;
-  /** Metres from the distance record: what kilometre totals add up. */
+  /** Metres from the distance record: kilometre totals add these up, and raw speed is distM ÷ durS. */
   distM: Float32Array;
-  /** Metres at the watch's speed (Σ speed × dt): what raw speed is read from. */
-  moveM: Float32Array;
-  /** Flat-equivalent metres (Σ speed × dt × Minetti factor): what grade-adjusted speed is read from. */
+  /** Flat-equivalent metres (Σ metres × GAP factor): grade-adjusted speed is flatM ÷ durS. */
   flatM: Float32Array;
   /** Time-weighted mean heart rate, or NaN. */
   hr: Float32Array;
@@ -31,13 +29,13 @@ interface Acc {
   seg: number;
   durS: number;
   distM: number;
-  moveM: number;
   flatM: number;
   hrSum: number;
   hrTime: number;
 }
 
-export function buildChunks(s: SampleSet, minSec: number): Chunks {
+/** `gapExp` is the GAP strength (see gap.ts): it decides each chunk's flat-equivalent metres. */
+export function buildChunks(s: SampleSet, minSec: number, gapExp = DEFAULT_GAP_EXP): Chunks {
   const done: Acc[] = [];
   let acc: Acc | null = null;
   for (let i = 0; i < s.dt.length; i++) {
@@ -45,8 +43,8 @@ export function buildChunks(s: SampleSet, minSec: number): Chunks {
       closeSegment(done, acc, minSec);
       acc = null;
     }
-    acc ??= { seg: s.seg[i]!, durS: 0, distM: 0, moveM: 0, flatM: 0, hrSum: 0, hrTime: 0 };
-    addSample(acc, s, i);
+    acc ??= { seg: s.seg[i]!, durS: 0, distM: 0, flatM: 0, hrSum: 0, hrTime: 0 };
+    addSample(acc, s, i, gapExp);
     // A chunk needs some time in it: an instant (the sample right after a pause) joins the next.
     if (acc.durS > 0 && acc.durS >= minSec) {
       done.push(acc);
@@ -57,13 +55,11 @@ export function buildChunks(s: SampleSet, minSec: number): Chunks {
   return toColumns(done);
 }
 
-function addSample(acc: Acc, s: SampleSet, i: number): void {
+function addSample(acc: Acc, s: SampleSet, i: number, gapExp: number): void {
   const dt = s.dt[i]!;
-  const move = s.speed[i]! * dt;
   acc.durS += dt;
   acc.distM += s.dist[i]!;
-  acc.moveM += move;
-  acc.flatM += move * flatMetresFactor(s.grade[i]!);
+  acc.flatM += s.dist[i]! * flatMetresFactor(s.grade[i]!, gapExp);
   if (Number.isFinite(s.hr[i]!)) {
     acc.hrSum += s.hr[i]! * dt;
     acc.hrTime += dt;
@@ -75,7 +71,6 @@ function closeSegment(done: Acc[], last: Acc, minSec: number): void {
   if (prev && prev.seg === last.seg && (last.durS < minSec / 2 || last.durS === 0)) {
     prev.durS += last.durS;
     prev.distM += last.distM;
-    prev.moveM += last.moveM;
     prev.flatM += last.flatM;
     prev.hrSum += last.hrSum;
     prev.hrTime += last.hrTime;
@@ -90,14 +85,13 @@ function toColumns(chunks: Acc[]): Chunks {
     seg: Uint16Array.from(chunks, (c) => c.seg),
     durS: pick((c) => c.durS),
     distM: pick((c) => c.distM),
-    moveM: pick((c) => c.moveM),
     flatM: pick((c) => c.flatM),
     hr: pick((c) => (c.hrTime > 0 ? c.hrSum / c.hrTime : NaN)),
   };
 }
 
-/** A chunk's speed in m/min: grade-adjusted with `gap`, the watch's raw speed otherwise; null with no time. */
+/** A chunk's speed in m/min: grade-adjusted with `gap`, raw (metres ÷ time) otherwise; null with no time. */
 export function chunkVelocity(c: Chunks, i: number, gap: boolean): number | null {
   const dur = c.durS[i]!;
-  return dur > 0 ? ((gap ? c.flatM[i]! : c.moveM[i]!) / dur) * 60 : null;
+  return dur > 0 ? ((gap ? c.flatM[i]! : c.distM[i]!) / dur) * 60 : null;
 }

@@ -36,9 +36,11 @@ describe('buildChunks', () => {
     expect(sum(c.distM)).toBeCloseTo(10, 6);
   });
 
-  it('reads raw speed from the watch and grade-adjusted speed from flat-equivalent metres', () => {
+  it('reads raw speed as metres ÷ time and grade-adjusted speed from flat-equivalent metres', () => {
     const c = buildChunks(sampleSet('f', [{ m: 30, s: 10, grade: 0.05 }]), 0);
     expect(chunkVelocity(c, 0, false)).toBeCloseTo(180, 4); // 3 m/s = 180 m/min
     expect(chunkVelocity(c, 0, true)).toBeCloseTo(180 * flatMetresFactor(0.05), 4);
+    const pure = buildChunks(sampleSet('g', [{ m: 30, s: 10, grade: 0.05 }]), 0, 1);
+    expect(chunkVelocity(pure, 0, true)).toBeCloseTo(180 * flatMetresFactor(0.05, 1), 4);
   });
 });

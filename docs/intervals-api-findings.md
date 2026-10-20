@@ -162,3 +162,29 @@ advantage is those 62 entries.
 - **Size:** 2.08 M samples for 671 runs, reprocessed from raw in 9.6 s in the browser,
   loaded in 56 ms; rebuilding everything after a chunk-length change takes 240 ms at 10 s and
   661 ms at 0 s on desktop. Phone startup under 4× CPU throttling: chart drawn in 1.5 s.
+
+## GAP model, settled (20 Oct 2026)
+
+Pure Minetti was far too aggressive: a 6% climb counts +36%, so every hill rep read as
+Repetition. What the others do:
+
+- **Runalyze** (open-source 4.3 code, `GradeAdjustedPace/Algorithm/Minetti.php`): Minetti's
+  cost ratio raised to **0.83**, a 20-point moving average on the elevation before the
+  gradient, applied to each point's pace from the speed stream.
+- **Intervals.icu**: `gap_model: STRAVA_RUN` (Strava's model, which Strava's patent describes
+  as fitted to athletes' heart-rate data) on its own heavily smoothed `grade_smooth`.
+- Both read speed from smoothed streams, which lag several seconds behind an acceleration: on
+  the 22 Jul 30 s sprints (raw 3:32/km on a 6% climb) they report GAP of only 3:14–3:43, and
+  Garmin even reports 3:46, slower than the raw pace.
+
+Fitting the same construction as Runalyze, (C(g)/C(0))^k, to Garmin's per-lap GAP over 399
+laps of ≥ 400 m and ≥ 90 s: k = 1 median error 1.41% (p90 6.1%), 0.83: 1.03%, 0.5: **0.76%**
+(p90 3.3%), 0.4: 0.72% (but worse on hilly laps), 0.3: 0.83%. The app uses k = 0.5 by default
+as a setting ("GAP strength"); 1 is pure Minetti, 0.83 Runalyze. Speed is metres ÷ time over a
+chunk (default 30 s), not the watch's smoothed speed.
+
+On the 22 Jul hill session the app now puts the 90 s reps at 3:40–3:56 (Intervals 3:48–3:58,
+Runalyze 3:37–3:57), the 60 s reps at 3:31–3:42 (3:26–3:36 / 3:34–3:44) and the 30 s sprints
+at 3:00–3:07, where both sites under-read them. History-wide at the defaults: workout types
+8/189/325/81/42/29 (legacy 25/260/269/60/40/21), 6.1% of kilometres at Interval + Repetition
+(legacy 5.1%).

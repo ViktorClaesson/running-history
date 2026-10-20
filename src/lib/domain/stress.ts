@@ -9,7 +9,7 @@ import { velocityFromVo2 } from './vdot';
  * so an hour at threshold is exactly 100 relative (the TSS convention). Threshold speed is
  * the threshold anchor (88% VDOT) at that day's own rolling VDOT.
  *
- * Always the **raw** speed (the watch's own), never grade-adjusted: this is meant to measure
+ * Always the **raw** speed (metres ÷ time), never grade-adjusted: this is meant to measure
  * the mechanical stress of landing, and a faster stride lands harder whatever the gradient.
  * (The legacy app followed the grade-adjusted-pace toggle here; that changed on purpose.)
  */
@@ -30,7 +30,7 @@ export function dayStress(daily: Daily, vdot: readonly (number | null)[]): DaySt
       for (let k = 0; k < c.durS.length; k++) {
         const h = c.durS[k]! / 3600;
         if (!(h > 0)) continue;
-        const kmh = c.moveM[k]! / 1000 / h;
+        const kmh = c.distM[k]! / 1000 / h;
         raw[i] += h * kmh * kmh;
         if (thresholdKmh > 0) rel[i] += 100 * h * (kmh / thresholdKmh) ** 2;
       }

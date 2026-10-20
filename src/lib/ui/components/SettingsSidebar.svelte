@@ -9,6 +9,7 @@
   import { theme } from '../theme.svelte';
   import Info from './Info.svelte';
   import NumField from './NumField.svelte';
+  import SlowNumField from './SlowNumField.svelte';
   import SyncPanel from './SyncPanel.svelte';
 
   /**
@@ -429,7 +430,7 @@
       class="chk"
       title="Runs are cut into chunks of at least this many seconds (never across a manual lap) before their speed is read; 0 reads every second on its own. Moves the histogram, the pace-zone volume, the workout types and the stress scores. VDOT reads whole laps and runs, so it doesn't move."
     >
-      Min chunk length <NumField
+      Min chunk length <SlowNumField
         value={p.chunkSec}
         min={0}
         max={60}
@@ -442,6 +443,18 @@
       title="Bin each chunk by its grade-adjusted pace instead of the pace actually run. Only moves the chunks, never the zone boundaries."
     >
       <input type="checkbox" bind:checked={settings.p.gapPace} /> Grade-adjusted pace
+    </label>
+    <label
+      class="chk"
+      title="How strongly a climb counts: Minetti's energy cost curve to this power. 1 is pure Minetti (a 6% climb worth +36%), 0.83 is what Runalyze uses, 0.5 matches Garmin's own GAP best on my laps. Applies to the histogram, the pace-zone volume, the workout types, and VDOT when its own GAP setting is on."
+    >
+      GAP strength <SlowNumField
+        value={p.gapExp}
+        min={0.3}
+        max={1}
+        step={0.05}
+        onset={(v) => (settings.p.gapExp = v)}
+      />
     </label>
   </section>
 

@@ -61,7 +61,6 @@ export async function fakeProcess(raw: RawActivity): Promise<SampleSet> {
     seg: new Uint16Array([0]),
     dt: new Float32Array([30]),
     dist: new Float32Array([100]),
-    speed: new Float32Array([100 / 30]),
     grade: new Float32Array([0]),
     hr: new Float32Array([140]),
   };

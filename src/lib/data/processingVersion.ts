@@ -8,6 +8,7 @@
  * In a module of its own so the page can read it without pulling in the FIT decoder,
  * which only the worker needs.
  *
- * v1: 100 m distance chunks.  v2: cleaned per-second samples (chunks now built in memory).
+ * v1: 100 m distance chunks.  v2: cleaned per-second samples (chunks built in memory).
+ * v3: the watch's smoothed speed dropped (it lags on short reps); speed is metres ÷ time.
  */
-export const PROCESSING_VERSION = 2;
+export const PROCESSING_VERSION = 3;

@@ -17,7 +17,6 @@ export function makeRun(stretches: Stretch[], pauses: Pause[] = []): ParsedRun {
   const dist = [0];
   const alt = [100];
   const hr = [NaN];
-  const speed = [NaN];
   const laps: WatchLap[] = [];
   let clock = 0;
   for (const s of stretches) {
@@ -39,7 +38,6 @@ export function makeRun(stretches: Stretch[], pauses: Pause[] = []): ParsedRun {
       dist.push(dist[dist.length - 1]! + s.speed);
       alt.push(alt[alt.length - 1]! + (s.climb ?? 0) / s.seconds);
       hr.push(s.hr ?? 140);
-      speed.push(s.speed);
     }
   }
   return {
@@ -47,7 +45,6 @@ export function makeRun(stretches: Stretch[], pauses: Pause[] = []): ParsedRun {
     dist: Float64Array.from(dist),
     alt: Float64Array.from(alt),
     hr: Float64Array.from(hr),
-    speed: Float64Array.from(speed),
     pauses,
     laps,
     totals: { distM: dist[dist.length - 1]!, timerS: stretches.reduce((a, s) => a + s.seconds, 0) },

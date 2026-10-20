@@ -12,7 +12,6 @@ describe('buildSamples', () => {
     expect(s.dt.length).toBe(600);
     expect(sum(s.dist)).toBeCloseTo(1800, 3);
     expect(sum(s.dt)).toBeCloseTo(600, 3);
-    expect(s.speed[10]).toBeCloseTo(3, 6); // the watch's speed
   });
 
   it('assigns each interval to its segment; lap totals are sums over a segment', () => {
@@ -43,19 +42,12 @@ describe('buildSamples', () => {
     expect(s.grade[150]).toBeCloseTo(0.05, 6);
   });
 
-  it('falls back to distance ÷ time when the watch recorded no speed', () => {
-    const run = makeRun([{ seconds: 60, speed: 3 }]);
-    run.speed.fill(NaN);
-    expect(buildSamples('e', run, 2).speed[5]).toBeCloseTo(3, 6);
-  });
-
   it('a manual entry with no samples becomes one interval from the session totals', () => {
     const run: ParsedRun = {
       t: new Float64Array(0),
       dist: new Float64Array(0),
       alt: new Float64Array(0),
       hr: new Float64Array(0),
-      speed: new Float64Array(0),
       pauses: [],
       laps: [],
       totals: { distM: 6000, timerS: 1800 },
